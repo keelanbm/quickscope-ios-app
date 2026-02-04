@@ -1,0 +1,42 @@
+{
+  "date": "2026-02-04",
+  "api_host": "https://api.quickscope.gg",
+  "results": [
+    {
+      "method": "public/getLatestSolPrice",
+      "http_status": 200,
+      "rpc_status": "ok",
+      "rpc_result_preview": "98.12706661479086"
+    },
+    {
+      "method": "public/getAccountSolBalances",
+      "http_status": 200,
+      "rpc_status": "ok",
+      "rpc_result_preview": "{'sol_price_usd': 98.12706661479086, 'balances': [{'account': '11111111111111111111111111111111', 'balance': 1}]}"
+    },
+    {
+      "method": "auth/challenge",
+      "http_status": 200,
+      "rpc_status": "ok",
+      "rpc_result_preview": "quickscope.gg wants you to sign in with your Solana account:\n11111111111111111111111111111111\n\nPlease sign in to use Quickscope\n\nURI: https://quickscope.gg\nVersion: 1\nChain ID: mai"
+    },
+    {
+      "method": "private/getDashboards",
+      "http_status": 200,
+      "rpc_status": "error",
+      "rpc_error": {
+        "code": -32600,
+        "message": "authentication required"
+      }
+    },
+    {
+      "method": "tx/getSwapQuote",
+      "http_status": 200,
+      "rpc_status": "error",
+      "rpc_error": {
+        "code": -32600,
+        "message": "authentication required"
+      }
+    }
+  ]
+}
