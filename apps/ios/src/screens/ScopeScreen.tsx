@@ -7,7 +7,6 @@ import {
   Alert,
   FlatList,
   Image,
-  Linking,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -16,32 +15,31 @@ import {
 } from "react-native";
 
 import {
-  fetchDiscoveryTokens,
-  type DiscoveryTabId,
-  type DiscoveryToken,
-} from "@/src/features/discovery/discoveryService";
+  fetchScopeTokens,
+  type ScopeTabId,
+  type ScopeToken,
+} from "@/src/features/scope/scopeService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
-import type { DiscoveryRouteParams, RootTabs } from "@/src/navigation/types";
+import type { RootTabs, ScopeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
-type DiscoveryScreenProps = {
+type ScopeScreenProps = {
   rpcClient: RpcClient;
-  params?: DiscoveryRouteParams;
+  params?: ScopeRouteParams;
 };
 
-type DiscoveryTab = {
-  id: DiscoveryTabId;
+type ScopeTab = {
+  id: ScopeTabId;
   label: string;
 };
 
-const tabs: DiscoveryTab[] = [
-  { id: "trending", label: "Trending" },
-  { id: "scan-feed", label: "Scan Feed" },
-  { id: "gainers", label: "Gainers" },
+const tabs: ScopeTab[] = [
+  { id: "new-pairs", label: "New Pairs" },
+  { id: "momentum", label: "Momentum" },
+  { id: "scan-surge", label: "Scan Surge" },
 ];
 
-const fallbackTokenImage =
-  "https://app.quickscope.gg/favicon.ico";
+const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
 
 function formatCompactUsd(value: number): string {
   if (!Number.isFinite(value) || value <= 0) {
@@ -92,31 +90,31 @@ function formatAgeFromSeconds(unixSeconds: number): string {
   if (elapsedSeconds < 604800) {
     return `${Math.floor(elapsedSeconds / 86400)}d`;
   }
+
   return `${Math.floor(elapsedSeconds / 604800)}w`;
 }
 
-function tabSubtitle(activeTab: DiscoveryTabId): string {
-  if (activeTab === "scan-feed") {
-    return "Sorted by 1h scan mentions";
+function tabSubtitle(activeTab: ScopeTabId): string {
+  if (activeTab === "momentum") {
+    return "Sorted by 1h transaction count";
   }
 
-  if (activeTab === "gainers") {
-    return "Sorted by 1h percentage gain";
+  if (activeTab === "scan-surge") {
+    return "Sorted by 1h telegram mentions";
   }
 
-  return "Sorted by 1h volume";
+  return "Sorted by newest pairs";
 }
 
-export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
+export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
   const requestSeqRef = useRef(0);
-  const [activeTab, setActiveTab] = useState<DiscoveryTabId>("trending");
-  const [rows, setRows] = useState<DiscoveryToken[]>([]);
+  const [activeTab, setActiveTab] = useState<ScopeTabId>("new-pairs");
+  const [rows, setRows] = useState<ScopeToken[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | undefined>();
   const [lastUpdatedMs, setLastUpdatedMs] = useState<number | undefined>();
-  const [starredMints, setStarredMints] = useState<Record<string, boolean>>({});
 
   const loadRows = useCallback(
     async (options?: { refreshing?: boolean }) => {
@@ -129,7 +127,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
       }
 
       try {
-        const result = await fetchDiscoveryTokens(rpcClient, activeTab);
+        const result = await fetchScopeTokens(rpcClient, activeTab);
         if (requestId !== requestSeqRef.current) {
           return;
         }
@@ -159,7 +157,6 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
     void loadRows();
   }, [loadRows]);
 
-  const selectedTokenAddress = params?.tokenAddress;
   const rowCountText = useMemo(() => `${rows.length} tokens`, [rows.length]);
   const updatedText = useMemo(() => {
     if (!lastUpdatedMs) {
@@ -169,30 +166,9 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
     return `Updated ${new Date(lastUpdatedMs).toLocaleTimeString()}`;
   }, [lastUpdatedMs]);
 
-  const toggleStar = useCallback((mint: string) => {
-    setStarredMints((current) => ({
-      ...current,
-      [mint]: !current[mint],
-    }));
-  }, []);
-
   const handleCopyAddress = useCallback(async (mint: string) => {
     await Clipboard.setStringAsync(mint);
     Alert.alert("Address copied", mint);
-  }, []);
-
-  const handleOpenExternal = useCallback(async (url: string) => {
-    try {
-      const canOpen = await Linking.canOpenURL(url);
-      if (!canOpen) {
-        Alert.alert("Invalid link", "Unable to open this URL.");
-        return;
-      }
-
-      await Linking.openURL(url);
-    } catch (error) {
-      Alert.alert("Open failed", String(error));
-    }
   }, []);
 
   return (
@@ -212,7 +188,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
       }
       ListHeaderComponent={
         <View style={styles.headerWrap}>
-          <Text style={styles.title}>Discovery</Text>
+          <Text style={styles.title}>Scope</Text>
           <Text style={styles.subtitle}>{tabSubtitle(activeTab)}</Text>
           <View style={styles.metaRow}>
             <Text style={styles.metaText}>{rowCountText}</Text>
@@ -236,16 +212,18 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             })}
           </View>
 
-          {selectedTokenAddress ? (
+          {params?.source ? (
             <View style={styles.deepLinkNote}>
               <Text style={styles.deepLinkTitle}>Opened from deep link</Text>
-              <Text style={styles.deepLinkBody}>{selectedTokenAddress}</Text>
+              <Text style={styles.deepLinkBody}>
+                Scope feed launched from a quickscope://scope style route.
+              </Text>
             </View>
           ) : null}
 
           {errorText ? (
             <View style={styles.errorBox}>
-              <Text style={styles.errorText}>Failed to load discovery list.</Text>
+              <Text style={styles.errorText}>Failed to load scope feed.</Text>
               <Text style={styles.errorText}>{errorText}</Text>
               <Pressable
                 style={styles.retryButton}
@@ -258,26 +236,23 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             </View>
           ) : null}
 
-          {isInitialLoading ? (
-            <Text style={styles.loadingText}>Loading tokens...</Text>
-          ) : null}
+          {isInitialLoading ? <Text style={styles.loadingText}>Loading scope feed...</Text> : null}
 
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderText, styles.tableHeaderToken]}>Token</Text>
             <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>MC</Text>
             <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>Age</Text>
-            <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>1h</Text>
+            <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>1h Tx</Text>
+            <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>1h %</Text>
             <Text style={[styles.tableHeaderText, styles.tableHeaderActions]}>Act</Text>
           </View>
         </View>
       }
       renderItem={({ item }) => {
-        const highlighted = selectedTokenAddress === item.mint;
-        const isStarred = Boolean(starredMints[item.mint]);
         const platformLabel = (item.platform || item.exchange || "unknown").toUpperCase();
 
         return (
-          <View style={[styles.rowItem, highlighted ? styles.rowItemHighlighted : null]}>
+          <View style={styles.rowItem}>
             <View style={styles.rowMain}>
               <View style={styles.tokenColumn}>
                 <Image
@@ -308,6 +283,12 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
               </View>
 
               <View style={styles.metricColumn}>
+                <Text numberOfLines={1} style={styles.metricValue}>
+                  {item.oneHourTxCount.toLocaleString()}
+                </Text>
+              </View>
+
+              <View style={styles.metricColumn}>
                 <Text
                   numberOfLines={1}
                   style={[
@@ -322,52 +303,19 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
               </View>
 
               <View style={styles.actionsColumn}>
-                <Pressable onPress={() => toggleStar(item.mint)} hitSlop={6}>
-                  <Text style={styles.starText}>{isStarred ? "★" : "☆"}</Text>
+                <Pressable onPress={() => void handleCopyAddress(item.mint)} hitSlop={6}>
+                  <Text style={styles.linkText}>Copy</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.tradeButton}
                   onPress={() =>
                     navigation.navigate("Trade", {
                       source: "deep-link",
                       tokenAddress: item.mint,
                     })
                   }
+                  hitSlop={6}
                 >
-                  <Text style={styles.tradeButtonText}>Trade</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.rowFooter}>
-              <Text numberOfLines={1} style={styles.footerMeta}>
-                1h Vol {formatCompactUsd(item.oneHourVolumeUsd)} • Tx {item.oneHourTxCount}
-                {activeTab === "scan-feed" ? ` • Scans ${item.scanMentionsOneHour}` : ""}
-              </Text>
-              <View style={styles.linksRow}>
-                {item.twitterUrl ? (
-                  <Pressable
-                    style={styles.linkChip}
-                    onPress={() => handleOpenExternal(item.twitterUrl!)}
-                  >
-                    <Text style={styles.linkChipText}>X</Text>
-                  </Pressable>
-                ) : null}
-                {item.telegramUrl ? (
-                  <Pressable
-                    style={styles.linkChip}
-                    onPress={() => handleOpenExternal(item.telegramUrl!)}
-                  >
-                    <Text style={styles.linkChipText}>TG</Text>
-                  </Pressable>
-                ) : null}
-                {item.websiteUrl ? (
-                  <Pressable style={styles.linkChip} onPress={() => handleOpenExternal(item.websiteUrl!)}>
-                    <Text style={styles.linkChipText}>Web</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable style={styles.linkChip} onPress={() => handleCopyAddress(item.mint)}>
-                  <Text style={styles.linkChipText}>Copy</Text>
+                  <Text style={styles.tradeText}>Search</Text>
                 </Pressable>
               </View>
             </View>
@@ -375,12 +323,14 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         );
       }}
       ListEmptyComponent={
-        isInitialLoading ? null : (
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>No tokens returned</Text>
-            <Text style={styles.emptyBody}>Try another tab or pull to refresh.</Text>
+        !isInitialLoading && !errorText ? (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>No scope results</Text>
+            <Text style={styles.emptyBody}>
+              Pull to refresh or switch tabs to load a different sort lens.
+            </Text>
           </View>
-        )
+        ) : null
       }
     />
   );
@@ -392,82 +342,84 @@ const styles = StyleSheet.create({
     backgroundColor: qsColors.bgCanvas,
   },
   content: {
-    paddingHorizontal: qsSpacing.xl,
-    paddingTop: qsSpacing.xl,
-    paddingBottom: 140,
+    paddingHorizontal: qsSpacing.lg,
+    paddingBottom: qsSpacing.xl,
   },
   headerWrap: {
+    paddingTop: qsSpacing.lg,
+    paddingBottom: qsSpacing.sm,
     gap: qsSpacing.sm,
-    marginBottom: qsSpacing.xs,
   },
   title: {
     color: qsColors.textPrimary,
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "700",
   },
   subtitle: {
     color: qsColors.textMuted,
-    fontSize: 14,
+    fontSize: 13,
   },
   metaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
   },
   metaText: {
     color: qsColors.textSubtle,
-    fontSize: 12,
+    fontSize: 11,
   },
   tabsWrap: {
     flexDirection: "row",
-    gap: qsSpacing.sm,
-    marginTop: qsSpacing.sm,
+    gap: qsSpacing.xs,
+    flexWrap: "wrap",
   },
   tabButton: {
-    borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    borderRadius: qsRadius.lg,
+    paddingHorizontal: qsSpacing.md,
+    paddingVertical: 6,
+    backgroundColor: qsColors.bgCardSoft,
   },
   tabButtonActive: {
-    backgroundColor: "#2a2f4a",
-    borderColor: "#6d74a8",
+    backgroundColor: "#13253d",
+    borderColor: qsColors.accent,
   },
   tabButtonText: {
-    color: qsColors.textMuted,
+    color: qsColors.textSecondary,
+    fontSize: 12,
     fontWeight: "600",
-    fontSize: 13,
   },
   tabButtonTextActive: {
-    color: qsColors.textPrimary,
+    color: qsColors.accent,
   },
   deepLinkNote: {
-    borderRadius: qsRadius.md,
     borderWidth: 1,
-    borderColor: qsColors.borderDefault,
+    borderColor: qsColors.accent,
+    borderRadius: qsRadius.md,
     backgroundColor: qsColors.bgCardSoft,
-    padding: qsSpacing.md,
+    padding: qsSpacing.sm,
     gap: 4,
   },
   deepLinkTitle: {
-    color: qsColors.textMuted,
+    color: qsColors.textPrimary,
     fontSize: 12,
+    fontWeight: "600",
   },
   deepLinkBody: {
     color: qsColors.textSecondary,
     fontSize: 12,
   },
   errorBox: {
-    borderRadius: qsRadius.md,
     borderWidth: 1,
-    borderColor: "#6d3232",
-    backgroundColor: "#2a171b",
-    padding: qsSpacing.md,
-    gap: 4,
+    borderColor: qsColors.danger,
+    borderRadius: qsRadius.md,
+    padding: qsSpacing.sm,
+    backgroundColor: "#3a1e2a",
+    gap: 2,
   },
   errorText: {
-    color: "#ffb4b4",
+    color: qsColors.danger,
     fontSize: 12,
   },
   retryButton: {
@@ -486,71 +438,69 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   loadingText: {
-    color: qsColors.textSubtle,
-    fontSize: 13,
+    color: qsColors.textMuted,
+    fontSize: 12,
   },
   tableHeader: {
     flexDirection: "row",
     alignItems: "center",
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCardSoft,
-    paddingVertical: 8,
+    borderRadius: qsRadius.md,
+    paddingVertical: 6,
     paddingHorizontal: qsSpacing.sm,
+    backgroundColor: qsColors.bgCardSoft,
   },
   tableHeaderText: {
     color: qsColors.textSubtle,
     fontSize: 10,
     fontWeight: "600",
     textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   tableHeaderToken: {
-    flex: 1,
+    flex: 2.2,
   },
   tableHeaderMetric: {
-    width: 64,
+    flex: 1,
     textAlign: "right",
   },
   tableHeaderActions: {
-    width: 72,
+    flex: 1.1,
     textAlign: "right",
   },
   rowItem: {
-    borderBottomWidth: 1,
+    borderWidth: 1,
     borderColor: qsColors.borderDefault,
+    borderRadius: qsRadius.md,
+    paddingVertical: qsSpacing.xs,
     paddingHorizontal: qsSpacing.sm,
-    paddingTop: qsSpacing.sm,
-    paddingBottom: 10,
-    backgroundColor: qsColors.bgCanvas,
-  },
-  rowItemHighlighted: {
-    backgroundColor: "#141c2e",
+    marginTop: qsSpacing.xs,
+    backgroundColor: qsColors.bgCard,
   },
   rowMain: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 48,
   },
   tokenColumn: {
-    flex: 1,
+    flex: 2.2,
     flexDirection: "row",
     alignItems: "center",
-    gap: qsSpacing.sm,
+    gap: qsSpacing.xs,
+    paddingRight: qsSpacing.xs,
   },
   tokenImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#2c3347",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: qsColors.bgCardSoft,
   },
   tokenTextColumn: {
     flex: 1,
-    gap: 1,
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
   },
   tokenName: {
@@ -558,33 +508,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   tagPill: {
+    marginTop: 2,
+    alignSelf: "flex-start",
     color: qsColors.textSubtle,
-    backgroundColor: "#23283a",
+    backgroundColor: qsColors.bgCardSoft,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
+    borderRadius: qsRadius.lg,
     paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
     fontSize: 9,
-    fontWeight: "600",
     overflow: "hidden",
-    alignSelf: "flex-start",
-    marginTop: 2,
   },
   metricColumn: {
-    width: 64,
+    flex: 1,
     alignItems: "flex-end",
-    justifyContent: "center",
-    paddingLeft: 4,
+    paddingRight: qsSpacing.xs,
   },
   metricValue: {
     color: qsColors.textSecondary,
-    fontSize: 11,
-    fontWeight: "500",
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
   },
   metricChange: {
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
+    fontWeight: "600",
   },
   metricChangePositive: {
     color: qsColors.success,
@@ -593,71 +541,36 @@ const styles = StyleSheet.create({
     color: qsColors.danger,
   },
   actionsColumn: {
-    width: 72,
+    flex: 1.1,
     alignItems: "flex-end",
-    gap: 6,
+    gap: 4,
   },
-  starText: {
-    color: "#ffe08f",
-    fontSize: 18,
-    lineHeight: 18,
+  linkText: {
+    color: qsColors.textMuted,
+    fontSize: 11,
+    textDecorationLine: "underline",
   },
-  tradeButton: {
-    borderRadius: 999,
+  tradeText: {
+    color: qsColors.accent,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  emptyBox: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    backgroundColor: "#27204a",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  tradeButtonText: {
-    color: qsColors.textPrimary,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  rowFooter: {
-    marginTop: 6,
-    marginLeft: 42,
-    gap: 6,
-  },
-  footerMeta: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
-  },
-  linksRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: qsSpacing.xs,
-  },
-  linkChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: "#1d2232",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  linkChipText: {
-    color: qsColors.textSecondary,
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  emptyWrap: {
     borderRadius: qsRadius.md,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
-    padding: qsSpacing.lg,
+    padding: qsSpacing.md,
+    marginTop: qsSpacing.sm,
+    backgroundColor: qsColors.bgCardSoft,
     gap: 4,
   },
   emptyTitle: {
     color: qsColors.textPrimary,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
   },
   emptyBody: {
     color: qsColors.textMuted,
-    fontSize: 13,
+    fontSize: 12,
   },
 });

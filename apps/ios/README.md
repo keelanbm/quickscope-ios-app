@@ -112,6 +112,7 @@ xcrun simctl openurl booted "quickscope://dev"
   - lint
   - typecheck
   - unit tests (`npm run test:ci`)
+- First remote baseline run (2026-02-04): https://github.com/keelanbm/quickscope-ios-app/actions/runs/21684731224
 
 ## Discovery Week 2 Check (Trending / Scan Feed / Gainers)
 
@@ -130,6 +131,23 @@ xcrun simctl openurl booted "quickscope://dev"
   - link chips (`X`, `TG`, `Web`) when available
   - `Copy` copies token mint address
 - Tap `Trade` on a row and confirm navigation to the `Search` tab with token context.
+- Pull to refresh and verify updated timestamp changes.
+
+## Scope Week 2 Check (New Pairs / Momentum / Scan Surge)
+
+- Open `Scope` tab.
+- Confirm top sub-tabs render: `New Pairs`, `Momentum`, `Scan Surge`.
+- Switch each tab and verify list ordering updates.
+- Confirm row includes:
+  - token ticker/name
+  - platform tag
+  - market cap
+  - age
+  - 1h tx count
+  - 1h % change
+- Confirm row actions:
+  - `Copy` copies token mint address
+  - `Search` opens the `Search` tab with token context
 - Pull to refresh and verify updated timestamp changes.
 
 ## Selected Smoke E2E Path (manual for Week 2)
@@ -160,3 +178,4 @@ See:
 - `../../docs/week1-tickets.md`
 - `../../docs/week1-execution-order.md`
 - `../../docs/decision-log.md`
+- `../../docs/week3-prep-token-flow-and-perf.md`

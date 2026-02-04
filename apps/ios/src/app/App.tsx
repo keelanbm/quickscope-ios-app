@@ -26,13 +26,13 @@ import {
 import {
   PortfolioRouteParams,
   RootTabs,
-  ScopeRouteParams,
   TelegramRouteParams,
   TrackingRouteParams,
   TradeRouteParams,
 } from "@/src/navigation/types";
 import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
+import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
@@ -75,14 +75,6 @@ function getTradeContextLines(params?: TradeRouteParams): string[] | undefined {
   }
 
   return lines;
-}
-
-function getScopeContextLines(params?: ScopeRouteParams): string[] | undefined {
-  if (!params?.source) {
-    return undefined;
-  }
-
-  return ["Opened from a deep link."];
 }
 
 function getPortfolioContextLines(params?: PortfolioRouteParams): string[] | undefined {
@@ -288,11 +280,7 @@ export default function App() {
           <Tabs.Screen name="Scope" options={{ title: "Scope" }}>
             {({ route }) => (
               <RouteErrorBoundary routeName="Scope">
-                <MvpPlaceholderScreen
-                  title="Scope"
-                  description="Memescope and feed modules will be integrated after data-layer baseline."
-                  contextLines={getScopeContextLines(route.params)}
-                />
+                <ScopeScreen rpcClient={rpcClient} params={route.params} />
               </RouteErrorBoundary>
             )}
           </Tabs.Screen>

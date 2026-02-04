@@ -36,7 +36,7 @@ Move from Week 1 spikes to Week 2 production foundations:
 - Added base design tokens (`colors`, `radius`, `spacing`) under `apps/ios/src/theme/tokens.ts`.
 - Updated card/screen styling to use shared tokens.
 
-### IOS-103 - Auth/session integration hardening (in progress)
+### IOS-103 - Auth/session integration hardening
 
 - Added `AuthSessionProvider` with explicit status machine:
   - `bootstrapping` -> `unauthenticated`/`authenticated`
@@ -49,7 +49,7 @@ Move from Week 1 spikes to Week 2 production foundations:
 - Added explicit account-switch/logout QA matrix with simulator/device acceptance criteria:
   - `docs/ios-103-auth-qa-matrix.md`
 
-### IOS-105 - Quality and test harness setup (in progress)
+### IOS-105 - Quality and test harness setup
 
 - Added CI lane at `.github/workflows/ios-checks.yml`:
   - lint
@@ -68,6 +68,14 @@ Move from Week 1 spikes to Week 2 production foundations:
   - `npm run lint`: ~1.48s
   - `npm run check-types`: ~0.84s
   - `npm run test:ci`: ~1.49s
+- Validated first remote CI run on branch push (GitHub Actions run #1, 2026-02-04):
+  - URL: https://github.com/keelanbm/quickscope-ios-app/actions/runs/21684731224
+  - Result: `success`
+  - Step timings:
+    - Install deps: ~27s
+    - Lint: ~3s
+    - Typecheck: ~2s
+    - Unit tests: ~3s
 
 ### IOS-201 - Discovery first real mobile surface (started early)
 
@@ -85,6 +93,23 @@ Move from Week 1 spikes to Week 2 production foundations:
   - star toggle
   - quick trade action (`Trade` tab deep-link style navigation payload)
 
+### IOS-202 - Scope first data-fed surface
+
+- Replaced Scope placeholder with API-fed list rendering.
+- Added Scope sub-tabs:
+  - New Pairs
+  - Momentum
+  - Scan Surge
+- Wired each tab to `public/filterTokensTable` with tab-specific sorting.
+- Added row-level quick actions:
+  - copy token mint
+  - open token in `Search` tab context
+
+### Week 3 Prep - token entry flow and list performance
+
+- Added Week 3 prep brief for token-detail/trade-entry stack shape and list performance baseline checks:
+  - `docs/week3-prep-token-flow-and-perf.md`
+
 ## QA Snapshot
 
 - Week 1 auth flow: passed (Phantom connect + challenge + sign).
@@ -93,7 +118,6 @@ Move from Week 1 spikes to Week 2 production foundations:
 
 ## Remaining Week 2 Focus
 
-1. Finish IOS-103 with explicit account-switch/logout QA matrix on simulator + device
-2. Finish IOS-105 by validating workflow on first remote push and collecting baseline timings
-3. Expand Discovery with final field prioritization and action hooks from design review
-4. Convert Scope placeholder to first data-fed surface
+1. Execute IOS-103 manual matrix runs (simulator + physical device) and log pass/fail notes
+2. Run Scope/Discovery live data QA on simulator and physical device
+3. Finalize Week 3 token-detail ticket breakdown from prep notes

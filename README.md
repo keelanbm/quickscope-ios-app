@@ -40,6 +40,7 @@ Out of scope for v1:
 - `docs/week1-execution-order.md` - Strict Week 1 execution order and import-ready table
 - `docs/roadmap-tickets-weeks2-10.md` - Ticket-ready weekly backlog draft for Weeks 2-10
 - `docs/week2-kickoff.md` - Week 2 execution kickoff status and in-progress foundations
+- `docs/week3-prep-token-flow-and-perf.md` - Week 3 prep notes for token entry flow + list performance baseline
 - `docs/ios-103-auth-qa-matrix.md` - Account-switch/logout QA matrix for auth hardening
 - `docs/decision-log.md` - Decision tracking log for architecture/product approvals
 - `docs/spike-auth-api-parity-2026-02-04.md` - Initial Week 1 auth/API smoke-check report
@@ -61,6 +62,7 @@ See `docs/architecture.md` for full detail.
 - Primary bottom nav: Discover, Scope, Search, Tracking, Portfolio
 - Secondary routes (non-primary nav): Telegram deep-link surface, Dev Console
 - Discovery is now API-fed with sub-tabs: Trending, Scan Feed, Gainers
+- Scope is now API-fed with sub-tabs: New Pairs, Momentum, Scan Surge
 
 ## Documentation Workflow
 
@@ -81,6 +83,6 @@ When major decisions change (auth, wallet model, API contracts, timeline), updat
 
 ## Immediate Next Steps
 
-1. Continue Week 2: Scope/Search data-fed surfaces and route wiring
-2. Keep IA and UX decisions updated in `docs/decision-log.md` as flows are locked
-3. Start Week 3 prep for discovery/scoping API coverage and list performance baselines
+1. Execute manual IOS-103 account-switch/logout matrix on simulator + physical device
+2. Continue Week 2: Search surface wiring and Discovery/Scope action polish
+3. Start Week 3 prep for token detail/trade-entry stack flows and list performance baselines
