@@ -44,3 +44,15 @@ IOS-103 is complete when:
 1. A1-A9 pass on simulator.
 2. A1, A2, A6, A7 pass on physical device.
 3. `npm run test:ci` is green (includes auth utility + session storage coverage).
+
+## Execution log (2026-02-04, simulator)
+
+- Environment:
+  - iPhone 16 Pro simulator (iOS 18.x runtime)
+  - App launched with `npm run start:ios`
+- Status:
+  - Route accessibility and Dev Console visibility confirmed.
+  - Manual auth matrix interactions (A1-A9) still require hands-on tap flow execution and observation pass.
+- Evidence screenshots:
+  - Dev Console route: `/tmp/quickscope-dev.png`
+  - Discovery shell: `/tmp/quickscope-home.png`

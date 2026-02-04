@@ -115,6 +115,7 @@ Move from Week 1 spikes to Week 2 production foundations:
 - Week 1 auth flow: passed (Phantom connect + challenge + sign).
 - Week 1 deep links: passed (token/trade/portfolio/telegram + fallback).
 - Week 1 websocket spike: passed (`public/slotTradeUpdates` subscribed and streaming).
+- Week 2 simulator UI pass: Discovery/Scope/Search/Portfolio/Dev routes render and deep-link navigation remains intact.
 
 ## Remaining Week 2 Focus
 
