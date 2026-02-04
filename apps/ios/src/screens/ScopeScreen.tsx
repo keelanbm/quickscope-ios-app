@@ -171,6 +171,27 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
     Alert.alert("Address copied", mint);
   }, []);
 
+  const handleOpenTokenDetail = useCallback(
+    (token: ScopeToken) => {
+      navigation.navigate("TokenDetail", {
+        source: "scope-row",
+        tokenAddress: token.mint,
+        symbol: token.symbol,
+        name: token.name,
+        imageUri: token.imageUri,
+        platform: token.platform,
+        exchange: token.exchange,
+        marketCapUsd: token.marketCapUsd,
+        oneHourVolumeUsd: token.oneHourVolumeUsd,
+        oneHourTxCount: token.oneHourTxCount,
+        oneHourChangePercent: token.oneHourChangePercent,
+        mintedAtSeconds: token.mintedAtSeconds,
+        scanMentionsOneHour: token.scanMentionsOneHour,
+      });
+    },
+    [navigation]
+  );
+
   return (
     <FlatList
       data={rows}
@@ -254,7 +275,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
         return (
           <View style={styles.rowItem}>
             <View style={styles.rowMain}>
-              <View style={styles.tokenColumn}>
+              <Pressable style={styles.tokenColumn} onPress={() => handleOpenTokenDetail(item)}>
                 <Image
                   source={{ uri: item.imageUri || fallbackTokenImage }}
                   style={styles.tokenImage}
@@ -268,7 +289,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                   </Text>
                   <Text style={styles.tagPill}>{platformLabel}</Text>
                 </View>
-              </View>
+              </Pressable>
 
               <View style={styles.metricColumn}>
                 <Text numberOfLines={1} style={styles.metricValue}>

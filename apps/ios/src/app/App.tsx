@@ -34,6 +34,7 @@ import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
+import { TokenDetailScreen } from "@/src/screens/TokenDetailScreen";
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
@@ -149,6 +150,9 @@ function navigateToTarget(
       return;
     case "Telegram":
       navigationRef.navigate("Telegram", target.params);
+      return;
+    case "TokenDetail":
+      navigationRef.navigate("TokenDetail", target.params);
       return;
     case "Dev":
       navigationRef.navigate("Dev");
@@ -348,6 +352,13 @@ export default function App() {
                     contextLines={getTelegramContextLines(route.params)}
                   />
                 </AuthRouteGate>
+              </RouteErrorBoundary>
+            )}
+          </Tabs.Screen>
+          <Tabs.Screen name="TokenDetail" options={{ title: "Token Detail", ...hiddenTabOptions }}>
+            {({ route }) => (
+              <RouteErrorBoundary routeName="Token Detail">
+                <TokenDetailScreen params={route.params} />
               </RouteErrorBoundary>
             )}
           </Tabs.Screen>

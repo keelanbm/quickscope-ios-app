@@ -34,6 +34,22 @@ export type TelegramRouteParams = {
   chatId?: string;
 };
 
+export type TokenDetailRouteParams = {
+  source?: DeepLinkMeta["source"] | "discovery-row" | "scope-row";
+  tokenAddress: string;
+  symbol?: string;
+  name?: string;
+  imageUri?: string;
+  platform?: string;
+  exchange?: string;
+  marketCapUsd?: number;
+  oneHourVolumeUsd?: number;
+  oneHourTxCount?: number;
+  oneHourChangePercent?: number;
+  mintedAtSeconds?: number;
+  scanMentionsOneHour?: number;
+};
+
 export type RootTabs = {
   Discovery: DiscoveryRouteParams | undefined;
   Scope: ScopeRouteParams | undefined;
@@ -41,5 +57,6 @@ export type RootTabs = {
   Portfolio: PortfolioRouteParams | undefined;
   Tracking: TrackingRouteParams | undefined;
   Telegram: TelegramRouteParams | undefined;
+  TokenDetail: TokenDetailRouteParams | undefined;
   Dev: undefined;
 };

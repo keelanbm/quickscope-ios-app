@@ -60,7 +60,7 @@ See `docs/architecture.md` for full detail.
 ## Current App Shell Snapshot
 
 - Primary bottom nav: Discover, Scope, Search, Tracking, Portfolio
-- Secondary routes (non-primary nav): Telegram deep-link surface, Dev Console
+- Secondary routes (non-primary nav): Telegram deep-link surface, Token Detail, Dev Console
 - Discovery is now API-fed with sub-tabs: Trending, Scan Feed, Gainers
 - Scope is now API-fed with sub-tabs: New Pairs, Momentum, Scan Surge
 

@@ -12,21 +12,23 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
 
 - Discovery row action `Trade` -> opens `Search` tab (`Trade` route) with `tokenAddress`.
 - Scope row action `Search` -> opens `Search` tab (`Trade` route) with `tokenAddress`.
+- Discovery row tap -> opens `TokenDetail` route with token context.
+- Scope row tap -> opens `TokenDetail` route with token context.
 
 ### Week 3 target behavior
 
-1. Tap token row (not only CTA) opens token detail stack route.
-2. Token detail route shows:
+1. Promote `TokenDetail` from hidden-tab route to dedicated stack route.
+2. Expand token detail route with:
    - token identity + social links
    - key market metrics (MC, 1h vol, 1h tx, 1h change)
-   - primary CTA: `Trade`
+   - primary CTA: `Open in Search`
 3. `Trade` CTA opens existing `Search` route with token context.
 
-### Proposed route shape
+### Proposed route shape (next refinement)
 
 - Keep bottom tabs unchanged.
 - Add stack over tabs:
-  - `TokenDetail` (new)
+  - `TokenDetail` (move from hidden tab to stack)
   - `Trade` (existing tab route reused for context handoff)
 
 ## Performance Baseline Plan

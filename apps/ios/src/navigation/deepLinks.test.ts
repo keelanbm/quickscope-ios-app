@@ -15,6 +15,20 @@ describe("parseQuickscopeDeepLink", () => {
     });
   });
 
+  it("maps token-detail links to Token Detail route", () => {
+    const target = parseQuickscopeDeepLink(
+      "quickscope://token-detail/So11111111111111111111111111111111111111112"
+    );
+
+    expect(target).toEqual({
+      screen: "TokenDetail",
+      params: {
+        source: "deep-link",
+        tokenAddress: "So11111111111111111111111111111111111111112",
+      },
+    });
+  });
+
   it("maps trade links with query params to Trade context", () => {
     const target = parseQuickscopeDeepLink(
       "quickscope://trade?in=So11111111111111111111111111111111111111112&out=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=5"

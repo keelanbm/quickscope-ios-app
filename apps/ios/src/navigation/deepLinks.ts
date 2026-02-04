@@ -3,6 +3,7 @@ import {
   PortfolioRouteParams,
   ScopeRouteParams,
   TelegramRouteParams,
+  TokenDetailRouteParams,
   TrackingRouteParams,
   TradeRouteParams,
 } from "@/src/navigation/types";
@@ -31,6 +32,10 @@ export type ParsedDeepLinkTarget =
   | {
       screen: "Telegram";
       params?: TelegramRouteParams;
+    }
+  | {
+      screen: "TokenDetail";
+      params: TokenDetailRouteParams;
     }
   | {
       screen: "Dev";
@@ -119,6 +124,24 @@ function parseTokenLink(url: URL, tokenCandidate?: string): ParsedDeepLinkTarget
 
   return {
     screen: "Discovery",
+    params: {
+      source: "deep-link",
+      tokenAddress,
+    },
+  };
+}
+
+function parseTokenDetailLink(url: URL, tokenCandidate?: string): ParsedDeepLinkTarget {
+  const tokenAddress = toAddressIfValid(
+    tokenCandidate ?? url.searchParams.get("tokenAddress") ?? url.searchParams.get("token")
+  );
+
+  if (!tokenAddress) {
+    return fallbackToDiscovery();
+  }
+
+  return {
+    screen: "TokenDetail",
     params: {
       source: "deep-link",
       tokenAddress,
@@ -268,6 +291,10 @@ export function parseQuickscopeDeepLink(rawUrl: string): ParsedDeepLinkTarget {
 
   if (firstSegment === "token") {
     return parseTokenLink(parsedUrl, second);
+  }
+
+  if (firstSegment === "token-detail" || firstSegment === "tokendetail") {
+    return parseTokenDetailLink(parsedUrl, second);
   }
 
   if (firstSegment === "trade") {

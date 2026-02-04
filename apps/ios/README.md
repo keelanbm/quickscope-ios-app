@@ -60,6 +60,7 @@ From another terminal tab:
 
 ```bash
 xcrun simctl openurl booted "quickscope://token/So11111111111111111111111111111111111111112"
+xcrun simctl openurl booted "quickscope://token-detail/So11111111111111111111111111111111111111112"
 xcrun simctl openurl booted "quickscope://trade?in=So11111111111111111111111111111111111111112&out=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=5"
 xcrun simctl openurl booted "quickscope://portfolio/Z8wPMesZqDZv4URMfBFH6kwFwM4fxjpdRG33tMjNFeP"
 xcrun simctl openurl booted "quickscope://telegram/share/So11111111111111111111111111111111111111112?chatId=123"
@@ -130,6 +131,7 @@ xcrun simctl openurl booted "quickscope://dev"
   - star toggle (`☆`/`★`)
   - link chips (`X`, `TG`, `Web`) when available
   - `Copy` copies token mint address
+- Tap token symbol/name area and confirm `Token Detail` opens.
 - Tap `Trade` on a row and confirm navigation to the `Search` tab with token context.
 - Pull to refresh and verify updated timestamp changes.
 
@@ -148,6 +150,7 @@ xcrun simctl openurl booted "quickscope://dev"
 - Confirm row actions:
   - `Copy` copies token mint address
   - `Search` opens the `Search` tab with token context
+- Tap token symbol/name area and confirm `Token Detail` opens.
 - Pull to refresh and verify updated timestamp changes.
 
 ## Selected Smoke E2E Path (manual for Week 2)
