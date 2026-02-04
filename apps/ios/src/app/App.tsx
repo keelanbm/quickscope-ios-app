@@ -61,6 +61,9 @@ function getTradeContextLines(params?: TradeRouteParams): string[] | undefined {
   }
 
   const lines = ["Opened from a deep link."];
+  if (params.tokenAddress) {
+    lines.push(`Token: ${params.tokenAddress}`);
+  }
 
   if (params.inputMint) {
     lines.push(`Input mint: ${params.inputMint}`);
