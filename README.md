@@ -40,6 +40,7 @@ Out of scope for v1:
 - `docs/week1-execution-order.md` - Strict Week 1 execution order and import-ready table
 - `docs/roadmap-tickets-weeks2-10.md` - Ticket-ready weekly backlog draft for Weeks 2-10
 - `docs/week2-kickoff.md` - Week 2 execution kickoff status and in-progress foundations
+- `docs/ios-103-auth-qa-matrix.md` - Account-switch/logout QA matrix for auth hardening
 - `docs/decision-log.md` - Decision tracking log for architecture/product approvals
 - `docs/spike-auth-api-parity-2026-02-04.md` - Initial Week 1 auth/API smoke-check report
 - `docs/spike-auth-api-parity-2026-02-04.results.json` - Raw output from automated API smoke checks

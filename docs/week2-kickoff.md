@@ -46,6 +46,8 @@ Move from Week 1 spikes to Week 2 production foundations:
 - Added app foreground refresh policy when access token is stale and refresh token remains valid.
 - Added wallet/session mismatch invalidation so account-switch state is deterministic.
 - Added session wallet persistence (with legacy secure-store fallback support).
+- Added explicit account-switch/logout QA matrix with simulator/device acceptance criteria:
+  - `docs/ios-103-auth-qa-matrix.md`
 
 ### IOS-105 - Quality and test harness setup (in progress)
 
@@ -57,7 +59,15 @@ Move from Week 1 spikes to Week 2 production foundations:
   - expiration parsing
   - skew handling
   - wallet selection and wallet-change invalidation
+- Added unit coverage for secure-store session persistence and legacy token fallback:
+  - `apps/ios/src/features/auth/sessionStorage.test.ts`
 - Documented the selected Week 2 smoke path in `apps/ios/README.md`.
+- Expanded CI trigger coverage so branch pushes are validated early:
+  - `.github/workflows/ios-checks.yml` now runs on `codex/**` pushes and `workflow_dispatch`.
+- Collected local quality-lane baseline timings (MacBook local run, 2026-02-04):
+  - `npm run lint`: ~1.48s
+  - `npm run check-types`: ~0.84s
+  - `npm run test:ci`: ~1.49s
 
 ### IOS-201 - Discovery first real mobile surface (started early)
 

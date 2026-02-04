@@ -99,12 +99,15 @@ xcrun simctl openurl booted "quickscope://dev"
   - if access token is stale but refresh token is valid, provider attempts refresh
 - If you switch wallets in Phantom, app should invalidate stored backend session and prompt re-auth.
 - Tap `Clear stored session` to reset to unauthenticated state.
+- Run the full account-switch/logout QA matrix:
+  - `../../docs/ios-103-auth-qa-matrix.md` (cases A1-A9)
 
 ## Week 2 Quality Lane (IOS-105)
 
 - Unit test scaffold now covers:
   - deep-link parser routing matrix
   - auth session utility logic (expiration parsing, wallet-change invalidation)
+  - secure-store session persistence + legacy migration fallback
 - CI lane is defined at `../../.github/workflows/ios-checks.yml` and runs:
   - lint
   - typecheck
