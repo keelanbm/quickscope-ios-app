@@ -63,6 +63,7 @@ See `docs/architecture.md` for full detail.
 - Secondary routes (non-primary nav): Telegram deep-link surface, Token Detail, Dev Console
 - Discovery is now API-fed with sub-tabs: Trending, Scan Feed, Gainers
 - Scope is now API-fed with sub-tabs: New Pairs, Momentum, Scan Surge
+- Search is now API-fed with symbol/name/CA filtering and token-detail handoff
 
 ## Documentation Workflow
 

@@ -108,6 +108,17 @@ Move from Week 1 spikes to Week 2 production foundations:
 - Added `quickscope://token-detail/<mint>` deep-link route for direct token-detail QA/testing.
 - Moved Token Detail to stack-over-tabs navigation for native back behavior.
 
+### IOS-203 - Search first functional surface
+
+- Replaced Search placeholder with API-fed token search index (`public/filterTokensTable`).
+- Added symbol/name/contract-address query filtering with relevance sorting.
+- Added search result row actions:
+  - open token detail
+  - copy token mint
+- Added deep-link context handling in Search:
+  - prefills query from route params
+  - includes direct `Open token detail` fallback for token-address deep links
+
 ### Week 3 Prep - token entry flow and list performance
 
 - Added Week 3 prep brief for token-detail/trade-entry stack shape and list performance baseline checks:

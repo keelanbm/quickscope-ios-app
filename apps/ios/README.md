@@ -153,6 +153,18 @@ xcrun simctl openurl booted "quickscope://dev"
 - Tap token symbol/name area and confirm `Token Detail` opens.
 - Pull to refresh and verify updated timestamp changes.
 
+## Search Week 2 Check (symbol / name / CA)
+
+- Open `Search` tab.
+- Verify search list loads and `Updated ...` timestamp is shown.
+- Enter a symbol fragment (e.g. `arc`) and verify results filter.
+- Enter a name fragment and verify results filter.
+- Enter a CA/deep-link token address and verify:
+  - query prefill appears
+  - deep-link context card renders
+  - `Open token detail` action works even when list has no match
+- Tap a search row and confirm `Token Detail` opens.
+
 ## Selected Smoke E2E Path (manual for Week 2)
 
 Run this sequence on simulator/device after `npm run start:ios`:

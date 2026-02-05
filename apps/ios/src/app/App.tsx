@@ -30,10 +30,10 @@ import {
   RootTabs,
   TelegramRouteParams,
   TrackingRouteParams,
-  TradeRouteParams,
 } from "@/src/navigation/types";
 import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
+import { SearchScreen } from "@/src/screens/SearchScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
 import { TokenDetailScreen } from "@/src/screens/TokenDetailScreen";
@@ -58,31 +58,6 @@ const navigationTheme: Theme = {
     primary: qsColors.accent,
   },
 };
-
-function getTradeContextLines(params?: TradeRouteParams): string[] | undefined {
-  if (!params?.source) {
-    return undefined;
-  }
-
-  const lines = ["Opened from a deep link."];
-  if (params.tokenAddress) {
-    lines.push(`Token: ${params.tokenAddress}`);
-  }
-
-  if (params.inputMint) {
-    lines.push(`Input mint: ${params.inputMint}`);
-  }
-
-  if (params.outputMint) {
-    lines.push(`Output mint: ${params.outputMint}`);
-  }
-
-  if (params.amount) {
-    lines.push(`Amount: ${params.amount}`);
-  }
-
-  return lines;
-}
 
 function getPortfolioContextLines(params?: PortfolioRouteParams): string[] | undefined {
   if (!params?.source) {
@@ -226,11 +201,7 @@ function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost
               featureName="Search"
               subtitle="Connect to access token search and quick action workflows."
             >
-              <MvpPlaceholderScreen
-                title="Search"
-                description="Token search, quick open, and shortcut actions are being implemented in Week 2-3."
-                contextLines={getTradeContextLines(route.params)}
-              />
+              <SearchScreen rpcClient={rpcClient} params={route.params} />
             </AuthRouteGate>
           </RouteErrorBoundary>
         )}
