@@ -365,7 +365,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                   style={styles.tradeButton}
                   onPress={(event) => {
                     stopRowPress(event);
-                    navigation.navigate("Trade", {
+                    rootNavigation?.navigate("TradeEntry", {
                       source: "deep-link",
                       tokenAddress: item.mint,
                     });

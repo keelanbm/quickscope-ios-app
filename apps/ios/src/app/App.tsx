@@ -37,6 +37,7 @@ import { SearchScreen } from "@/src/screens/SearchScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
 import { TokenDetailScreen } from "@/src/screens/TokenDetailScreen";
+import { TradeEntryScreen } from "@/src/screens/TradeEntryScreen";
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
@@ -118,7 +119,7 @@ function navigateToTarget(
       navigationRef.navigate("MainTabs", { screen: "Scope", params: target.params });
       return;
     case "Trade":
-      navigationRef.navigate("MainTabs", { screen: "Trade", params: target.params });
+      navigationRef.navigate("TradeEntry", target.params);
       return;
     case "Portfolio":
       navigationRef.navigate("MainTabs", { screen: "Portfolio", params: target.params });
@@ -360,6 +361,20 @@ export default function App() {
               children={({ route }) => (
                 <RouteErrorBoundary routeName="Token Detail">
                   <TokenDetailScreen params={route.params} />
+                </RouteErrorBoundary>
+              )}
+            />
+            <Stack.Screen
+              name="TradeEntry"
+              options={{ title: "Trade", headerBackButtonDisplayMode: "minimal" }}
+              children={({ route }) => (
+                <RouteErrorBoundary routeName="Trade">
+                  <AuthRouteGate
+                    featureName="Trade"
+                    subtitle="Connect to request quotes and execute trades."
+                  >
+                    <TradeEntryScreen params={route.params} />
+                  </AuthRouteGate>
                 </RouteErrorBoundary>
               )}
             />

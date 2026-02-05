@@ -132,12 +132,9 @@ export function TokenDetailScreen({ params }: TokenDetailScreenProps) {
         <Pressable
           style={styles.primaryCta}
           onPress={() =>
-            navigation.navigate("MainTabs", {
-              screen: "Trade",
-              params: {
-                source: "deep-link",
-                tokenAddress: params.tokenAddress,
-              },
+            navigation.navigate("TradeEntry", {
+              source: "deep-link",
+              tokenAddress: params.tokenAddress,
             })
           }
         >

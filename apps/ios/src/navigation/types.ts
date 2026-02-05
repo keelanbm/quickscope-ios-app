@@ -17,6 +17,8 @@ export type TradeRouteParams = {
   amount?: string;
 };
 
+export type TradeEntryRouteParams = TradeRouteParams;
+
 export type ScopeRouteParams = DeepLinkMeta;
 
 export type PortfolioRouteParams = {
@@ -65,4 +67,5 @@ export type RootTabs = {
 export type RootStack = {
   MainTabs: NavigatorScreenParams<RootTabs>;
   TokenDetail: TokenDetailRouteParams;
+  TradeEntry: TradeEntryRouteParams | undefined;
 };
