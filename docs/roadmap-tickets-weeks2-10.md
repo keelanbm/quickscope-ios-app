@@ -82,6 +82,30 @@ Estimates are ideal engineering days and should be recalibrated after Week 1 out
   - [ ] Scroll/jank baseline is acceptable on target test devices
   - [ ] Performance risks documented
 
+### IOS-206 - Token detail stack route baseline
+- **Estimate:** 0.75d
+- **Acceptance criteria:**
+  - [ ] Token detail opens from Discovery/Scope/Search lists and token deep links
+  - [ ] Identity header + key stats (MC, 1h vol, 1h tx, 1h change) render
+  - [ ] Primary CTA routes to TradeEntry
+  - [ ] Back navigation returns to originating surface
+
+### IOS-207 - Trade entry + quote preview
+- **Estimate:** 1.0d
+- **Acceptance criteria:**
+  - [ ] TradeEntry accepts token + amount from list actions and deep links
+  - [ ] Quote request loading/error/success states are visible
+  - [ ] Quote TTL is shown and stale quotes are blocked
+  - [ ] Safe fallback to Search for token lookup
+
+### IOS-208 - Review trade confirmation (non-executing)
+- **Estimate:** 0.75d
+- **Acceptance criteria:**
+  - [ ] Review screen recaps quote + token context before execution
+  - [ ] Stale quote guard blocks review/execute path
+  - [ ] Execute CTA is disabled unless feature flag is enabled
+  - [ ] Recovery messaging is explicit for wallet/session mismatches
+
 ---
 
 ## Week 4 - Trading Flow (Core Conversion Path)

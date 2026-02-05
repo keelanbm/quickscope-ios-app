@@ -36,6 +36,12 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
    - default disabled in dev/prod env templates
    - wallet/session/TTL mismatch blocks with explicit recovery messaging
 
+### Ticket breakdown (roadmap IDs)
+
+- IOS-206: Token detail stack route baseline
+- IOS-207: Trade entry + quote preview
+- IOS-208: Review trade confirmation (non-executing)
+
 ### Proposed route shape (implemented baseline)
 
 - Keep bottom tabs unchanged.
