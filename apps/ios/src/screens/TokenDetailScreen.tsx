@@ -1,15 +1,46 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import {
+  Alert,
+  Image,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
+import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import {
+  buildMarketCapSeries,
+  fetchLiveTokenInfo,
+  fetchTokenCandles,
+  type LiveTokenInfo,
+  type TokenMarketCapPoint,
+} from "@/src/features/token/tokenService";
+import { TokenChart } from "@/src/ui/TokenChart";
 
 type TokenDetailScreenProps = {
+  rpcClient: RpcClient;
   params?: TokenDetailRouteParams;
 };
 
 const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
+
+const chartTimeframes = [
+  { id: "1h", label: "1h", rangeSeconds: 60 * 60, resolutionSeconds: 60 },
+  { id: "6h", label: "6h", rangeSeconds: 6 * 60 * 60, resolutionSeconds: 5 * 60 },
+  { id: "24h", label: "24h", rangeSeconds: 24 * 60 * 60, resolutionSeconds: 15 * 60 },
+  { id: "7d", label: "7d", rangeSeconds: 7 * 24 * 60 * 60, resolutionSeconds: 60 * 60 },
+] as const;
+
+type ChartTimeframe = (typeof chartTimeframes)[number];
 
 function formatCompactUsd(value: number | undefined): string {
   if (!value || !Number.isFinite(value) || value <= 0) {
@@ -59,8 +90,36 @@ function formatAgeFromSeconds(unixSeconds: number | undefined): string {
   return `${Math.floor(elapsedSeconds / 604800)}w`;
 }
 
-export function TokenDetailScreen({ params }: TokenDetailScreenProps) {
+function formatChartTimestamp(timestampSeconds: number, timeframeId: string): string {
+  if (!timestampSeconds) {
+    return "--";
+  }
+
+  const date = new Date(timestampSeconds * 1000);
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+
+  if (timeframeId === "1h" || timeframeId === "6h") {
+    return `${hours}:${minutes}`;
+  }
+
+  if (timeframeId === "24h") {
+    return `${date.getMonth() + 1}/${date.getDate()} ${hours}:${minutes}`;
+  }
+
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
+  const requestIdRef = useRef(0);
+  const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(
+    chartTimeframes[2]
+  );
+  const [liveInfo, setLiveInfo] = useState<LiveTokenInfo | null>(null);
+  const [chartData, setChartData] = useState<TokenMarketCapPoint[]>([]);
+  const [isChartLoading, setIsChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
 
   if (!params?.tokenAddress) {
     return (
@@ -71,62 +130,206 @@ export function TokenDetailScreen({ params }: TokenDetailScreenProps) {
     );
   }
 
-  const platformLabel = (params.platform || params.exchange || "unknown").toUpperCase();
+  const tokenAddress = params.tokenAddress;
+
+  useEffect(() => {
+    let isActive = true;
+    const requestId = ++requestIdRef.current;
+
+    const load = async () => {
+      setIsChartLoading(true);
+      setChartError(null);
+
+      try {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const fromSeconds = nowSeconds - selectedTimeframe.rangeSeconds;
+
+        const [tokenInfo, candlesResponse] = await Promise.all([
+          fetchLiveTokenInfo(rpcClient, tokenAddress),
+          fetchTokenCandles(rpcClient, {
+            tokenAddress,
+            from: fromSeconds,
+            to: nowSeconds,
+            resolutionSeconds: selectedTimeframe.resolutionSeconds,
+          }),
+        ]);
+
+        if (!isActive || requestId !== requestIdRef.current) {
+          return;
+        }
+
+        setLiveInfo(tokenInfo ?? null);
+
+        const series = buildMarketCapSeries({
+          candles: candlesResponse.candles ?? [],
+          tokenInfo: tokenInfo ?? null,
+          candlesResponse,
+        });
+
+        setChartData(series);
+      } catch (error) {
+        if (!isActive || requestId !== requestIdRef.current) {
+          return;
+        }
+        setChartError(error instanceof Error ? error.message : "Failed to load chart.");
+      } finally {
+        if (!isActive || requestId !== requestIdRef.current) {
+          return;
+        }
+        setIsChartLoading(false);
+      }
+    };
+
+    void load();
+
+    return () => {
+      isActive = false;
+    };
+  }, [rpcClient, selectedTimeframe, tokenAddress]);
+
+  const tokenMeta = useMemo(() => {
+    const metadata = liveInfo?.token_metadata;
+    return {
+      symbol: metadata?.symbol ?? params.symbol ?? "Unknown",
+      name: metadata?.name ?? params.name ?? "Unnamed token",
+      imageUri: metadata?.image_uri ?? params.imageUri,
+      twitterUrl: metadata?.twitter_url ?? metadata?.twitter,
+      telegramUrl: metadata?.telegram_url ?? metadata?.telegram,
+      websiteUrl: metadata?.website_url ?? metadata?.website,
+    };
+  }, [liveInfo, params]);
+
+  const marketCapUsd = params.marketCapUsd;
   const oneHourChange = params.oneHourChangePercent;
+  const platformLabel = (params.platform || params.exchange || "unknown").toUpperCase();
+  const mintedAtSeconds = liveInfo?.mint_transaction?.ts ?? params.mintedAtSeconds;
+
+  const handleCopyAddress = async () => {
+    await Clipboard.setStringAsync(tokenAddress);
+    Alert.alert("Copied", "Token address copied to clipboard.");
+  };
+
+  const socialLinks = [
+    { label: "X", url: tokenMeta.twitterUrl },
+    { label: "TG", url: tokenMeta.telegramUrl },
+    { label: "Web", url: tokenMeta.websiteUrl },
+  ].filter((link) => Boolean(link.url));
 
   return (
     <View style={styles.page}>
-      <View style={styles.hero}>
-        <Image source={{ uri: params.imageUri || fallbackTokenImage }} style={styles.tokenImage} />
-        <View style={styles.heroText}>
-          <Text style={styles.symbol}>{params.symbol || "Unknown"}</Text>
-          <Text style={styles.name}>{params.name || "Unnamed token"}</Text>
-          <Text style={styles.tagPill}>{platformLabel}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <Image
+            source={{ uri: tokenMeta.imageUri || fallbackTokenImage }}
+            style={styles.tokenImage}
+          />
+          <View style={styles.heroText}>
+            <Text style={styles.symbol}>{tokenMeta.symbol}</Text>
+            <Text style={styles.name}>{tokenMeta.name}</Text>
+            <Text style={styles.tagPill}>{platformLabel}</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={styles.metricsGrid}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Market Cap</Text>
-          <Text style={styles.metricValue}>{formatCompactUsd(params.marketCapUsd)}</Text>
-        </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>1h Volume</Text>
-          <Text style={styles.metricValue}>{formatCompactUsd(params.oneHourVolumeUsd)}</Text>
-        </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>1h Tx</Text>
-          <Text style={styles.metricValue}>
-            {params.oneHourTxCount?.toLocaleString() || "n/a"}
-          </Text>
-        </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>1h Change</Text>
-          <Text
-            style={[
-              styles.metricValue,
-              oneHourChange !== undefined
-                ? oneHourChange >= 0
-                  ? styles.metricPositive
-                  : styles.metricNegative
-                : null,
-            ]}
-          >
-            {formatPercent(oneHourChange)}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.detailsCard}>
-        <Text style={styles.detailLine}>Address: {params.tokenAddress}</Text>
-        <Text style={styles.detailLine}>Age: {formatAgeFromSeconds(params.mintedAtSeconds)}</Text>
-        {typeof params.scanMentionsOneHour === "number" ? (
-          <Text style={styles.detailLine}>
-            Scan mentions (1h): {params.scanMentionsOneHour}
-          </Text>
+        {socialLinks.length > 0 ? (
+          <View style={styles.socialRow}>
+            {socialLinks.map((link) => (
+              <Pressable
+                key={link.label}
+                style={styles.socialPill}
+                onPress={() => link.url && Linking.openURL(link.url)}
+              >
+                <Text style={styles.socialText}>{link.label}</Text>
+              </Pressable>
+            ))}
+          </View>
         ) : null}
-        {params.source ? <Text style={styles.detailLine}>Opened from: {params.source}</Text> : null}
-      </View>
+
+        <View style={styles.metricsGrid}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Market Cap</Text>
+            <Text style={styles.metricValue}>{formatCompactUsd(marketCapUsd)}</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>1h Volume</Text>
+            <Text style={styles.metricValue}>{formatCompactUsd(params.oneHourVolumeUsd)}</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>1h Tx</Text>
+            <Text style={styles.metricValue}>
+              {params.oneHourTxCount?.toLocaleString() || "n/a"}
+            </Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>1h Change</Text>
+            <Text
+              style={[
+                styles.metricValue,
+                oneHourChange !== undefined
+                  ? oneHourChange >= 0
+                    ? styles.metricPositive
+                    : styles.metricNegative
+                  : null,
+              ]}
+            >
+              {formatPercent(oneHourChange)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.chartCard}>
+          <View style={styles.chartHeader}>
+            <Text style={styles.sectionTitle}>Market Cap</Text>
+            <View style={styles.timeframeRow}>
+              {chartTimeframes.map((frame) => {
+                const isActive = frame.id === selectedTimeframe.id;
+                return (
+                  <Pressable
+                    key={frame.id}
+                    onPress={() => setSelectedTimeframe(frame)}
+                    style={[styles.timeframePill, isActive && styles.timeframePillActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.timeframeText,
+                        isActive && styles.timeframeTextActive,
+                      ]}
+                    >
+                      {frame.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <TokenChart
+            data={chartData}
+            height={170}
+            isLoading={isChartLoading}
+            formatValue={formatCompactUsd}
+            formatTimestamp={(ts) => formatChartTimestamp(ts, selectedTimeframe.id)}
+          />
+          {chartError ? <Text style={styles.chartError}>Chart unavailable.</Text> : null}
+        </View>
+
+        <View style={styles.detailsCard}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Address</Text>
+            <Pressable onPress={handleCopyAddress}>
+              <Text style={styles.copyText}>Copy</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.detailLine}>{tokenAddress}</Text>
+          <Text style={styles.detailLine}>Age: {formatAgeFromSeconds(mintedAtSeconds)}</Text>
+          {typeof params.scanMentionsOneHour === "number" ? (
+            <Text style={styles.detailLine}>
+              Scan mentions (1h): {params.scanMentionsOneHour}
+            </Text>
+          ) : null}
+          {params.source ? (
+            <Text style={styles.detailLine}>Opened from: {params.source}</Text>
+          ) : null}
+        </View>
+      </ScrollView>
 
       <View style={styles.ctaWrap}>
         <Pressable
@@ -134,7 +337,7 @@ export function TokenDetailScreen({ params }: TokenDetailScreenProps) {
           onPress={() =>
             navigation.navigate("TradeEntry", {
               source: "deep-link",
-              tokenAddress: params.tokenAddress,
+              tokenAddress,
               outputMintDecimals: params.tokenDecimals,
             })
           }
@@ -156,8 +359,11 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: qsColors.bgCanvas,
+  },
+  scrollContent: {
     padding: qsSpacing.xl,
     gap: qsSpacing.md,
+    paddingBottom: qsSpacing.lg,
   },
   title: {
     color: qsColors.textPrimary,
@@ -191,6 +397,23 @@ const styles = StyleSheet.create({
   name: {
     color: qsColors.textMuted,
     fontSize: 14,
+  },
+  socialRow: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+  },
+  socialPill: {
+    borderRadius: qsRadius.lg,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCard,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  socialText: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
   },
   tagPill: {
     marginTop: 6,
@@ -233,6 +456,48 @@ const styles = StyleSheet.create({
   metricNegative: {
     color: qsColors.danger,
   },
+  chartCard: {
+    gap: qsSpacing.sm,
+  },
+  chartHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: qsSpacing.sm,
+  },
+  sectionTitle: {
+    color: qsColors.textPrimary,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  timeframeRow: {
+    flexDirection: "row",
+    gap: qsSpacing.xs,
+  },
+  timeframePill: {
+    borderRadius: qsRadius.sm,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: qsColors.bgCard,
+  },
+  timeframePillActive: {
+    borderColor: qsColors.accent,
+    backgroundColor: "rgba(78, 163, 255, 0.15)",
+  },
+  timeframeText: {
+    color: qsColors.textSubtle,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  timeframeTextActive: {
+    color: qsColors.textPrimary,
+  },
+  chartError: {
+    color: qsColors.textSubtle,
+    fontSize: 12,
+  },
   detailsCard: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
@@ -241,12 +506,30 @@ const styles = StyleSheet.create({
     padding: qsSpacing.md,
     gap: 6,
   },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  detailLabel: {
+    color: qsColors.textSubtle,
+    fontSize: 12,
+  },
+  copyText: {
+    color: qsColors.accent,
+    fontSize: 12,
+    fontWeight: "600",
+  },
   detailLine: {
     color: qsColors.textSecondary,
     fontSize: 12,
   },
   ctaWrap: {
-    marginTop: "auto",
+    borderTopWidth: 1,
+    borderTopColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCanvas,
+    paddingHorizontal: qsSpacing.xl,
+    paddingVertical: qsSpacing.sm,
     gap: qsSpacing.sm,
   },
   primaryCta: {

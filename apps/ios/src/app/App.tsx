@@ -25,18 +25,18 @@ import {
   type ParsedDeepLinkTarget,
 } from "@/src/navigation/deepLinks";
 import {
-  PortfolioRouteParams,
   RootStack,
   RootTabs,
   TelegramRouteParams,
-  TrackingRouteParams,
 } from "@/src/navigation/types";
 import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
+import { PortfolioScreen } from "@/src/screens/PortfolioScreen";
 import { ReviewTradeScreen } from "@/src/screens/ReviewTradeScreen";
 import { SearchScreen } from "@/src/screens/SearchScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
+import { TrackingScreen } from "@/src/screens/TrackingScreen";
 import { TokenDetailScreen } from "@/src/screens/TokenDetailScreen";
 import { TradeEntryScreen } from "@/src/screens/TradeEntryScreen";
 import { qsColors } from "@/src/theme/tokens";
@@ -60,32 +60,6 @@ const navigationTheme: Theme = {
     primary: qsColors.accent,
   },
 };
-
-function getPortfolioContextLines(params?: PortfolioRouteParams): string[] | undefined {
-  if (!params?.source) {
-    return undefined;
-  }
-
-  const lines = ["Opened from a deep link."];
-  if (params.walletAddress) {
-    lines.push(`Wallet: ${params.walletAddress}`);
-  }
-
-  return lines;
-}
-
-function getTrackingContextLines(params?: TrackingRouteParams): string[] | undefined {
-  if (!params?.source) {
-    return undefined;
-  }
-
-  const lines = ["Opened from a deep link."];
-  if (params.walletAddress) {
-    lines.push(`Wallet: ${params.walletAddress}`);
-  }
-
-  return lines;
-}
 
 function getTelegramContextLines(params?: TelegramRouteParams): string[] | undefined {
   if (!params?.source) {
@@ -215,11 +189,7 @@ function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost
               featureName="Tracking"
               subtitle="Connect to manage tracked wallets and token alerts."
             >
-              <MvpPlaceholderScreen
-                title="Tracking"
-                description="Wallet and token tracking workflows are planned for Week 3."
-                contextLines={getTrackingContextLines(route.params)}
-              />
+              <TrackingScreen params={route.params} />
             </AuthRouteGate>
           </RouteErrorBoundary>
         )}
@@ -231,11 +201,7 @@ function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost
               featureName="Portfolio"
               subtitle="Connect to load balances, PnL, and position details."
             >
-              <MvpPlaceholderScreen
-                title="Portfolio"
-                description="Portfolio and positions details are planned for Week 3 and Week 5."
-                contextLines={getPortfolioContextLines(route.params)}
-              />
+              <PortfolioScreen params={route.params} />
             </AuthRouteGate>
           </RouteErrorBoundary>
         )}
@@ -361,7 +327,7 @@ export default function App() {
               options={{ title: "Token Detail", headerBackButtonDisplayMode: "minimal" }}
               children={({ route }) => (
                 <RouteErrorBoundary routeName="Token Detail">
-                  <TokenDetailScreen params={route.params} />
+                  <TokenDetailScreen rpcClient={rpcClient} params={route.params} />
                 </RouteErrorBoundary>
               )}
             />
