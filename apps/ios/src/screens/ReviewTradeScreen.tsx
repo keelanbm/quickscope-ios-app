@@ -57,6 +57,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
   const [executionError, setExecutionError] = useState<string | undefined>();
   const [executionStateText, setExecutionStateText] = useState<string | undefined>();
   const [executionSignature, setExecutionSignature] = useState<string | undefined>();
+  const [executionCreationTime, setExecutionCreationTime] = useState<string | undefined>();
   const [executionTime, setExecutionTime] = useState<string | undefined>();
   const [executionNotice, setExecutionNotice] = useState<
     | {
@@ -111,6 +112,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
     setExecutionError(undefined);
     setExecutionStateText(undefined);
     setExecutionSignature(undefined);
+    setExecutionCreationTime(undefined);
     setExecutionTime(undefined);
     setExecutionNotice(undefined);
     setIsExecuting(true);
@@ -128,6 +130,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
       const signatureSuffix = result.signature ? ` • ${result.signature.slice(0, 12)}...` : "";
       setExecutionStateText(`${statusText}${signatureSuffix}`);
       setExecutionSignature(result.signature);
+      setExecutionCreationTime(result.creationTime);
       setExecutionTime(result.executionTime);
 
       const normalizedStatus = result.status?.toLowerCase();
@@ -287,6 +290,19 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
         <Text style={styles.line}>{executionBlockedReason ?? "Ready for execution."}</Text>
         {executionStateText ? <Text style={styles.successText}>Result: {executionStateText}</Text> : null}
         {executionTime ? <Text style={styles.meta}>Executed at {executionTime}</Text> : null}
+        {executionCreationTime && executionTime ? (
+          <Text style={styles.meta}>
+            Duration:{" "}
+            {(() => {
+              const start = new Date(executionCreationTime).getTime();
+              const end = new Date(executionTime).getTime();
+              if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+                return "n/a";
+              }
+              return `${((end - start) / 1000).toFixed(2)}s`;
+            })()}
+          </Text>
+        ) : null}
         {executionSignature ? (
           <View style={styles.signatureRow}>
             <Pressable style={styles.signatureButton} onPress={handleCopySignature}>

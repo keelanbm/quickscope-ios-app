@@ -5,6 +5,7 @@ type TxExecutionResult = {
   status?: string;
   signature?: string;
   err?: unknown;
+  creation_time?: string;
   execution_time?: string;
 };
 
@@ -25,6 +26,7 @@ export type SwapExecutionResult = {
   status?: string;
   signature?: string;
   executionId?: number;
+  creationTime?: string;
   executionTime?: string;
   errorPreview?: string;
   raw: unknown;
@@ -55,6 +57,7 @@ export async function requestSwapExecution(
     status: execution?.status,
     signature: execution?.signature,
     executionId: execution?.id,
+    creationTime: execution?.creation_time,
     executionTime: execution?.execution_time,
     errorPreview,
     raw,

@@ -8,6 +8,7 @@ describe("requestSwapExecution", () => {
         id: 42,
         status: "pending",
         signature: "3iKL...abc",
+        creation_time: "2026-02-05T20:29:58Z",
         execution_time: "2026-02-05T20:30:00Z",
       },
     });
@@ -35,6 +36,7 @@ describe("requestSwapExecution", () => {
     expect(result.status).toBe("pending");
     expect(result.signature).toBe("3iKL...abc");
     expect(result.executionId).toBe(42);
+    expect(result.creationTime).toBe("2026-02-05T20:29:58Z");
   });
 
   it("captures execution error preview", async () => {
