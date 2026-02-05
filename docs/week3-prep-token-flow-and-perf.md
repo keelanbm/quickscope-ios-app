@@ -32,6 +32,9 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
    - quote recap and route context
    - explicit execute-disabled state until `tx/swap` guardrails are finalized
    - quote freshness visibility (TTL) so stale quotes are not reviewed/executed
+5. Add execution path behind feature flag (`EXPO_PUBLIC_ENABLE_SWAP_EXECUTION`):
+   - default disabled in dev/prod env templates
+   - wallet/session/TTL mismatch blocks with explicit recovery messaging
 
 ### Proposed route shape (implemented baseline)
 

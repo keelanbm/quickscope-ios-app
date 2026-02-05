@@ -132,7 +132,7 @@ xcrun simctl openurl booted "quickscope://dev"
   - link chips (`X`, `TG`, `Web`) when available
   - `Copy` copies token mint address
 - Tap token symbol/name area and confirm `Token Detail` opens.
-- Tap `Trade` on a row and confirm navigation to the `Search` tab with token context.
+- Tap `Trade` on a row and confirm navigation to `TradeEntry` with token context.
 - Pull to refresh and verify updated timestamp changes.
 
 ## Scope Week 2 Check (New Pairs / Momentum / Scan Surge)
@@ -164,6 +164,19 @@ xcrun simctl openurl booted "quickscope://dev"
   - deep-link context card renders
   - `Open token detail` action works even when list has no match
 - Tap a search row and confirm `Token Detail` opens.
+
+## Trade / Review Check (quote + guarded execution)
+
+- Open token detail and tap `Trade`.
+- Enter amount and tap `Get Quote`.
+- Confirm quote card renders with:
+  - estimated receive
+  - min receive
+  - fee/impact/slippage
+  - quote TTL
+- Tap `Review Trade`.
+- Confirm review screen shows quote recap and TTL.
+- If `EXPO_PUBLIC_ENABLE_SWAP_EXECUTION=false`, confirm execution CTA is disabled.
 
 ## Selected Smoke E2E Path (manual for Week 2)
 

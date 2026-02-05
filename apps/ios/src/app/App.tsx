@@ -388,7 +388,11 @@ export default function App() {
                     featureName="Trade"
                     subtitle="Connect to review and execute trades."
                   >
-                    <ReviewTradeScreen params={route.params} />
+                    <ReviewTradeScreen
+                      rpcClient={rpcClient}
+                      executionEnabled={env.enableSwapExecution}
+                      params={route.params}
+                    />
                   </AuthRouteGate>
                 </RouteErrorBoundary>
               )}

@@ -1,15 +1,22 @@
 import { useEffect, useState } from "react";
 
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
   getQuoteTtlSecondsRemaining,
   isQuoteStale,
 } from "@/src/features/trade/quoteUtils";
-import type { ReviewTradeRouteParams } from "@/src/navigation/types";
+import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
+import type { RpcClient } from "@/src/lib/api/rpcClient";
+import type { ReviewTradeRouteParams, RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
 type ReviewTradeScreenProps = {
+  rpcClient: RpcClient;
+  executionEnabled: boolean;
   params: ReviewTradeRouteParams;
 };
 
@@ -41,10 +48,16 @@ function formatTime(value: number): string {
   return new Date(value).toLocaleTimeString();
 }
 
-export function ReviewTradeScreen({ params }: ReviewTradeScreenProps) {
+export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: ReviewTradeScreenProps) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
+  const { walletAddress, hasValidAccessToken, authenticateFromWallet, status } = useAuthSession();
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executionError, setExecutionError] = useState<string | undefined>();
+  const [executionStateText, setExecutionStateText] = useState<string | undefined>();
   const quoteIsStale = isQuoteStale(params.quoteRequestedAtMs, nowMs);
   const quoteTtlSeconds = getQuoteTtlSecondsRemaining(params.quoteRequestedAtMs, nowMs);
+  const walletMismatch = walletAddress !== undefined && walletAddress !== params.walletAddress;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -53,6 +66,59 @@ export function ReviewTradeScreen({ params }: ReviewTradeScreenProps) {
 
     return () => clearInterval(timer);
   }, []);
+
+  const executionBlockedReason = !executionEnabled
+    ? "Execution is disabled in this build."
+    : quoteIsStale
+      ? "Quote expired. Refresh quote before execution."
+      : !hasValidAccessToken
+        ? "Session is not authenticated."
+        : walletMismatch
+          ? "Connected wallet does not match quote wallet."
+          : undefined;
+
+  const handleExecute = async () => {
+    if (executionBlockedReason || isExecuting) {
+      return;
+    }
+
+    const shouldExecute = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        "Execute trade?",
+        "This will submit tx/swap with the reviewed quote context.",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Execute", style: "destructive", onPress: () => resolve(true) },
+        ]
+      );
+    });
+
+    if (!shouldExecute) {
+      return;
+    }
+
+    setExecutionError(undefined);
+    setExecutionStateText(undefined);
+    setIsExecuting(true);
+
+    try {
+      const result = await requestSwapExecution(rpcClient, {
+        walletAddress: params.walletAddress,
+        inputMint: params.inputMint,
+        outputMint: params.outputMint,
+        amountAtomic: params.amountAtomic,
+        slippageBps: params.slippageBps,
+      });
+
+      const statusText = result.status ? result.status.toUpperCase() : "SUBMITTED";
+      const signatureSuffix = result.signature ? ` • ${result.signature.slice(0, 12)}...` : "";
+      setExecutionStateText(`${statusText}${signatureSuffix}`);
+    } catch (error) {
+      setExecutionError(String(error));
+    } finally {
+      setIsExecuting(false);
+    }
+  };
 
   return (
     <View style={styles.page}>
@@ -97,14 +163,49 @@ export function ReviewTradeScreen({ params }: ReviewTradeScreenProps) {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Execution status</Text>
-        <Text style={styles.line}>
-          Execution is intentionally disabled in this build while we finalize tx/swap safety checks.
-        </Text>
+        <Text style={styles.line}>{executionBlockedReason ?? "Ready for execution."}</Text>
+        {executionStateText ? <Text style={styles.successText}>Result: {executionStateText}</Text> : null}
+        {executionError ? <Text style={styles.errorText}>{executionError}</Text> : null}
+        {!hasValidAccessToken ? (
+          <Pressable
+            style={styles.authButton}
+            onPress={() => {
+              void authenticateFromWallet();
+            }}
+            disabled={status === "authenticating"}
+          >
+            <Text style={styles.authButtonText}>
+              {status === "authenticating" ? "Authenticating..." : "Authenticate Session"}
+            </Text>
+          </Pressable>
+        ) : null}
+        {walletMismatch ? (
+          <Text style={styles.errorText}>Quote wallet and connected wallet do not match.</Text>
+        ) : null}
       </View>
 
       <View style={styles.actions}>
-        <Pressable style={styles.disabledButton} disabled>
-          <Text style={styles.disabledButtonText}>Execute Trade (Coming Soon)</Text>
+        <Pressable
+          style={[
+            styles.executeButton,
+            executionBlockedReason ? styles.executeButtonDisabled : null,
+          ]}
+          onPress={() => {
+            void handleExecute();
+          }}
+          disabled={Boolean(executionBlockedReason) || isExecuting}
+        >
+          <Text
+            style={[
+              styles.executeButtonText,
+              executionBlockedReason ? styles.executeButtonTextDisabled : null,
+            ]}
+          >
+            {isExecuting ? "Executing..." : "Execute Trade"}
+          </Text>
+        </Pressable>
+        <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>Back to Trade</Text>
         </Pressable>
       </View>
     </View>
@@ -154,18 +255,61 @@ const styles = StyleSheet.create({
   metaDanger: {
     color: qsColors.danger,
   },
+  successText: {
+    color: qsColors.success,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  errorText: {
+    color: qsColors.danger,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  authButton: {
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.accent,
+    backgroundColor: qsColors.bgCard,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  authButtonText: {
+    color: qsColors.accent,
+    fontSize: 13,
+    fontWeight: "600",
+  },
   actions: {
     marginTop: "auto",
+    gap: qsSpacing.sm,
   },
-  disabledButton: {
+  executeButton: {
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.borderDefault,
+    backgroundColor: qsColors.accent,
     paddingVertical: 12,
     alignItems: "center",
   },
-  disabledButtonText: {
-    color: qsColors.textSubtle,
+  executeButtonDisabled: {
+    backgroundColor: qsColors.borderDefault,
+  },
+  executeButtonText: {
+    color: "#061326",
     fontSize: 14,
     fontWeight: "700",
+  },
+  executeButtonTextDisabled: {
+    color: qsColors.textSubtle,
+  },
+  backButton: {
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCard,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  backButtonText: {
+    color: qsColors.textSecondary,
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

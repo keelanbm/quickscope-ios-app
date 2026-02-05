@@ -27,6 +27,7 @@ export type ReviewTradeRouteParams = {
   inputMint: string;
   outputMint: string;
   amountUi: number;
+  amountAtomic: number;
   inputTokenDecimals: number;
   outputTokenDecimals?: number;
   slippageBps: number;

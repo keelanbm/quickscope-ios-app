@@ -163,6 +163,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       inputMint: quote.inputMint,
       outputMint,
       amountUi: quote.amountUi,
+      amountAtomic: quote.amountAtomic,
       inputTokenDecimals: quote.inputTokenDecimals,
       outputTokenDecimals: quote.outputTokenDecimals,
       slippageBps: quote.slippageBps,
