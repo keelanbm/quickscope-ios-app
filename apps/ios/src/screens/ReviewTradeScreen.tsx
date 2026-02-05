@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
@@ -55,6 +56,8 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionError, setExecutionError] = useState<string | undefined>();
   const [executionStateText, setExecutionStateText] = useState<string | undefined>();
+  const [executionSignature, setExecutionSignature] = useState<string | undefined>();
+  const [executionTime, setExecutionTime] = useState<string | undefined>();
   const quoteIsStale = isQuoteStale(params.quoteRequestedAtMs, nowMs);
   const quoteTtlSeconds = getQuoteTtlSecondsRemaining(params.quoteRequestedAtMs, nowMs);
   const walletMismatch = walletAddress !== undefined && walletAddress !== params.walletAddress;
@@ -99,6 +102,8 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
 
     setExecutionError(undefined);
     setExecutionStateText(undefined);
+    setExecutionSignature(undefined);
+    setExecutionTime(undefined);
     setIsExecuting(true);
 
     try {
@@ -113,10 +118,40 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
       const statusText = result.status ? result.status.toUpperCase() : "SUBMITTED";
       const signatureSuffix = result.signature ? ` • ${result.signature.slice(0, 12)}...` : "";
       setExecutionStateText(`${statusText}${signatureSuffix}`);
+      setExecutionSignature(result.signature);
+      setExecutionTime(result.executionTime);
     } catch (error) {
       setExecutionError(String(error));
     } finally {
       setIsExecuting(false);
+    }
+  };
+
+  const handleCopySignature = async () => {
+    if (!executionSignature) {
+      return;
+    }
+
+    await Clipboard.setStringAsync(executionSignature);
+    Alert.alert("Signature copied", executionSignature);
+  };
+
+  const handleOpenExplorer = async () => {
+    if (!executionSignature) {
+      return;
+    }
+
+    const url = `https://solscan.io/tx/${executionSignature}`;
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (!canOpen) {
+        Alert.alert("Invalid link", "Unable to open explorer link.");
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert("Open failed", String(error));
     }
   };
 
@@ -182,6 +217,17 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
         <Text style={styles.cardTitle}>Execution status</Text>
         <Text style={styles.line}>{executionBlockedReason ?? "Ready for execution."}</Text>
         {executionStateText ? <Text style={styles.successText}>Result: {executionStateText}</Text> : null}
+        {executionTime ? <Text style={styles.meta}>Executed at {executionTime}</Text> : null}
+        {executionSignature ? (
+          <View style={styles.signatureRow}>
+            <Pressable style={styles.signatureButton} onPress={handleCopySignature}>
+              <Text style={styles.signatureButtonText}>Copy signature</Text>
+            </Pressable>
+            <Pressable style={styles.signatureButton} onPress={handleOpenExplorer}>
+              <Text style={styles.signatureButtonText}>View on Solscan</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {executionError ? <Text style={styles.errorText}>{executionError}</Text> : null}
         {!hasValidAccessToken ? (
           <Pressable
@@ -322,6 +368,24 @@ const styles = StyleSheet.create({
   authButtonText: {
     color: qsColors.accent,
     fontSize: 13,
+    fontWeight: "600",
+  },
+  signatureRow: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+    flexWrap: "wrap",
+  },
+  signatureButton: {
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCard,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  signatureButtonText: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
     fontWeight: "600",
   },
   actions: {
