@@ -106,6 +106,7 @@ Move from Week 1 spikes to Week 2 production foundations:
   - open token in `Search` tab context
 - Added row-tap token detail entry from both Discovery and Scope feeds.
 - Added `quickscope://token-detail/<mint>` deep-link route for direct token-detail QA/testing.
+- Moved Token Detail to stack-over-tabs navigation for native back behavior.
 
 ### Week 3 Prep - token entry flow and list performance
 

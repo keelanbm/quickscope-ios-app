@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import {
   Alert,
   FlatList,
+  type GestureResponderEvent,
   Image,
   Linking,
   Pressable,
@@ -21,7 +22,7 @@ import {
   type DiscoveryToken,
 } from "@/src/features/discovery/discoveryService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
-import type { DiscoveryRouteParams, RootTabs } from "@/src/navigation/types";
+import type { DiscoveryRouteParams, RootStack, RootTabs } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
 type DiscoveryScreenProps = {
@@ -109,6 +110,7 @@ function tabSubtitle(activeTab: DiscoveryTabId): string {
 
 export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
+  const rootNavigation = navigation.getParent<NavigationProp<RootStack>>();
   const requestSeqRef = useRef(0);
   const [activeTab, setActiveTab] = useState<DiscoveryTabId>("trending");
   const [rows, setRows] = useState<DiscoveryToken[]>([]);
@@ -197,7 +199,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
 
   const handleOpenTokenDetail = useCallback(
     (token: DiscoveryToken) => {
-      navigation.navigate("TokenDetail", {
+      rootNavigation?.navigate("TokenDetail", {
         source: "discovery-row",
         tokenAddress: token.mint,
         symbol: token.symbol,
@@ -213,8 +215,12 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         scanMentionsOneHour: token.scanMentionsOneHour,
       });
     },
-    [navigation]
+    [rootNavigation]
   );
+
+  const stopRowPress = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
+  }, []);
 
   return (
     <FlatList
@@ -298,9 +304,12 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         const platformLabel = (item.platform || item.exchange || "unknown").toUpperCase();
 
         return (
-          <View style={[styles.rowItem, highlighted ? styles.rowItemHighlighted : null]}>
+          <Pressable
+            style={[styles.rowItem, highlighted ? styles.rowItemHighlighted : null]}
+            onPress={() => handleOpenTokenDetail(item)}
+          >
             <View style={styles.rowMain}>
-              <Pressable style={styles.tokenColumn} onPress={() => handleOpenTokenDetail(item)}>
+              <View style={styles.tokenColumn}>
                 <Image
                   source={{ uri: item.imageUri || fallbackTokenImage }}
                   style={styles.tokenImage}
@@ -314,7 +323,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                   </Text>
                   <Text style={styles.tagPill}>{platformLabel}</Text>
                 </View>
-              </Pressable>
+              </View>
 
               <View style={styles.metricColumn}>
                 <Text numberOfLines={1} style={styles.metricValue}>
@@ -343,17 +352,24 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
               </View>
 
               <View style={styles.actionsColumn}>
-                <Pressable onPress={() => toggleStar(item.mint)} hitSlop={6}>
+                <Pressable
+                  onPress={(event) => {
+                    stopRowPress(event);
+                    toggleStar(item.mint);
+                  }}
+                  hitSlop={6}
+                >
                   <Text style={styles.starText}>{isStarred ? "★" : "☆"}</Text>
                 </Pressable>
                 <Pressable
                   style={styles.tradeButton}
-                  onPress={() =>
+                  onPress={(event) => {
+                    stopRowPress(event);
                     navigation.navigate("Trade", {
                       source: "deep-link",
                       tokenAddress: item.mint,
-                    })
-                  }
+                    });
+                  }}
                 >
                   <Text style={styles.tradeButtonText}>Trade</Text>
                 </Pressable>
@@ -369,7 +385,10 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                 {item.twitterUrl ? (
                   <Pressable
                     style={styles.linkChip}
-                    onPress={() => handleOpenExternal(item.twitterUrl!)}
+                    onPress={(event) => {
+                      stopRowPress(event);
+                      void handleOpenExternal(item.twitterUrl!);
+                    }}
                   >
                     <Text style={styles.linkChipText}>X</Text>
                   </Pressable>
@@ -377,22 +396,37 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                 {item.telegramUrl ? (
                   <Pressable
                     style={styles.linkChip}
-                    onPress={() => handleOpenExternal(item.telegramUrl!)}
+                    onPress={(event) => {
+                      stopRowPress(event);
+                      void handleOpenExternal(item.telegramUrl!);
+                    }}
                   >
                     <Text style={styles.linkChipText}>TG</Text>
                   </Pressable>
                 ) : null}
                 {item.websiteUrl ? (
-                  <Pressable style={styles.linkChip} onPress={() => handleOpenExternal(item.websiteUrl!)}>
+                  <Pressable
+                    style={styles.linkChip}
+                    onPress={(event) => {
+                      stopRowPress(event);
+                      void handleOpenExternal(item.websiteUrl!);
+                    }}
+                  >
                     <Text style={styles.linkChipText}>Web</Text>
                   </Pressable>
                 ) : null}
-                <Pressable style={styles.linkChip} onPress={() => handleCopyAddress(item.mint)}>
+                <Pressable
+                  style={styles.linkChip}
+                  onPress={(event) => {
+                    stopRowPress(event);
+                    void handleCopyAddress(item.mint);
+                  }}
+                >
                   <Text style={styles.linkChipText}>Copy</Text>
                 </Pressable>
               </View>
             </View>
-          </View>
+          </Pressable>
         );
       }}
       ListEmptyComponent={

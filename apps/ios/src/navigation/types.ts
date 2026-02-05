@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from "@react-navigation/native";
+
 type DeepLinkMeta = {
   source?: "deep-link";
 };
@@ -57,6 +59,10 @@ export type RootTabs = {
   Portfolio: PortfolioRouteParams | undefined;
   Tracking: TrackingRouteParams | undefined;
   Telegram: TelegramRouteParams | undefined;
-  TokenDetail: TokenDetailRouteParams | undefined;
   Dev: undefined;
+};
+
+export type RootStack = {
+  MainTabs: NavigatorScreenParams<RootTabs>;
+  TokenDetail: TokenDetailRouteParams;
 };

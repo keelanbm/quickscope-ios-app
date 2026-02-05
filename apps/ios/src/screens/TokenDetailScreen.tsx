@@ -1,8 +1,8 @@
-import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
-import type { RootTabs, TokenDetailRouteParams } from "@/src/navigation/types";
+import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
 type TokenDetailScreenProps = {
@@ -60,7 +60,7 @@ function formatAgeFromSeconds(unixSeconds: number | undefined): string {
 }
 
 export function TokenDetailScreen({ params }: TokenDetailScreenProps) {
-  const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
 
   if (!params?.tokenAddress) {
     return (
@@ -132,15 +132,21 @@ export function TokenDetailScreen({ params }: TokenDetailScreenProps) {
         <Pressable
           style={styles.primaryCta}
           onPress={() =>
-            navigation.navigate("Trade", {
-              source: "deep-link",
-              tokenAddress: params.tokenAddress,
+            navigation.navigate("MainTabs", {
+              screen: "Trade",
+              params: {
+                source: "deep-link",
+                tokenAddress: params.tokenAddress,
+              },
             })
           }
         >
-          <Text style={styles.primaryCtaText}>Open in Search</Text>
+          <Text style={styles.primaryCtaText}>Trade</Text>
         </Pressable>
-        <Pressable style={styles.secondaryCta} onPress={() => navigation.navigate("Discovery")}>
+        <Pressable
+          style={styles.secondaryCta}
+          onPress={() => navigation.navigate("MainTabs", { screen: "Discovery" })}
+        >
           <Text style={styles.secondaryCtaText}>Back to Discover</Text>
         </Pressable>
       </View>

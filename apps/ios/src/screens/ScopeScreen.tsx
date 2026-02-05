@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import {
   Alert,
   FlatList,
+  type GestureResponderEvent,
   Image,
   Pressable,
   RefreshControl,
@@ -20,7 +21,7 @@ import {
   type ScopeToken,
 } from "@/src/features/scope/scopeService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
-import type { RootTabs, ScopeRouteParams } from "@/src/navigation/types";
+import type { RootStack, RootTabs, ScopeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
 type ScopeScreenProps = {
@@ -108,6 +109,7 @@ function tabSubtitle(activeTab: ScopeTabId): string {
 
 export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
+  const rootNavigation = navigation.getParent<NavigationProp<RootStack>>();
   const requestSeqRef = useRef(0);
   const [activeTab, setActiveTab] = useState<ScopeTabId>("new-pairs");
   const [rows, setRows] = useState<ScopeToken[]>([]);
@@ -173,7 +175,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
 
   const handleOpenTokenDetail = useCallback(
     (token: ScopeToken) => {
-      navigation.navigate("TokenDetail", {
+      rootNavigation?.navigate("TokenDetail", {
         source: "scope-row",
         tokenAddress: token.mint,
         symbol: token.symbol,
@@ -189,8 +191,12 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
         scanMentionsOneHour: token.scanMentionsOneHour,
       });
     },
-    [navigation]
+    [rootNavigation]
   );
+
+  const stopRowPress = useCallback((event: GestureResponderEvent) => {
+    event.stopPropagation();
+  }, []);
 
   return (
     <FlatList
@@ -273,9 +279,9 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
         const platformLabel = (item.platform || item.exchange || "unknown").toUpperCase();
 
         return (
-          <View style={styles.rowItem}>
+          <Pressable style={styles.rowItem} onPress={() => handleOpenTokenDetail(item)}>
             <View style={styles.rowMain}>
-              <Pressable style={styles.tokenColumn} onPress={() => handleOpenTokenDetail(item)}>
+              <View style={styles.tokenColumn}>
                 <Image
                   source={{ uri: item.imageUri || fallbackTokenImage }}
                   style={styles.tokenImage}
@@ -289,7 +295,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                   </Text>
                   <Text style={styles.tagPill}>{platformLabel}</Text>
                 </View>
-              </Pressable>
+              </View>
 
               <View style={styles.metricColumn}>
                 <Text numberOfLines={1} style={styles.metricValue}>
@@ -324,23 +330,30 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
               </View>
 
               <View style={styles.actionsColumn}>
-                <Pressable onPress={() => void handleCopyAddress(item.mint)} hitSlop={6}>
+                <Pressable
+                  onPress={(event) => {
+                    stopRowPress(event);
+                    void handleCopyAddress(item.mint);
+                  }}
+                  hitSlop={6}
+                >
                   <Text style={styles.linkText}>Copy</Text>
                 </Pressable>
                 <Pressable
-                  onPress={() =>
+                  onPress={(event) => {
+                    stopRowPress(event);
                     navigation.navigate("Trade", {
                       source: "deep-link",
                       tokenAddress: item.mint,
-                    })
-                  }
+                    });
+                  }}
                   hitSlop={6}
                 >
                   <Text style={styles.tradeText}>Search</Text>
                 </Pressable>
               </View>
             </View>
-          </View>
+          </Pressable>
         );
       }}
       ListEmptyComponent={
