@@ -1,5 +1,11 @@
+import { useEffect, useState } from "react";
+
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import {
+  getQuoteTtlSecondsRemaining,
+  isQuoteStale,
+} from "@/src/features/trade/quoteUtils";
 import type { ReviewTradeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
@@ -36,6 +42,18 @@ function formatTime(value: number): string {
 }
 
 export function ReviewTradeScreen({ params }: ReviewTradeScreenProps) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const quoteIsStale = isQuoteStale(params.quoteRequestedAtMs, nowMs);
+  const quoteTtlSeconds = getQuoteTtlSecondsRemaining(params.quoteRequestedAtMs, nowMs);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <View style={styles.page}>
       <Text style={styles.title}>Review Trade</Text>
@@ -52,6 +70,9 @@ export function ReviewTradeScreen({ params }: ReviewTradeScreenProps) {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Quote</Text>
+        <Text style={[styles.meta, quoteIsStale ? styles.metaDanger : null]}>
+          {quoteIsStale ? "Quote expired" : `Quote valid for ~${quoteTtlSeconds}s`}
+        </Text>
         <Text style={styles.line}>
           You pay: {formatAmount(params.amountUi, params.inputTokenDecimals)}
         </Text>
@@ -129,6 +150,9 @@ const styles = StyleSheet.create({
     color: qsColors.textSubtle,
     fontSize: 11,
     marginTop: 2,
+  },
+  metaDanger: {
+    color: qsColors.danger,
   },
   actions: {
     marginTop: "auto",

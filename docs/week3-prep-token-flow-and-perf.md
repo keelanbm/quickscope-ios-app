@@ -31,6 +31,7 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
 4. Add non-executing `ReviewTrade` confirmation screen:
    - quote recap and route context
    - explicit execute-disabled state until `tx/swap` guardrails are finalized
+   - quote freshness visibility (TTL) so stale quotes are not reviewed/executed
 
 ### Proposed route shape (implemented baseline)
 

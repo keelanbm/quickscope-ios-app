@@ -1,10 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import {
+  getQuoteTtlSecondsRemaining,
+  isQuoteStale,
+} from "@/src/features/trade/quoteUtils";
 import {
   requestSwapQuote,
   type QuoteResult,
@@ -59,6 +63,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
   const [quote, setQuote] = useState<QuoteResult | undefined>();
   const [quoteError, setQuoteError] = useState<string | undefined>();
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const inputMint = params?.inputMint ?? SOL_MINT;
   const outputMint = params?.outputMint ?? params?.tokenAddress;
@@ -79,6 +84,21 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
     }
     return lines;
   }, [inputMint, outputMint, params?.tokenAddress]);
+
+  useEffect(() => {
+    if (!quote) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [quote]);
+
+  const quoteIsStale = quote ? isQuoteStale(quote.requestedAtMs, nowMs) : false;
+  const quoteTtlSeconds = quote ? getQuoteTtlSecondsRemaining(quote.requestedAtMs, nowMs) : 0;
 
   const handleGetQuote = async () => {
     if (!walletAddress) {
@@ -130,6 +150,10 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
   const handleReviewTrade = () => {
     if (!quote || !walletAddress || !outputMint) {
+      return;
+    }
+    if (quoteIsStale) {
+      Alert.alert("Quote expired", "Refresh quote before continuing to review.");
       return;
     }
 
@@ -202,6 +226,9 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       {quote ? (
         <View style={styles.quoteCard}>
           <Text style={styles.quoteTitle}>Quote ready</Text>
+          <Text style={styles.quoteMeta}>
+            {quoteIsStale ? "Quote expired" : `Quote valid for ~${quoteTtlSeconds}s`}
+          </Text>
           <Text style={styles.contextText}>
             You pay: {formatTokenAmount(quote.amountUi, quote.inputTokenDecimals)} (
             {formatAtomic(quote.summary.amountInAtomic)} atomic)
@@ -226,6 +253,9 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
           <Text style={styles.contextText}>Slippage: {quote.slippageBps} bps</Text>
           {quote.summary.feeRateBps !== undefined ? (
             <Text style={styles.contextText}>Fee rate: {quote.summary.feeRateBps} bps</Text>
+          ) : null}
+          {quoteIsStale ? (
+            <Text style={styles.staleWarning}>Refresh quote before reviewing trade.</Text>
           ) : null}
         </View>
       ) : null}
@@ -343,6 +373,16 @@ const styles = StyleSheet.create({
     color: qsColors.textPrimary,
     fontSize: 14,
     fontWeight: "700",
+  },
+  quoteMeta: {
+    color: qsColors.textSubtle,
+    fontSize: 11,
+  },
+  staleWarning: {
+    color: qsColors.danger,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
   },
   errorCard: {
     borderWidth: 1,
