@@ -194,6 +194,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
       navigation.navigate("TokenDetail", {
         source: "deep-link",
         tokenAddress: token.mint,
+        tokenDecimals: token.tokenDecimals,
         symbol: token.symbol,
         name: token.name,
         imageUri: token.imageUri,

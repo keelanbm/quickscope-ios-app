@@ -178,6 +178,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
       rootNavigation?.navigate("TokenDetail", {
         source: "scope-row",
         tokenAddress: token.mint,
+        tokenDecimals: token.tokenDecimals,
         symbol: token.symbol,
         name: token.name,
         imageUri: token.imageUri,
@@ -345,6 +346,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                     navigation.navigate("Trade", {
                       source: "deep-link",
                       tokenAddress: item.mint,
+                      outputMintDecimals: item.tokenDecimals,
                     });
                   }}
                   hitSlop={6}

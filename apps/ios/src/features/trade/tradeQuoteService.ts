@@ -1,34 +1,64 @@
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
-const LAMPORTS_PER_SOL = 1_000_000_000;
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD6h7nGQ6GdQ4Yf9sC6pHf";
 
-type QuoteResponseShape = Record<string, unknown>;
+const KNOWN_MINT_DECIMALS: Record<string, number> = {
+  [SOL_MINT]: 9,
+  [USDC_MINT]: 6,
+  [USDT_MINT]: 6,
+};
 
 export type QuoteRequestInput = {
   walletAddress: string;
   inputMint: string;
   outputMint: string;
   amountUi: number;
+  inputTokenDecimals?: number;
+  outputTokenDecimals?: number;
   slippageBps?: number;
 };
 
+export type TradeSwapQuote = {
+  quickscope_fee_info?: {
+    user_fee_rate_bps?: number | string;
+    fee_amount_sol?: number | string;
+  };
+  amount_in?: number | string;
+  amount_in_max?: number | string;
+  amount_out?: number | string;
+  amount_out_min?: number | string;
+  outAmount?: number | string;
+  otherAmountThreshold?: number | string;
+  priceImpactPct?: number | string;
+  routePlan?: unknown[];
+};
+
 export type QuoteSummary = {
+  amountInAtomic?: number;
+  amountInMaxAtomic?: number;
   outAmountAtomic?: number;
   minOutAmountAtomic?: number;
   priceImpactPercent?: number;
+  feeAmountSol?: number;
+  feeRateBps?: number;
   routeHopCount?: number;
+  amountOutUi?: number;
+  minOutAmountUi?: number;
 };
 
 export type QuoteResult = {
   requestedAtMs: number;
   inputMint: string;
   outputMint: string;
+  inputTokenDecimals: number;
+  outputTokenDecimals?: number;
   amountUi: number;
   amountAtomic: number;
   slippageBps: number;
   summary: QuoteSummary;
-  raw: unknown;
+  raw: TradeSwapQuote;
 };
 
 function toNumber(value: unknown): number | undefined {
@@ -36,23 +66,25 @@ function toNumber(value: unknown): number | undefined {
   return Number.isFinite(numeric) ? numeric : undefined;
 }
 
-function asObject(value: unknown): QuoteResponseShape | undefined {
-  return value && typeof value === "object" ? (value as QuoteResponseShape) : undefined;
-}
-
-function pickNumber(obj: QuoteResponseShape | undefined, keys: string[]): number | undefined {
-  if (!obj) {
+function toTokenUnits(atomicAmount: number | undefined, decimals: number | undefined): number | undefined {
+  if (atomicAmount === undefined || decimals === undefined) {
     return undefined;
   }
 
-  for (const key of keys) {
-    const numeric = toNumber(obj[key]);
-    if (numeric !== undefined) {
-      return numeric;
-    }
+  return atomicAmount / 10 ** decimals;
+}
+
+function inferInputDecimals(inputMint: string, inputTokenDecimals?: number): number {
+  if (typeof inputTokenDecimals === "number" && Number.isFinite(inputTokenDecimals)) {
+    return inputTokenDecimals;
   }
 
-  return undefined;
+  const fromMintMap = KNOWN_MINT_DECIMALS[inputMint];
+  if (typeof fromMintMap === "number") {
+    return fromMintMap;
+  }
+
+  throw new Error("Input token decimals are unavailable. Use SOL input or provide token decimals.");
 }
 
 function priceImpactToPercent(value: number | undefined): number | undefined {
@@ -67,31 +99,38 @@ function priceImpactToPercent(value: number | undefined): number | undefined {
   return value;
 }
 
-function inferQuoteSummary(raw: unknown): QuoteSummary {
-  const object = asObject(raw);
-  const routePlan = object?.routePlan;
+function inferQuoteSummary(raw: TradeSwapQuote, outputTokenDecimals?: number): QuoteSummary {
+  const amountInAtomic = toNumber(raw.amount_in);
+  const amountInMaxAtomic = toNumber(raw.amount_in_max);
+  const outAmountAtomic = toNumber(raw.amount_out ?? raw.outAmount);
+  const minOutAmountAtomic = toNumber(raw.amount_out_min ?? raw.otherAmountThreshold);
+  const priceImpactPercent = priceImpactToPercent(toNumber(raw.priceImpactPct));
+  const feeAmountSol = toNumber(raw.quickscope_fee_info?.fee_amount_sol);
+  const feeRateBps = toNumber(raw.quickscope_fee_info?.user_fee_rate_bps);
+  const routePlan = raw.routePlan;
   const routeHopCount = Array.isArray(routePlan) ? routePlan.length : undefined;
 
   return {
-    outAmountAtomic: pickNumber(object, ["outAmount", "out_amount", "amountOut"]),
-    minOutAmountAtomic: pickNumber(object, [
-      "otherAmountThreshold",
-      "minOutAmount",
-      "min_out_amount",
-    ]),
-    priceImpactPercent: priceImpactToPercent(
-      pickNumber(object, ["priceImpactPct", "price_impact_pct", "priceImpactPercent"])
-    ),
+    amountInAtomic,
+    amountInMaxAtomic,
+    outAmountAtomic,
+    minOutAmountAtomic,
+    priceImpactPercent,
+    feeAmountSol,
+    feeRateBps,
     routeHopCount,
+    amountOutUi: toTokenUnits(outAmountAtomic, outputTokenDecimals),
+    minOutAmountUi: toTokenUnits(minOutAmountAtomic, outputTokenDecimals),
   };
 }
 
-function toAtomicAmount(amountUi: number, inputMint: string): number {
-  if (inputMint !== SOL_MINT) {
-    throw new Error("Only SOL-input quote requests are enabled in this build.");
+function toAtomicAmount(amountUi: number, inputTokenDecimals: number): number {
+  const multiplier = 10 ** inputTokenDecimals;
+  if (!Number.isFinite(multiplier) || multiplier <= 0) {
+    throw new Error("Invalid token decimals for quote conversion.");
   }
 
-  return Math.max(1, Math.floor(amountUi * LAMPORTS_PER_SOL));
+  return Math.max(1, Math.floor(amountUi * multiplier));
 }
 
 export async function requestSwapQuote(
@@ -103,9 +142,10 @@ export async function requestSwapQuote(
     throw new Error("Enter an amount greater than 0.");
   }
 
+  const inputTokenDecimals = inferInputDecimals(input.inputMint, input.inputTokenDecimals);
   const slippageBps = input.slippageBps ?? 50;
-  const amountAtomic = toAtomicAmount(amountUi, input.inputMint);
-  const raw = await rpcClient.call<unknown>("tx/getSwapQuote", [
+  const amountAtomic = toAtomicAmount(amountUi, inputTokenDecimals);
+  const raw = await rpcClient.call<TradeSwapQuote>("tx/getSwapQuote", [
     input.walletAddress,
     input.inputMint,
     input.outputMint,
@@ -121,10 +161,12 @@ export async function requestSwapQuote(
     requestedAtMs: Date.now(),
     inputMint: input.inputMint,
     outputMint: input.outputMint,
+    inputTokenDecimals,
+    outputTokenDecimals: input.outputTokenDecimals,
     amountUi,
     amountAtomic,
     slippageBps,
-    summary: inferQuoteSummary(raw),
+    summary: inferQuoteSummary(raw, input.outputTokenDecimals),
     raw,
   };
 }

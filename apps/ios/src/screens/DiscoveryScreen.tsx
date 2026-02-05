@@ -202,6 +202,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
       rootNavigation?.navigate("TokenDetail", {
         source: "discovery-row",
         tokenAddress: token.mint,
+        tokenDecimals: token.tokenDecimals,
         symbol: token.symbol,
         name: token.name,
         imageUri: token.imageUri,
@@ -368,6 +369,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                     rootNavigation?.navigate("TradeEntry", {
                       source: "deep-link",
                       tokenAddress: item.mint,
+                      outputMintDecimals: item.tokenDecimals,
                     });
                   }}
                 >

@@ -13,7 +13,9 @@ export type TradeRouteParams = {
   source?: DeepLinkMeta["source"];
   tokenAddress?: string;
   inputMint?: string;
+  inputMintDecimals?: number;
   outputMint?: string;
+  outputMintDecimals?: number;
   amount?: string;
 };
 
@@ -41,6 +43,7 @@ export type TelegramRouteParams = {
 export type TokenDetailRouteParams = {
   source?: DeepLinkMeta["source"] | "discovery-row" | "scope-row";
   tokenAddress: string;
+  tokenDecimals?: number;
   symbol?: string;
   name?: string;
   imageUri?: string;

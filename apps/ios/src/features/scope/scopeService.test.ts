@@ -50,6 +50,7 @@ describe("fetchScopeTokens", () => {
             one_hour_volume_sol: 45.67,
             one_hour_change: 0.123,
             telegram_mentions_1h: 98,
+            decimals: 6,
           },
         ],
       },
@@ -71,6 +72,7 @@ describe("fetchScopeTokens", () => {
       oneHourVolumeUsd: 4567,
       oneHourChangePercent: 12.3,
       scanMentionsOneHour: 98,
+      tokenDecimals: 6,
     });
   });
 });

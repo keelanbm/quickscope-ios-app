@@ -31,7 +31,7 @@ describe("parseQuickscopeDeepLink", () => {
 
   it("maps trade links with query params to Trade context", () => {
     const target = parseQuickscopeDeepLink(
-      "quickscope://trade?in=So11111111111111111111111111111111111111112&out=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=5"
+      "quickscope://trade?in=So11111111111111111111111111111111111111112&out=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=5&inDecimals=9&outDecimals=6"
     );
 
     expect(target).toEqual({
@@ -39,7 +39,9 @@ describe("parseQuickscopeDeepLink", () => {
       params: {
         source: "deep-link",
         inputMint: "So11111111111111111111111111111111111111112",
+        inputMintDecimals: 9,
         outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        outputMintDecimals: 6,
         amount: "5",
       },
     });

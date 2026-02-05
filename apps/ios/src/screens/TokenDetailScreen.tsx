@@ -135,6 +135,7 @@ export function TokenDetailScreen({ params }: TokenDetailScreenProps) {
             navigation.navigate("TradeEntry", {
               source: "deep-link",
               tokenAddress: params.tokenAddress,
+              outputMintDecimals: params.tokenDecimals,
             })
           }
         >

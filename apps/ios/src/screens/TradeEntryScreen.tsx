@@ -28,6 +28,18 @@ function formatAtomic(value: number | undefined): string {
   return value.toLocaleString();
 }
 
+function formatTokenAmount(value: number | undefined, decimals = 6): string {
+  if (value === undefined || !Number.isFinite(value)) {
+    return "n/a";
+  }
+
+  const clampedDecimals = Math.max(0, Math.min(decimals, 8));
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: clampedDecimals,
+  });
+}
+
 function formatPercent(value: number | undefined): string {
   if (value === undefined) {
     return "n/a";
@@ -50,6 +62,8 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
   const inputMint = params?.inputMint ?? SOL_MINT;
   const outputMint = params?.outputMint ?? params?.tokenAddress;
+  const inputMintDecimals = params?.inputMintDecimals;
+  const outputMintDecimals = params?.outputMintDecimals;
 
   const summaryLines = useMemo(() => {
     const lines: string[] = [];
@@ -57,20 +71,14 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       lines.push(`Token: ${outputMint}`);
     }
     lines.push(`Input mint: ${inputMint}`);
+    if (outputMint && outputMint !== params?.tokenAddress) {
+      lines.push(`Output mint: ${outputMint}`);
+    }
     if (!lines.length) {
       lines.push("No token selected yet.");
     }
     return lines;
-  }, [inputMint, outputMint]);
-
-  const quotePreview = useMemo(() => {
-    if (!quote) {
-      return undefined;
-    }
-
-    const raw = JSON.stringify(quote.raw, null, 2);
-    return raw.length > 360 ? `${raw.slice(0, 360)}...` : raw;
-  }, [quote]);
+  }, [inputMint, outputMint, params?.tokenAddress]);
 
   const handleGetQuote = async () => {
     if (!walletAddress) {
@@ -104,6 +112,8 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
         inputMint,
         outputMint,
         amountUi,
+        inputTokenDecimals: inputMintDecimals,
+        outputTokenDecimals: outputMintDecimals,
       });
       setQuote(nextQuote);
     } catch (error) {
@@ -134,7 +144,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       </View>
 
       <View style={styles.amountBlock}>
-        <Text style={styles.label}>Amount (SOL)</Text>
+        <Text style={styles.label}>Amount</Text>
         <TextInput
           value={amount}
           onChangeText={setAmount}
@@ -166,16 +176,31 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       {quote ? (
         <View style={styles.quoteCard}>
           <Text style={styles.quoteTitle}>Quote ready</Text>
-          <Text style={styles.contextText}>Out amount (atomic): {formatAtomic(quote.summary.outAmountAtomic)}</Text>
           <Text style={styles.contextText}>
-            Min out (atomic): {formatAtomic(quote.summary.minOutAmountAtomic)}
+            You pay: {formatTokenAmount(quote.amountUi, quote.inputTokenDecimals)} (
+            {formatAtomic(quote.summary.amountInAtomic)} atomic)
+          </Text>
+          <Text style={styles.contextText}>
+            Estimated receive:{" "}
+            {quote.summary.amountOutUi !== undefined
+              ? formatTokenAmount(quote.summary.amountOutUi, quote.outputTokenDecimals ?? 6)
+              : formatAtomic(quote.summary.outAmountAtomic)}
+          </Text>
+          <Text style={styles.contextText}>
+            Min receive:{" "}
+            {quote.summary.minOutAmountUi !== undefined
+              ? formatTokenAmount(quote.summary.minOutAmountUi, quote.outputTokenDecimals ?? 6)
+              : formatAtomic(quote.summary.minOutAmountAtomic)}
           </Text>
           <Text style={styles.contextText}>
             Price impact: {formatPercent(quote.summary.priceImpactPercent)}
           </Text>
+          <Text style={styles.contextText}>Fee: {quote.summary.feeAmountSol ?? "n/a"} SOL</Text>
           <Text style={styles.contextText}>Route hops: {quote.summary.routeHopCount ?? "n/a"}</Text>
           <Text style={styles.contextText}>Slippage: {quote.slippageBps} bps</Text>
-          {quotePreview ? <Text style={styles.rawQuoteText}>{quotePreview}</Text> : null}
+          {quote.summary.feeRateBps !== undefined ? (
+            <Text style={styles.contextText}>Fee rate: {quote.summary.feeRateBps} bps</Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -287,12 +312,6 @@ const styles = StyleSheet.create({
     color: qsColors.textPrimary,
     fontSize: 14,
     fontWeight: "700",
-  },
-  rawQuoteText: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 4,
   },
   errorCard: {
     borderWidth: 1,

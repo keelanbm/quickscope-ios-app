@@ -23,6 +23,7 @@ type DiscoveryTokenRow = {
   one_hour_tx_count: number;
   one_hour_change: number;
   telegram_mentions_1h: number;
+  decimals?: number;
 };
 
 type DiscoveryTableResponse = {
@@ -48,6 +49,7 @@ export type DiscoveryToken = {
   oneHourTxCount: number;
   oneHourChangePercent: number;
   scanMentionsOneHour: number;
+  tokenDecimals?: number;
 };
 
 type DiscoveryResult = {
@@ -76,6 +78,15 @@ function toNumber(value: unknown): number {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+function toOptionalInteger(value: unknown): number | undefined {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    return undefined;
+  }
+
+  return numeric;
+}
+
 export async function fetchDiscoveryTokens(
   rpcClient: RpcClient,
   tab: DiscoveryTabId
@@ -96,22 +107,27 @@ export async function fetchDiscoveryTokens(
   return {
     tab,
     fetchedAtMs: Date.now(),
-    rows: (response.table?.rows ?? []).map((row) => ({
-      mint: row.mint,
-      symbol: row.symbol,
-      name: row.name,
-      imageUri: row.image_uri,
-      platform: row.platform,
-      exchange: row.exchange,
-      twitterUrl: row.twitter_url,
-      telegramUrl: row.telegram_url,
-      websiteUrl: row.website_url,
-      mintedAtSeconds: toNumber(row.mint_ts),
-      marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
-      oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
-      oneHourTxCount: toNumber(row.one_hour_tx_count),
-      oneHourChangePercent: toNumber(row.one_hour_change) * 100,
-      scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
-    })),
+    rows: (response.table?.rows ?? []).map((row) => {
+      const tokenDecimals = toOptionalInteger(row.decimals);
+
+      return {
+        mint: row.mint,
+        symbol: row.symbol,
+        name: row.name,
+        imageUri: row.image_uri,
+        platform: row.platform,
+        exchange: row.exchange,
+        twitterUrl: row.twitter_url,
+        telegramUrl: row.telegram_url,
+        websiteUrl: row.website_url,
+        mintedAtSeconds: toNumber(row.mint_ts),
+        marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
+        oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
+        oneHourTxCount: toNumber(row.one_hour_tx_count),
+        oneHourChangePercent: toNumber(row.one_hour_change) * 100,
+        scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
+        ...(tokenDecimals !== undefined ? { tokenDecimals } : null),
+      };
+    }),
   };
 }

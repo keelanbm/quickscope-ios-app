@@ -20,6 +20,7 @@ type ScopeTokenRow = {
   one_hour_volume_sol: number;
   one_hour_change: number;
   telegram_mentions_1h: number;
+  decimals?: number;
 };
 
 type ScopeTableResponse = {
@@ -42,6 +43,7 @@ export type ScopeToken = {
   oneHourVolumeUsd: number;
   oneHourChangePercent: number;
   scanMentionsOneHour: number;
+  tokenDecimals?: number;
 };
 
 type ScopeResult = {
@@ -70,6 +72,15 @@ function toNumber(value: unknown): number {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+function toOptionalInteger(value: unknown): number | undefined {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    return undefined;
+  }
+
+  return numeric;
+}
+
 export async function fetchScopeTokens(
   rpcClient: RpcClient,
   tab: ScopeTabId
@@ -90,19 +101,24 @@ export async function fetchScopeTokens(
   return {
     tab,
     fetchedAtMs: Date.now(),
-    rows: (response.table?.rows ?? []).map((row) => ({
-      mint: row.mint,
-      symbol: row.symbol,
-      name: row.name,
-      imageUri: row.image_uri,
-      platform: row.platform,
-      exchange: row.exchange,
-      mintedAtSeconds: toNumber(row.mint_ts),
-      marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
-      oneHourTxCount: toNumber(row.one_hour_tx_count),
-      oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
-      oneHourChangePercent: toNumber(row.one_hour_change) * 100,
-      scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
-    })),
+    rows: (response.table?.rows ?? []).map((row) => {
+      const tokenDecimals = toOptionalInteger(row.decimals);
+
+      return {
+        mint: row.mint,
+        symbol: row.symbol,
+        name: row.name,
+        imageUri: row.image_uri,
+        platform: row.platform,
+        exchange: row.exchange,
+        mintedAtSeconds: toNumber(row.mint_ts),
+        marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
+        oneHourTxCount: toNumber(row.one_hour_tx_count),
+        oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
+        oneHourChangePercent: toNumber(row.one_hour_change) * 100,
+        scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
+        ...(tokenDecimals !== undefined ? { tokenDecimals } : null),
+      };
+    }),
   };
 }

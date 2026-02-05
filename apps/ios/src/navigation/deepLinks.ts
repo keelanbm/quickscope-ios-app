@@ -71,6 +71,19 @@ function toPositiveNumberString(value: string | null): string | undefined {
   return trimmed;
 }
 
+function toTokenDecimals(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value.trim());
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 18) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
 function toChatId(value: string | null): string | undefined {
   if (!value) {
     return undefined;
@@ -152,6 +165,12 @@ function parseTokenDetailLink(url: URL, tokenCandidate?: string): ParsedDeepLink
 function parseTradeLink(url: URL, inPath?: string, outPath?: string): ParsedDeepLinkTarget {
   const inputMintFromQuery = toAddressIfValid(url.searchParams.get("in"));
   const outputMintFromQuery = toAddressIfValid(url.searchParams.get("out"));
+  const inputMintDecimals = toTokenDecimals(
+    url.searchParams.get("inDecimals") ?? url.searchParams.get("inputDecimals")
+  );
+  const outputMintDecimals = toTokenDecimals(
+    url.searchParams.get("outDecimals") ?? url.searchParams.get("outputDecimals")
+  );
   const amount = toPositiveNumberString(url.searchParams.get("amount"));
 
   const pathInputMint = toAddressIfValid(inPath);
@@ -161,6 +180,10 @@ function parseTradeLink(url: URL, inPath?: string, outPath?: string): ParsedDeep
   );
   const inputMint = inputMintFromQuery ?? pathInputMint;
   const outputMint = outputMintFromQuery ?? pathOutputMint;
+  const decimalParams = {
+    ...(inputMintDecimals !== undefined ? { inputMintDecimals } : null),
+    ...(outputMintDecimals !== undefined ? { outputMintDecimals } : null),
+  };
 
   if (tokenAddress) {
     return {
@@ -168,6 +191,7 @@ function parseTradeLink(url: URL, inPath?: string, outPath?: string): ParsedDeep
       params: {
         source: "deep-link",
         tokenAddress,
+        ...decimalParams,
         amount,
       },
     };
@@ -179,6 +203,7 @@ function parseTradeLink(url: URL, inPath?: string, outPath?: string): ParsedDeep
       params: {
         source: "deep-link",
         tokenAddress: pathInputMint,
+        ...decimalParams,
         amount,
       },
     };
@@ -190,6 +215,7 @@ function parseTradeLink(url: URL, inPath?: string, outPath?: string): ParsedDeep
       params: {
         source: "deep-link",
         inputMint,
+        ...decimalParams,
         outputMint,
         amount,
       },
@@ -200,6 +226,7 @@ function parseTradeLink(url: URL, inPath?: string, outPath?: string): ParsedDeep
     screen: "Trade",
     params: {
       source: "deep-link",
+      ...decimalParams,
     },
   };
 }
