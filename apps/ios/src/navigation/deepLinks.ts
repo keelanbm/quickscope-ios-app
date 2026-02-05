@@ -173,12 +173,13 @@ function parseTradeLink(url: URL, inPath?: string, outPath?: string): ParsedDeep
     };
   }
 
-  if (!inputMintFromQuery && !outputMintFromQuery && !amount && pathInputMint && !pathOutputMint) {
+  if (!inputMintFromQuery && !outputMintFromQuery && pathInputMint && !pathOutputMint) {
     return {
       screen: "Trade",
       params: {
         source: "deep-link",
         tokenAddress: pathInputMint,
+        amount,
       },
     };
   }

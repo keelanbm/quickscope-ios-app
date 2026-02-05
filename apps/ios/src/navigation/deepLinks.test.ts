@@ -59,6 +59,21 @@ describe("parseQuickscopeDeepLink", () => {
     });
   });
 
+  it("keeps path trade token semantics when amount query is provided", () => {
+    const target = parseQuickscopeDeepLink(
+      "quickscope://trade/So11111111111111111111111111111111111111112?amount=0.5"
+    );
+
+    expect(target).toEqual({
+      screen: "Trade",
+      params: {
+        source: "deep-link",
+        tokenAddress: "So11111111111111111111111111111111111111112",
+        amount: "0.5",
+      },
+    });
+  });
+
   it("maps portfolio links with wallet address", () => {
     const target = parseQuickscopeDeepLink(
       "quickscope://portfolio/Z8wPMesZqDZv4URMfBFH6kwFwM4fxjpdRG33tMjNFeP"

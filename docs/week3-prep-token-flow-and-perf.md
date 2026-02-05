@@ -10,11 +10,12 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
 
 ### Current behavior (ready now)
 
-- Discovery row action `Trade` -> opens `Search` tab (`Trade` route) with `tokenAddress`.
-- Scope row action `Search` -> opens `Search` tab (`Trade` route) with `tokenAddress`.
+- Discovery row action `Trade` -> opens dedicated `TradeEntry` stack route with `tokenAddress`.
+- Scope row action `Search` -> opens `Search` tab with `tokenAddress`.
 - Discovery row tap -> opens `TokenDetail` route with token context.
 - Scope row tap -> opens `TokenDetail` route with token context.
 - Token detail now sits on a stack over tabs (native back affordance).
+- Trade deep links (`quickscope://trade/...`) now open `TradeEntry` directly.
 
 ### Week 3 target behavior
 
@@ -22,8 +23,11 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
 2. Expand token detail route with:
    - token identity + social links
    - key market metrics (MC, 1h vol, 1h tx, 1h change)
-   - primary CTA: `Open in Search`
-3. `Trade` CTA opens existing `Search` route with token context.
+   - primary CTA: `Trade`
+3. Expand `TradeEntry` with read-only quote preview:
+   - route context (input/output mint + amount)
+   - quote request loading/error/success states
+   - safe fallback link to Search tab
 
 ### Proposed route shape (implemented baseline)
 
@@ -31,7 +35,8 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
 - Stack over tabs:
   - `MainTabs`
   - `TokenDetail`
-- `Trade` remains the `Search` tab route reused for context handoff.
+  - `TradeEntry`
+- `Trade` tab remains the Search surface for lookup/discovery tasks.
 
 ## Performance Baseline Plan
 

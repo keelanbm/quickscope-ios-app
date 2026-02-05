@@ -373,7 +373,7 @@ export default function App() {
                     featureName="Trade"
                     subtitle="Connect to request quotes and execute trades."
                   >
-                    <TradeEntryScreen params={route.params} />
+                    <TradeEntryScreen rpcClient={rpcClient} params={route.params} />
                   </AuthRouteGate>
                 </RouteErrorBoundary>
               )}
