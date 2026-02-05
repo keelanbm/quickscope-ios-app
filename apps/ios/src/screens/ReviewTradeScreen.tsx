@@ -122,6 +122,23 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
 
   return (
     <View style={styles.page}>
+      <View style={styles.headerRow}>
+        <View
+          style={[
+            styles.modeBadge,
+            executionEnabled ? styles.modeBadgeEnabled : styles.modeBadgeDisabled,
+          ]}
+        >
+          <Text
+            style={[
+              styles.modeBadgeText,
+              executionEnabled ? styles.modeBadgeTextEnabled : styles.modeBadgeTextDisabled,
+            ]}
+          >
+            {executionEnabled ? "DEV: Execution ON" : "DEV: Execution OFF"}
+          </Text>
+        </View>
+      </View>
       <Text style={styles.title}>Review Trade</Text>
       <Text style={styles.subtitle}>
         Final execute wiring is next. This step confirms quote context before placing any trade.
@@ -218,6 +235,35 @@ const styles = StyleSheet.create({
     backgroundColor: qsColors.bgCanvas,
     padding: qsSpacing.xl,
     gap: qsSpacing.md,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  modeBadge: {
+    borderRadius: qsRadius.lg,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  modeBadgeEnabled: {
+    borderColor: qsColors.success,
+    backgroundColor: "#103029",
+  },
+  modeBadgeDisabled: {
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCard,
+  },
+  modeBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  modeBadgeTextEnabled: {
+    color: qsColors.success,
+  },
+  modeBadgeTextDisabled: {
+    color: qsColors.textSubtle,
   },
   title: {
     color: qsColors.textPrimary,
