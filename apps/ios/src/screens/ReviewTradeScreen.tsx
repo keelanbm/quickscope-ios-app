@@ -55,18 +55,10 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionError, setExecutionError] = useState<string | undefined>();
-  const [executionStateText, setExecutionStateText] = useState<string | undefined>();
+  const [executionTone, setExecutionTone] = useState<"success" | "error" | "info" | undefined>();
   const [executionSignature, setExecutionSignature] = useState<string | undefined>();
   const [executionCreationTime, setExecutionCreationTime] = useState<string | undefined>();
   const [executionTime, setExecutionTime] = useState<string | undefined>();
-  const [executionNotice, setExecutionNotice] = useState<
-    | {
-        tone: "success" | "error" | "info";
-        title: string;
-        body: string;
-      }
-    | undefined
-  >();
   const quoteIsStale = isQuoteStale(params.quoteRequestedAtMs, nowMs);
   const quoteTtlSeconds = getQuoteTtlSecondsRemaining(params.quoteRequestedAtMs, nowMs);
   const walletMismatch = walletAddress !== undefined && walletAddress !== params.walletAddress;
@@ -110,11 +102,10 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
     }
 
     setExecutionError(undefined);
-    setExecutionStateText(undefined);
+    setExecutionTone(undefined);
     setExecutionSignature(undefined);
     setExecutionCreationTime(undefined);
     setExecutionTime(undefined);
-    setExecutionNotice(undefined);
     setIsExecuting(true);
 
     try {
@@ -126,9 +117,6 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
         slippageBps: params.slippageBps,
       });
 
-      const statusText = result.status ? result.status.toUpperCase() : "SUBMITTED";
-      const signatureSuffix = result.signature ? ` • ${result.signature.slice(0, 12)}...` : "";
-      setExecutionStateText(`${statusText}${signatureSuffix}`);
       setExecutionSignature(result.signature);
       setExecutionCreationTime(result.creationTime);
       setExecutionTime(result.executionTime);
@@ -146,37 +134,19 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
 
       if (isFailure) {
         const body = result.errorPreview ?? "Swap execution failed.";
-        setExecutionNotice({
-          tone: "error",
-          title: "Trade failed",
-          body,
-        });
+        setExecutionTone("error");
         Alert.alert("Trade failed", body);
       } else if (isSuccess) {
-        const body = "Trade executed successfully.";
-        setExecutionNotice({
-          tone: "success",
-          title: "Trade success",
-          body,
-        });
-        Alert.alert("Trade success", body);
+        setExecutionTone("success");
+        Alert.alert("Trade success", "Trade executed successfully.");
       } else {
-        const body = "Trade submitted. Status will update when finalized.";
-        setExecutionNotice({
-          tone: "info",
-          title: "Trade submitted",
-          body,
-        });
-        Alert.alert("Trade submitted", body);
+        setExecutionTone("info");
+        Alert.alert("Trade submitted", "Trade submitted. Status will update when finalized.");
       }
     } catch (error) {
       const message = String(error);
       setExecutionError(message);
-      setExecutionNotice({
-        tone: "error",
-        title: "Trade failed",
-        body: message,
-      });
+      setExecutionTone("error");
       Alert.alert("Trade failed", message);
     } finally {
       setIsExecuting(false);
@@ -235,22 +205,6 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
         Final execute wiring is next. This step confirms quote context before placing any trade.
       </Text>
 
-      {executionNotice ? (
-        <View
-          style={[
-            styles.noticeCard,
-            executionNotice.tone === "success"
-              ? styles.noticeCardSuccess
-              : executionNotice.tone === "error"
-                ? styles.noticeCardError
-                : styles.noticeCardInfo,
-          ]}
-        >
-          <Text style={styles.noticeTitle}>{executionNotice.title}</Text>
-          <Text style={styles.noticeBody}>{executionNotice.body}</Text>
-        </View>
-      ) : null}
-
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Route</Text>
         <Text style={styles.line}>From: {params.inputMint}</Text>
@@ -288,10 +242,17 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Execution status</Text>
         <Text style={styles.line}>{executionBlockedReason ?? "Ready for execution."}</Text>
-        {executionStateText ? <Text style={styles.successText}>Result: {executionStateText}</Text> : null}
-        {executionTime ? <Text style={styles.meta}>Executed at {executionTime}</Text> : null}
         {executionCreationTime && executionTime ? (
-          <Text style={styles.meta}>
+          <Text
+            style={[
+              styles.meta,
+              executionTone === "success"
+                ? styles.metaSuccess
+                : executionTone === "error"
+                  ? styles.metaDanger
+                  : null,
+            ]}
+          >
             Duration:{" "}
             {(() => {
               const start = new Date(executionCreationTime).getTime();
@@ -302,9 +263,25 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
               return `${((end - start) / 1000).toFixed(2)}s`;
             })()}
           </Text>
+        ) : executionTime ? (
+          <Text
+            style={[
+              styles.meta,
+              executionTone === "success"
+                ? styles.metaSuccess
+                : executionTone === "error"
+                  ? styles.metaDanger
+                  : null,
+            ]}
+          >
+            Executed at {executionTime}
+          </Text>
         ) : null}
         {executionSignature ? (
           <View style={styles.signatureRow}>
+            <Text style={styles.signatureText}>
+              Signature: {executionSignature.slice(0, 12)}...
+            </Text>
             <Pressable style={styles.signatureButton} onPress={handleCopySignature}>
               <Text style={styles.signatureButtonText}>Copy signature</Text>
             </Pressable>
@@ -406,34 +383,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  noticeCard: {
-    borderWidth: 1,
-    borderRadius: qsRadius.md,
-    padding: qsSpacing.md,
-    gap: 4,
-  },
-  noticeCardSuccess: {
-    borderColor: qsColors.success,
-    backgroundColor: "#102a1f",
-  },
-  noticeCardError: {
-    borderColor: qsColors.danger,
-    backgroundColor: "#351822",
-  },
-  noticeCardInfo: {
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCardSoft,
-  },
-  noticeTitle: {
-    color: qsColors.textPrimary,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  noticeBody: {
-    color: qsColors.textSecondary,
-    fontSize: 12,
-    lineHeight: 17,
-  },
   card: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
@@ -457,13 +406,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
+  metaSuccess: {
+    color: qsColors.success,
+  },
   metaDanger: {
     color: qsColors.danger,
-  },
-  successText: {
-    color: qsColors.success,
-    fontSize: 12,
-    lineHeight: 18,
   },
   errorText: {
     color: qsColors.danger,
@@ -487,6 +434,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: qsSpacing.sm,
     flexWrap: "wrap",
+    alignItems: "center",
+  },
+  signatureText: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
   },
   signatureButton: {
     borderRadius: qsRadius.md,
