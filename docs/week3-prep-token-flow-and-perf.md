@@ -28,6 +28,9 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
    - route context (input/output mint + amount)
    - quote request loading/error/success states
    - safe fallback link to Search tab
+4. Add non-executing `ReviewTrade` confirmation screen:
+   - quote recap and route context
+   - explicit execute-disabled state until `tx/swap` guardrails are finalized
 
 ### Proposed route shape (implemented baseline)
 

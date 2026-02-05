@@ -21,6 +21,26 @@ export type TradeRouteParams = {
 
 export type TradeEntryRouteParams = TradeRouteParams;
 
+export type ReviewTradeRouteParams = {
+  source?: "trade-entry";
+  walletAddress: string;
+  inputMint: string;
+  outputMint: string;
+  amountUi: number;
+  inputTokenDecimals: number;
+  outputTokenDecimals?: number;
+  slippageBps: number;
+  estimatedOutAmountUi?: number;
+  minOutAmountUi?: number;
+  estimatedOutAmountAtomic?: number;
+  minOutAmountAtomic?: number;
+  priceImpactPercent?: number;
+  feeAmountSol?: number;
+  feeRateBps?: number;
+  routeHopCount?: number;
+  quoteRequestedAtMs: number;
+};
+
 export type ScopeRouteParams = DeepLinkMeta;
 
 export type PortfolioRouteParams = {
@@ -71,4 +91,5 @@ export type RootStack = {
   MainTabs: NavigatorScreenParams<RootTabs>;
   TokenDetail: TokenDetailRouteParams;
   TradeEntry: TradeEntryRouteParams | undefined;
+  ReviewTrade: ReviewTradeRouteParams;
 };

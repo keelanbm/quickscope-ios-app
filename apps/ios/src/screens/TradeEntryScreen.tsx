@@ -128,6 +128,32 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
     }
   };
 
+  const handleReviewTrade = () => {
+    if (!quote || !walletAddress || !outputMint) {
+      return;
+    }
+
+    navigation.navigate("ReviewTrade", {
+      source: "trade-entry",
+      walletAddress,
+      inputMint: quote.inputMint,
+      outputMint,
+      amountUi: quote.amountUi,
+      inputTokenDecimals: quote.inputTokenDecimals,
+      outputTokenDecimals: quote.outputTokenDecimals,
+      slippageBps: quote.slippageBps,
+      estimatedOutAmountUi: quote.summary.amountOutUi,
+      minOutAmountUi: quote.summary.minOutAmountUi,
+      estimatedOutAmountAtomic: quote.summary.outAmountAtomic,
+      minOutAmountAtomic: quote.summary.minOutAmountAtomic,
+      priceImpactPercent: quote.summary.priceImpactPercent,
+      feeAmountSol: quote.summary.feeAmountSol,
+      feeRateBps: quote.summary.feeRateBps,
+      routeHopCount: quote.summary.routeHopCount,
+      quoteRequestedAtMs: quote.requestedAtMs,
+    });
+  };
+
   return (
     <View style={styles.page}>
       <Text style={styles.title}>Trade</Text>
@@ -217,6 +243,11 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
             {isLoadingQuote ? "Getting Quote..." : "Get Quote"}
           </Text>
         </Pressable>
+        {quote ? (
+          <Pressable style={styles.reviewButton} onPress={handleReviewTrade}>
+            <Text style={styles.reviewButtonText}>Review Trade</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           style={styles.secondaryButton}
           onPress={() => navigation.navigate("MainTabs", { screen: "Trade" })}
@@ -353,6 +384,19 @@ const styles = StyleSheet.create({
     backgroundColor: qsColors.bgCard,
     paddingVertical: 10,
     alignItems: "center",
+  },
+  reviewButton: {
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.accent,
+    backgroundColor: qsColors.bgCardSoft,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  reviewButtonText: {
+    color: qsColors.accent,
+    fontSize: 13,
+    fontWeight: "700",
   },
   secondaryButtonText: {
     color: qsColors.textSecondary,

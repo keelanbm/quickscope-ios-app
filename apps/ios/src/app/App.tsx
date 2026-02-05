@@ -33,6 +33,7 @@ import {
 } from "@/src/navigation/types";
 import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
+import { ReviewTradeScreen } from "@/src/screens/ReviewTradeScreen";
 import { SearchScreen } from "@/src/screens/SearchScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
@@ -374,6 +375,20 @@ export default function App() {
                     subtitle="Connect to request quotes and execute trades."
                   >
                     <TradeEntryScreen rpcClient={rpcClient} params={route.params} />
+                  </AuthRouteGate>
+                </RouteErrorBoundary>
+              )}
+            />
+            <Stack.Screen
+              name="ReviewTrade"
+              options={{ title: "Review Trade", headerBackButtonDisplayMode: "minimal" }}
+              children={({ route }) => (
+                <RouteErrorBoundary routeName="Review Trade">
+                  <AuthRouteGate
+                    featureName="Trade"
+                    subtitle="Connect to review and execute trades."
+                  >
+                    <ReviewTradeScreen params={route.params} />
                   </AuthRouteGate>
                 </RouteErrorBoundary>
               )}
