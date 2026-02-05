@@ -65,7 +65,11 @@ Lock the initial Week 3 implementation shape for token-detail/trade entry and de
 
 ### Instrumentation starting point
 
-- Add simple mount/fetch timing logs per screen in development builds.
+- Added simple mount/fetch timing logs per screen in development builds:
+  - `[perf] Discovery fetch start/success/error`
+  - `[perf] Discovery first data`
+  - `[perf] Scope fetch start/success/error`
+  - `[perf] Scope first data`
 - Capture simulator + physical-device observations in this document.
 
 ## Success criteria for Week 3 prep complete

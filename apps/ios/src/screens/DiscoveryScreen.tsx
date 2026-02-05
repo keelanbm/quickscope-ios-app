@@ -112,6 +112,8 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
   const rootNavigation = navigation.getParent<NavigationProp<RootStack>>();
   const requestSeqRef = useRef(0);
+  const mountTimestampRef = useRef(Date.now());
+  const firstDataLoggedRef = useRef(false);
   const [activeTab, setActiveTab] = useState<DiscoveryTabId>("trending");
   const [rows, setRows] = useState<DiscoveryToken[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -124,6 +126,13 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
     async (options?: { refreshing?: boolean }) => {
       const requestId = ++requestSeqRef.current;
       const isRefreshingRequest = options?.refreshing ?? false;
+      const fetchStartedAt = Date.now();
+      if (__DEV__) {
+        console.log("[perf] Discovery fetch start", {
+          tab: activeTab,
+          kind: isRefreshingRequest ? "refresh" : "load",
+        });
+      }
       if (isRefreshingRequest) {
         setIsRefreshing(true);
       } else {
@@ -139,12 +148,35 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         setRows(result.rows);
         setLastUpdatedMs(result.fetchedAtMs);
         setErrorText(undefined);
+        if (__DEV__) {
+          console.log("[perf] Discovery fetch success", {
+            tab: activeTab,
+            ms: Date.now() - fetchStartedAt,
+            rows: result.rows.length,
+          });
+        }
+        if (!firstDataLoggedRef.current) {
+          firstDataLoggedRef.current = true;
+          if (__DEV__) {
+            console.log("[perf] Discovery first data", {
+              tab: activeTab,
+              msSinceMount: Date.now() - mountTimestampRef.current,
+            });
+          }
+        }
       } catch (error) {
         if (requestId !== requestSeqRef.current) {
           return;
         }
 
         setErrorText(String(error));
+        if (__DEV__) {
+          console.log("[perf] Discovery fetch error", {
+            tab: activeTab,
+            ms: Date.now() - fetchStartedAt,
+            error: String(error),
+          });
+        }
       } finally {
         if (requestId !== requestSeqRef.current) {
           return;

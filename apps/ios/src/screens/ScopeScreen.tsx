@@ -111,6 +111,8 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
   const rootNavigation = navigation.getParent<NavigationProp<RootStack>>();
   const requestSeqRef = useRef(0);
+  const mountTimestampRef = useRef(Date.now());
+  const firstDataLoggedRef = useRef(false);
   const [activeTab, setActiveTab] = useState<ScopeTabId>("new-pairs");
   const [rows, setRows] = useState<ScopeToken[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -122,6 +124,13 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
     async (options?: { refreshing?: boolean }) => {
       const requestId = ++requestSeqRef.current;
       const isRefreshingRequest = options?.refreshing ?? false;
+      const fetchStartedAt = Date.now();
+      if (__DEV__) {
+        console.log("[perf] Scope fetch start", {
+          tab: activeTab,
+          kind: isRefreshingRequest ? "refresh" : "load",
+        });
+      }
       if (isRefreshingRequest) {
         setIsRefreshing(true);
       } else {
@@ -137,12 +146,35 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
         setRows(result.rows);
         setLastUpdatedMs(result.fetchedAtMs);
         setErrorText(undefined);
+        if (__DEV__) {
+          console.log("[perf] Scope fetch success", {
+            tab: activeTab,
+            ms: Date.now() - fetchStartedAt,
+            rows: result.rows.length,
+          });
+        }
+        if (!firstDataLoggedRef.current) {
+          firstDataLoggedRef.current = true;
+          if (__DEV__) {
+            console.log("[perf] Scope first data", {
+              tab: activeTab,
+              msSinceMount: Date.now() - mountTimestampRef.current,
+            });
+          }
+        }
       } catch (error) {
         if (requestId !== requestSeqRef.current) {
           return;
         }
 
         setErrorText(String(error));
+        if (__DEV__) {
+          console.log("[perf] Scope fetch error", {
+            tab: activeTab,
+            ms: Date.now() - fetchStartedAt,
+            error: String(error),
+          });
+        }
       } finally {
         if (requestId !== requestSeqRef.current) {
           return;
