@@ -58,6 +58,14 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
   const [executionStateText, setExecutionStateText] = useState<string | undefined>();
   const [executionSignature, setExecutionSignature] = useState<string | undefined>();
   const [executionTime, setExecutionTime] = useState<string | undefined>();
+  const [executionNotice, setExecutionNotice] = useState<
+    | {
+        tone: "success" | "error" | "info";
+        title: string;
+        body: string;
+      }
+    | undefined
+  >();
   const quoteIsStale = isQuoteStale(params.quoteRequestedAtMs, nowMs);
   const quoteTtlSeconds = getQuoteTtlSecondsRemaining(params.quoteRequestedAtMs, nowMs);
   const walletMismatch = walletAddress !== undefined && walletAddress !== params.walletAddress;
@@ -104,6 +112,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
     setExecutionStateText(undefined);
     setExecutionSignature(undefined);
     setExecutionTime(undefined);
+    setExecutionNotice(undefined);
     setIsExecuting(true);
 
     try {
@@ -120,8 +129,52 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
       setExecutionStateText(`${statusText}${signatureSuffix}`);
       setExecutionSignature(result.signature);
       setExecutionTime(result.executionTime);
+
+      const normalizedStatus = result.status?.toLowerCase();
+      const isFailure =
+        Boolean(result.errorPreview) ||
+        normalizedStatus === "failed" ||
+        normalizedStatus === "error" ||
+        normalizedStatus === "expired";
+      const isSuccess =
+        normalizedStatus === "confirmed" ||
+        normalizedStatus === "finalized" ||
+        normalizedStatus === "success";
+
+      if (isFailure) {
+        const body = result.errorPreview ?? "Swap execution failed.";
+        setExecutionNotice({
+          tone: "error",
+          title: "Trade failed",
+          body,
+        });
+        Alert.alert("Trade failed", body);
+      } else if (isSuccess) {
+        const body = "Trade executed successfully.";
+        setExecutionNotice({
+          tone: "success",
+          title: "Trade success",
+          body,
+        });
+        Alert.alert("Trade success", body);
+      } else {
+        const body = "Trade submitted. Status will update when finalized.";
+        setExecutionNotice({
+          tone: "info",
+          title: "Trade submitted",
+          body,
+        });
+        Alert.alert("Trade submitted", body);
+      }
     } catch (error) {
-      setExecutionError(String(error));
+      const message = String(error);
+      setExecutionError(message);
+      setExecutionNotice({
+        tone: "error",
+        title: "Trade failed",
+        body: message,
+      });
+      Alert.alert("Trade failed", message);
     } finally {
       setIsExecuting(false);
     }
@@ -178,6 +231,22 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
       <Text style={styles.subtitle}>
         Final execute wiring is next. This step confirms quote context before placing any trade.
       </Text>
+
+      {executionNotice ? (
+        <View
+          style={[
+            styles.noticeCard,
+            executionNotice.tone === "success"
+              ? styles.noticeCardSuccess
+              : executionNotice.tone === "error"
+                ? styles.noticeCardError
+                : styles.noticeCardInfo,
+          ]}
+        >
+          <Text style={styles.noticeTitle}>{executionNotice.title}</Text>
+          <Text style={styles.noticeBody}>{executionNotice.body}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Route</Text>
@@ -320,6 +389,34 @@ const styles = StyleSheet.create({
     color: qsColors.textMuted,
     fontSize: 14,
     lineHeight: 20,
+  },
+  noticeCard: {
+    borderWidth: 1,
+    borderRadius: qsRadius.md,
+    padding: qsSpacing.md,
+    gap: 4,
+  },
+  noticeCardSuccess: {
+    borderColor: qsColors.success,
+    backgroundColor: "#102a1f",
+  },
+  noticeCardError: {
+    borderColor: qsColors.danger,
+    backgroundColor: "#351822",
+  },
+  noticeCardInfo: {
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCardSoft,
+  },
+  noticeTitle: {
+    color: qsColors.textPrimary,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  noticeBody: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
   },
   card: {
     borderWidth: 1,
