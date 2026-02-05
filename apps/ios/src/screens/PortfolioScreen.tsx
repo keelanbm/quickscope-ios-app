@@ -1,12 +1,21 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import {
+  fetchAccountTokenHoldings,
+  fetchTraderOverview,
+  type AccountTokenHoldings,
+  type TraderOverview,
+} from "@/src/features/portfolio/portfolioService";
 import type { PortfolioRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 import { SectionCard } from "@/src/ui/SectionCard";
 
 type PortfolioScreenProps = {
+  rpcClient: RpcClient;
   params?: PortfolioRouteParams;
 };
 
@@ -17,13 +26,8 @@ type PositionRow = {
   value: string;
   pnl: string;
   pnlPositive: boolean;
+  valueUsd: number;
 };
-
-const mockPositions: PositionRow[] = [
-  { id: "pos-1", symbol: "ARC", name: "AI Rig Corp", value: "$1.35K", pnl: "+12.4%", pnlPositive: true },
-  { id: "pos-2", symbol: "WIF", name: "dogwifhat", value: "$820", pnl: "-4.8%", pnlPositive: false },
-  { id: "pos-3", symbol: "BONK", name: "Bonk", value: "$412", pnl: "+6.1%", pnlPositive: true },
-];
 
 function formatWalletAddress(address?: string): string {
   if (!address) {
@@ -37,16 +41,117 @@ function formatWalletAddress(address?: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export function PortfolioScreen({ params }: PortfolioScreenProps) {
-  const stats = useMemo(
-    () => [
-      { label: "Balance", value: "--" },
-      { label: "Positions", value: mockPositions.length.toString() },
-      { label: "Total Volume", value: "--" },
+function formatUsd(value?: number): string {
+  if (!value || !Number.isFinite(value)) {
+    return "--";
+  }
+
+  if (value >= 1_000_000_000) {
+    return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  }
+  if (value >= 1_000_000) {
+    return `$${(value / 1_000_000).toFixed(2)}M`;
+  }
+  if (value >= 1_000) {
+    return `$${(value / 1_000).toFixed(1)}K`;
+  }
+  return `$${value.toFixed(2)}`;
+}
+
+export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
+  const { walletAddress } = useAuthSession();
+  const requestRef = useRef(0);
+  const [overview, setOverview] = useState<TraderOverview | null>(null);
+  const [holdings, setHoldings] = useState<AccountTokenHoldings | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorText, setErrorText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!walletAddress) {
+      setOverview(null);
+      setHoldings(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let isActive = true;
+    const requestId = ++requestRef.current;
+    setIsLoading(true);
+    setErrorText(null);
+
+    Promise.all([
+      fetchTraderOverview(rpcClient, walletAddress),
+      fetchAccountTokenHoldings(rpcClient, walletAddress),
+    ])
+      .then(([nextOverview, nextHoldings]) => {
+        if (!isActive || requestId !== requestRef.current) {
+          return;
+        }
+        setOverview(nextOverview);
+        setHoldings(nextHoldings);
+      })
+      .catch((error) => {
+        if (!isActive || requestId !== requestRef.current) {
+          return;
+        }
+        setErrorText(error instanceof Error ? error.message : "Failed to load portfolio.");
+      })
+      .finally(() => {
+        if (!isActive || requestId !== requestRef.current) {
+          return;
+        }
+        setIsLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [rpcClient, walletAddress]);
+
+  const positions = useMemo<PositionRow[]>(() => {
+    if (!holdings?.token_holdings) {
+      return [];
+    }
+
+    const solPriceUsd = holdings.sol_price_usd || overview?.sol_price_usd || 0;
+    return holdings.token_holdings
+      .map((entry) => {
+        const tokenMeta = entry.token_info?.token_metadata;
+        const symbol = tokenMeta?.symbol ?? "UNK";
+        const name = tokenMeta?.name ?? "Unknown token";
+        const valueUsd = entry.value_sol * solPriceUsd;
+
+        return {
+          id: tokenMeta?.mint ?? symbol,
+          symbol,
+          name,
+          value: formatUsd(valueUsd),
+          pnl: "--",
+          pnlPositive: true,
+          valueUsd,
+        };
+      })
+      .sort((a, b) => {
+        return b.valueUsd - a.valueUsd;
+      })
+      .slice(0, 6);
+  }, [holdings, overview?.sol_price_usd]);
+
+  const stats = useMemo(() => {
+    const solPriceUsd = holdings?.sol_price_usd || overview?.sol_price_usd || 0;
+    const solBalanceUsd = holdings?.sol_balance ? holdings.sol_balance * solPriceUsd : undefined;
+    const positionsValueUsd = holdings?.value_usd;
+    const totalVolumeUsd =
+      (overview?.cumulatives?.bought_usd_cumulative ?? 0) +
+      (overview?.cumulatives?.sold_usd_cumulative ?? 0);
+
+    return [
+      { label: "Balance", value: formatUsd(solBalanceUsd) },
+      { label: "Positions", value: positions.length.toString() },
+      { label: "Total Volume", value: formatUsd(totalVolumeUsd || undefined) },
       { label: "Unrealized PnL", value: "--" },
-    ],
-    []
-  );
+    ];
+  }, [holdings, overview, positions.length]);
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
@@ -61,7 +166,9 @@ export function PortfolioScreen({ params }: PortfolioScreenProps) {
         </View>
         <View style={styles.walletText}>
           <Text style={styles.walletName}>Primary Wallet</Text>
-          <Text style={styles.walletAddress}>{formatWalletAddress(params?.walletAddress)}</Text>
+          <Text style={styles.walletAddress}>
+            {formatWalletAddress(walletAddress ?? params?.walletAddress)}
+          </Text>
         </View>
         <Pressable style={styles.walletButton}>
           <Text style={styles.walletButtonText}>Manage</Text>
@@ -78,30 +185,38 @@ export function PortfolioScreen({ params }: PortfolioScreenProps) {
       </View>
 
       <SectionCard title="Positions" subtitle="Top holdings by value">
-        {mockPositions.map((position) => (
-          <View key={position.id} style={styles.positionRow}>
-            <View style={styles.positionLeft}>
-              <View style={styles.positionAvatar}>
-                <Text style={styles.positionAvatarText}>{position.symbol[0]}</Text>
+        {isLoading ? (
+          <Text style={styles.contextText}>Loading positions...</Text>
+        ) : errorText ? (
+          <Text style={styles.contextText}>{errorText}</Text>
+        ) : positions.length === 0 ? (
+          <Text style={styles.contextText}>No positions yet.</Text>
+        ) : (
+          positions.map((position) => (
+            <View key={position.id} style={styles.positionRow}>
+              <View style={styles.positionLeft}>
+                <View style={styles.positionAvatar}>
+                  <Text style={styles.positionAvatarText}>{position.symbol[0]}</Text>
+                </View>
+                <View style={styles.positionText}>
+                  <Text style={styles.positionSymbol}>{position.symbol}</Text>
+                  <Text style={styles.positionName}>{position.name}</Text>
+                </View>
               </View>
-              <View style={styles.positionText}>
-                <Text style={styles.positionSymbol}>{position.symbol}</Text>
-                <Text style={styles.positionName}>{position.name}</Text>
+              <View style={styles.positionRight}>
+                <Text style={styles.positionValue}>{position.value}</Text>
+                <Text
+                  style={[
+                    styles.positionPnl,
+                    position.pnlPositive ? styles.pnlPositive : styles.pnlNegative,
+                  ]}
+                >
+                  {position.pnl}
+                </Text>
               </View>
             </View>
-            <View style={styles.positionRight}>
-              <Text style={styles.positionValue}>{position.value}</Text>
-              <Text
-                style={[
-                  styles.positionPnl,
-                  position.pnlPositive ? styles.pnlPositive : styles.pnlNegative,
-                ]}
-              >
-                {position.pnl}
-              </Text>
-            </View>
-          </View>
-        ))}
+          ))
+        )}
       </SectionCard>
 
       {params?.source ? (

@@ -15,8 +15,10 @@ import {
 } from "react-native";
 
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { fetchPositionPnl, type TraderTokenPosition } from "@/src/features/portfolio/portfolioService";
 import {
   buildMarketCapSeries,
   fetchLiveTokenInfo,
@@ -24,6 +26,12 @@ import {
   type LiveTokenInfo,
   type TokenMarketCapPoint,
 } from "@/src/features/token/tokenService";
+import {
+  addTokenToWatchlist,
+  fetchTokenWatchlists,
+  removeTokenFromWatchlist,
+  type TokenWatchlist,
+} from "@/src/features/watchlist/tokenWatchlistService";
 import { TokenChart } from "@/src/ui/TokenChart";
 
 type TokenDetailScreenProps = {
@@ -110,9 +118,27 @@ function formatChartTimestamp(timestampSeconds: number, timeframeId: string): st
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
+function formatSol(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) {
+    return "--";
+  }
+
+  if (Math.abs(value) >= 1000) {
+    return value.toFixed(0);
+  }
+
+  if (Math.abs(value) >= 10) {
+    return value.toFixed(2);
+  }
+
+  return value.toFixed(3);
+}
+
 export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const requestIdRef = useRef(0);
+  const { walletAddress, hasValidAccessToken, authenticateFromWallet } = useAuthSession();
+  const chartRequestIdRef = useRef(0);
+  const positionRequestIdRef = useRef(0);
   const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(
     chartTimeframes[2]
   );
@@ -120,6 +146,12 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const [chartData, setChartData] = useState<TokenMarketCapPoint[]>([]);
   const [isChartLoading, setIsChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [positionInfo, setPositionInfo] = useState<TraderTokenPosition | null>(null);
+  const [positionError, setPositionError] = useState<string | null>(null);
+  const [watchlists, setWatchlists] = useState<TokenWatchlist[]>([]);
+  const [watchlistError, setWatchlistError] = useState<string | null>(null);
+  const [isWatchlistLoading, setIsWatchlistLoading] = useState(false);
+  const [isWatchlistUpdating, setIsWatchlistUpdating] = useState(false);
 
   if (!params?.tokenAddress) {
     return (
@@ -134,7 +166,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   useEffect(() => {
     let isActive = true;
-    const requestId = ++requestIdRef.current;
+    const requestId = ++chartRequestIdRef.current;
 
     const load = async () => {
       setIsChartLoading(true);
@@ -154,7 +186,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           }),
         ]);
 
-        if (!isActive || requestId !== requestIdRef.current) {
+        if (!isActive || requestId !== chartRequestIdRef.current) {
           return;
         }
 
@@ -168,12 +200,12 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
         setChartData(series);
       } catch (error) {
-        if (!isActive || requestId !== requestIdRef.current) {
+        if (!isActive || requestId !== chartRequestIdRef.current) {
           return;
         }
         setChartError(error instanceof Error ? error.message : "Failed to load chart.");
       } finally {
-        if (!isActive || requestId !== requestIdRef.current) {
+        if (!isActive || requestId !== chartRequestIdRef.current) {
           return;
         }
         setIsChartLoading(false);
@@ -187,6 +219,74 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     };
   }, [rpcClient, selectedTimeframe, tokenAddress]);
 
+  useEffect(() => {
+    if (!hasValidAccessToken) {
+      setWatchlists([]);
+      return;
+    }
+
+    let isActive = true;
+    setIsWatchlistLoading(true);
+    setWatchlistError(null);
+
+    fetchTokenWatchlists(rpcClient)
+      .then((data) => {
+        if (!isActive) {
+          return;
+        }
+        setWatchlists(data ?? []);
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return;
+        }
+        setWatchlistError(
+          error instanceof Error ? error.message : "Failed to load watchlists."
+        );
+        setWatchlists([]);
+      })
+      .finally(() => {
+        if (!isActive) {
+          return;
+        }
+        setIsWatchlistLoading(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [hasValidAccessToken, rpcClient]);
+
+  useEffect(() => {
+    if (!walletAddress || !tokenAddress) {
+      setPositionInfo(null);
+      return;
+    }
+
+    let isActive = true;
+    const requestId = ++positionRequestIdRef.current;
+    setPositionError(null);
+
+    fetchPositionPnl(rpcClient, walletAddress, tokenAddress)
+      .then((data) => {
+        if (!isActive || requestId !== positionRequestIdRef.current) {
+          return;
+        }
+        setPositionInfo(data);
+      })
+      .catch((error) => {
+        if (!isActive || requestId !== positionRequestIdRef.current) {
+          return;
+        }
+        setPositionError(error instanceof Error ? error.message : "Failed to load position.");
+        setPositionInfo(null);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [rpcClient, tokenAddress, walletAddress]);
+
   const tokenMeta = useMemo(() => {
     const metadata = liveInfo?.token_metadata;
     return {
@@ -199,6 +299,25 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     };
   }, [liveInfo, params]);
 
+  const activeWatchlist = useMemo(() => {
+    if (watchlists.length === 0) {
+      return undefined;
+    }
+
+    return (
+      watchlists.find(
+        (list) => list.isFavorites || list.name.toLowerCase() === "favorites"
+      ) ?? watchlists[0]
+    );
+  }, [watchlists]);
+
+  const isTracked = useMemo(() => {
+    if (!activeWatchlist) {
+      return false;
+    }
+    return activeWatchlist.tokens?.includes(tokenAddress) ?? false;
+  }, [activeWatchlist, tokenAddress]);
+
   const marketCapUsd = params.marketCapUsd;
   const oneHourChange = params.oneHourChangePercent;
   const platformLabel = (params.platform || params.exchange || "unknown").toUpperCase();
@@ -207,6 +326,53 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const handleCopyAddress = async () => {
     await Clipboard.setStringAsync(tokenAddress);
     Alert.alert("Copied", "Token address copied to clipboard.");
+  };
+
+  const handleToggleWatchlist = async () => {
+    if (!hasValidAccessToken) {
+      await authenticateFromWallet();
+      return;
+    }
+
+    if (!activeWatchlist) {
+      Alert.alert("No watchlists", "Create a watchlist on web to start tracking.");
+      return;
+    }
+
+    if (isWatchlistUpdating) {
+      return;
+    }
+
+    setIsWatchlistUpdating(true);
+    setWatchlistError(null);
+
+    try {
+      if (isTracked) {
+        await removeTokenFromWatchlist(rpcClient, activeWatchlist.id, tokenAddress);
+      } else {
+        await addTokenToWatchlist(rpcClient, activeWatchlist.id, tokenAddress);
+      }
+
+      setWatchlists((prev) =>
+        prev.map((list) => {
+          if (list.id !== activeWatchlist.id) {
+            return list;
+          }
+
+          const nextTokens = isTracked
+            ? list.tokens.filter((mint) => mint !== tokenAddress)
+            : [...list.tokens, tokenAddress];
+
+          return { ...list, tokens: nextTokens };
+        })
+      );
+    } catch (error) {
+      setWatchlistError(
+        error instanceof Error ? error.message : "Failed to update watchlist."
+      );
+    } finally {
+      setIsWatchlistUpdating(false);
+    }
   };
 
   const socialLinks = [
@@ -244,6 +410,35 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           </View>
         ) : null}
 
+        <View style={styles.watchlistRow}>
+          <Pressable
+            style={[
+              styles.watchlistButton,
+              isTracked && hasValidAccessToken ? styles.watchlistButtonActive : null,
+            ]}
+            onPress={handleToggleWatchlist}
+            disabled={isWatchlistLoading || isWatchlistUpdating}
+          >
+            <Text
+              style={[
+                styles.watchlistText,
+                isTracked && hasValidAccessToken ? styles.watchlistTextActive : null,
+              ]}
+            >
+              {!hasValidAccessToken
+                ? "Authenticate for watchlists"
+                : activeWatchlist
+                  ? isTracked
+                    ? "In Watchlist"
+                    : "Add to Watchlist"
+                  : isWatchlistLoading
+                    ? "Loading watchlists..."
+                    : "No watchlists yet"}
+            </Text>
+          </Pressable>
+          {watchlistError ? <Text style={styles.watchlistError}>Watchlist unavailable.</Text> : null}
+        </View>
+
         <View style={styles.metricsGrid}>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Market Cap</Text>
@@ -275,6 +470,59 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
             </Text>
           </View>
         </View>
+
+        {walletAddress ? (
+          <View style={styles.holdingsCard}>
+            <View style={styles.holdingsHeader}>
+              <Text style={styles.sectionTitle}>Holdings</Text>
+              {positionError ? (
+                <Text style={styles.holdingsError}>Unavailable</Text>
+              ) : null}
+            </View>
+            <View style={styles.holdingsRow}>
+              <View style={styles.holdingsStat}>
+                <Text style={styles.holdingsLabel}>Balance</Text>
+                <Text style={styles.holdingsValue}>
+                  {formatSol(positionInfo?.position?.balance)}
+                </Text>
+              </View>
+              <View style={styles.holdingsStat}>
+                <Text style={styles.holdingsLabel}>Total PnL</Text>
+                <Text
+                  style={[
+                    styles.holdingsValue,
+                    positionInfo?.position?.total_pnl_quote
+                      ? positionInfo.position.total_pnl_quote >= 0
+                        ? styles.metricPositive
+                        : styles.metricNegative
+                      : null,
+                  ]}
+                >
+                  {formatSol(positionInfo?.position?.total_pnl_quote)}
+                </Text>
+              </View>
+              <View style={styles.holdingsStat}>
+                <Text style={styles.holdingsLabel}>PnL %</Text>
+                <Text
+                  style={[
+                    styles.holdingsValue,
+                    positionInfo?.position?.total_pnl_change_proportion
+                      ? positionInfo.position.total_pnl_change_proportion >= 0
+                        ? styles.metricPositive
+                        : styles.metricNegative
+                      : null,
+                  ]}
+                >
+                  {formatPercent(
+                    positionInfo?.position?.total_pnl_change_proportion !== undefined
+                      ? positionInfo.position.total_pnl_change_proportion * 100
+                      : undefined
+                  )}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
@@ -415,6 +663,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  watchlistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.sm,
+  },
+  watchlistButton: {
+    borderRadius: qsRadius.lg,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCard,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  watchlistButtonActive: {
+    borderColor: qsColors.accent,
+    backgroundColor: "rgba(78, 163, 255, 0.18)",
+  },
+  watchlistText: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  watchlistTextActive: {
+    color: qsColors.textPrimary,
+  },
+  watchlistError: {
+    color: qsColors.textSubtle,
+    fontSize: 12,
+  },
   tagPill: {
     marginTop: 6,
     alignSelf: "flex-start",
@@ -458,6 +735,41 @@ const styles = StyleSheet.create({
   },
   chartCard: {
     gap: qsSpacing.sm,
+  },
+  holdingsCard: {
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    borderRadius: qsRadius.md,
+    backgroundColor: qsColors.bgCard,
+    padding: qsSpacing.md,
+    gap: qsSpacing.sm,
+  },
+  holdingsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  holdingsError: {
+    color: qsColors.textSubtle,
+    fontSize: 12,
+  },
+  holdingsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: qsSpacing.sm,
+  },
+  holdingsStat: {
+    flex: 1,
+    gap: 4,
+  },
+  holdingsLabel: {
+    color: qsColors.textSubtle,
+    fontSize: 11,
+  },
+  holdingsValue: {
+    color: qsColors.textSecondary,
+    fontSize: 14,
+    fontWeight: "600",
   },
   chartHeader: {
     flexDirection: "row",

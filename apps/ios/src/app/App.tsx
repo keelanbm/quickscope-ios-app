@@ -189,7 +189,7 @@ function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost
               featureName="Tracking"
               subtitle="Connect to manage tracked wallets and token alerts."
             >
-              <TrackingScreen params={route.params} />
+              <TrackingScreen rpcClient={rpcClient} params={route.params} />
             </AuthRouteGate>
           </RouteErrorBoundary>
         )}
@@ -201,7 +201,7 @@ function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost
               featureName="Portfolio"
               subtitle="Connect to load balances, PnL, and position details."
             >
-              <PortfolioScreen params={route.params} />
+              <PortfolioScreen rpcClient={rpcClient} params={route.params} />
             </AuthRouteGate>
           </RouteErrorBoundary>
         )}
