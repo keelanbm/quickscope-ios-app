@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
@@ -14,8 +14,10 @@ import {
   type QuoteResult,
 } from "@/src/features/trade/tradeQuoteService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { toast } from "@/src/lib/toast";
 import type { RootStack, TradeEntryRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { AlertCircle, Clock, Zap } from "@/src/ui/icons";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -102,12 +104,12 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
   const handleGetQuote = async () => {
     if (!walletAddress) {
-      Alert.alert("Wallet required", "Connect your wallet to request a quote.");
+      toast.warn("Wallet required", "Connect your wallet to request a quote.");
       return;
     }
 
     if (!outputMint) {
-      Alert.alert("Token required", "Select a token before requesting a quote.");
+      toast.warn("Token required", "Select a token before requesting a quote.");
       return;
     }
 
@@ -118,7 +120,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
     const amountUi = parseAmount(amount);
     if (!Number.isFinite(amountUi) || amountUi <= 0) {
-      Alert.alert("Invalid amount", "Enter an amount greater than 0.");
+      toast.warn("Invalid amount", "Enter an amount greater than 0.");
       return;
     }
 
@@ -153,7 +155,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       return;
     }
     if (quoteIsStale) {
-      Alert.alert("Quote expired", "Refresh quote before continuing to review.");
+      toast.warn("Quote expired", "Refresh quote before continuing to review.");
       return;
     }
 
@@ -182,9 +184,6 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
   return (
     <View style={styles.page}>
       <Text style={styles.title}>Trade</Text>
-      <Text style={styles.subtitle}>
-        Trade execution flow is being finalized. Token context and amount capture are ready.
-      </Text>
 
       <View style={styles.contextCard}>
         {summaryLines.map((line) => (
@@ -201,7 +200,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
           onChangeText={setAmount}
           keyboardType="decimal-pad"
           placeholder="0.0"
-          placeholderTextColor={qsColors.textSubtle}
+          placeholderTextColor={qsColors.textTertiary}
           style={styles.amountInput}
         />
       </View>
@@ -227,9 +226,12 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       {quote ? (
         <View style={styles.quoteCard}>
           <Text style={styles.quoteTitle}>Quote ready</Text>
-          <Text style={styles.quoteMeta}>
-            {quoteIsStale ? "Quote expired" : `Quote valid for ~${quoteTtlSeconds}s`}
-          </Text>
+          <View style={styles.ttlRow}>
+            <Clock size={14} color={quoteIsStale ? qsColors.danger : qsColors.textTertiary} />
+            <Text style={[styles.quoteMeta, quoteIsStale ? styles.quoteMetaDanger : null]}>
+              {quoteIsStale ? "Quote expired" : `Quote valid for ~${quoteTtlSeconds}s`}
+            </Text>
+          </View>
           <Text style={styles.contextText}>
             You pay: {formatTokenAmount(quote.amountUi, quote.inputTokenDecimals)} (
             {formatAtomic(quote.summary.amountInAtomic)} atomic)
@@ -263,20 +265,29 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
       {quoteError ? (
         <View style={styles.errorCard}>
-          <Text style={styles.errorTitle}>Quote failed</Text>
+          <View style={styles.errorTitleRow}>
+            <AlertCircle size={14} color={qsColors.danger} />
+            <Text style={styles.errorTitle}>Quote failed</Text>
+          </View>
           <Text style={styles.errorText}>{quoteError}</Text>
         </View>
       ) : null}
 
       <View style={styles.actions}>
         <Pressable style={styles.primaryButton} onPress={handleGetQuote} disabled={isLoadingQuote}>
-          <Text style={styles.primaryButtonText}>
-            {isLoadingQuote ? "Getting Quote..." : "Get Quote"}
-          </Text>
+          <View style={styles.buttonRow}>
+            <Zap size={16} color={qsColors.layer0} />
+            <Text style={styles.primaryButtonText}>
+              {isLoadingQuote ? "Getting Quote..." : "Get Quote"}
+            </Text>
+          </View>
         </Pressable>
         {quote ? (
           <Pressable style={styles.reviewButton} onPress={handleReviewTrade}>
-            <Text style={styles.reviewButtonText}>Review Trade</Text>
+            <View style={styles.buttonRow}>
+              <Zap size={16} color={qsColors.accent} />
+              <Text style={styles.reviewButtonText}>Review Trade</Text>
+            </View>
           </Pressable>
         ) : null}
         <Pressable
@@ -293,7 +304,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
     padding: qsSpacing.xl,
     gap: qsSpacing.md,
   },
@@ -302,16 +313,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
   },
-  subtitle: {
-    color: qsColors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
   contextCard: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     padding: qsSpacing.md,
     gap: 6,
   },
@@ -323,14 +329,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    color: qsColors.textSubtle,
+    color: qsColors.textTertiary,
     fontSize: 12,
   },
   amountInput: {
     borderWidth: 1,
-    borderColor: qsColors.borderDefault,
+    borderColor: qsColors.layer3,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer2,
     color: qsColors.textPrimary,
     fontSize: 16,
     paddingHorizontal: qsSpacing.md,
@@ -340,7 +346,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer1,
     padding: qsSpacing.md,
     gap: 6,
   },
@@ -348,7 +354,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     padding: qsSpacing.md,
     gap: 8,
   },
@@ -361,7 +367,7 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.accent,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     paddingVertical: 8,
     alignItems: "center",
   },
@@ -375,9 +381,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  ttlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   quoteMeta: {
-    color: qsColors.textSubtle,
+    color: qsColors.textTertiary,
     fontSize: 11,
+  },
+  quoteMetaDanger: {
+    color: qsColors.danger,
   },
   staleWarning: {
     color: qsColors.danger,
@@ -389,9 +403,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.danger,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.dangerDark,
     padding: qsSpacing.md,
     gap: 4,
+  },
+  errorTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   errorTitle: {
     color: qsColors.danger,
@@ -407,6 +426,12 @@ const styles = StyleSheet.create({
     marginTop: "auto",
     gap: qsSpacing.sm,
   },
+  buttonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
   primaryButton: {
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.accent,
@@ -414,7 +439,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryButtonText: {
-    color: "#061326",
+    color: qsColors.layer0,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -422,7 +447,7 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     paddingVertical: 10,
     alignItems: "center",
   },
@@ -430,7 +455,7 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.accent,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     paddingVertical: 10,
     alignItems: "center",
   },

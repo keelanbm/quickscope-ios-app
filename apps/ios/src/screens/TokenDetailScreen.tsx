@@ -1,30 +1,49 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+/**
+ * TokenDetailScreen — Robinhood-inspired token detail with inline trade panel
+ *
+ * Layout (top to bottom):
+ * 1. Hero: Price LEFT, token image RIGHT (Robinhood pattern)
+ * 2. Social links + platform badge + watchlist
+ * 3. Edge-to-edge area chart (280px, 0 horizontal padding)
+ * 4. Timeframe selector pills
+ * 5. Metric badges row (MC, Vol, TX, 1h Change)
+ * 6. Holdings card (if wallet connected)
+ * 7. Token details card (address, age, scan mentions)
+ * 8. Persistent QuickTradePanel at bottom
+ * 9. TradeBottomSheet (expand from quick panel)
+ *
+ * v2.1: UI treatment only — all existing data preserved, no feature changes.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Clipboard from "expo-clipboard";
+import BottomSheet from "@gorhom/bottom-sheet";
 import {
-  Alert,
   Image,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { toast } from "@/src/lib/toast";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
-import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { qsColors, qsRadius, qsSpacing, qsShadows, qsTypography } from "@/src/theme/tokens";
 import { fetchPositionPnl, type TraderTokenPosition } from "@/src/features/portfolio/portfolioService";
 import {
-  buildMarketCapSeries,
+  buildChartSeries,
   fetchLiveTokenInfo,
   fetchTokenCandles,
   type LiveTokenInfo,
-  type TokenMarketCapPoint,
+  type TokenChartPoint,
+  type ChartSeriesResult,
 } from "@/src/features/token/tokenService";
 import {
   addTokenToWatchlist,
@@ -33,6 +52,19 @@ import {
   type TokenWatchlist,
 } from "@/src/features/watchlist/tokenWatchlistService";
 import { TokenChart } from "@/src/ui/TokenChart";
+import { MetricBadge } from "@/src/ui/MetricBadge";
+import { SocialChips, type SocialLink } from "@/src/ui/SocialChips";
+import { QuickTradePanel } from "@/src/ui/QuickTradePanel";
+import { TradeBottomSheet } from "@/src/ui/TradeBottomSheet";
+import { TradeSettingsModal } from "@/src/ui/TradeSettingsModal";
+import {
+  type TradeSettings,
+  DEFAULT_SETTINGS,
+  loadTradeSettings,
+  activeProfile,
+} from "@/src/features/trade/tradeSettings";
+import { haptics } from "@/src/lib/haptics";
+import { Copy, Star, ArrowLeft } from "@/src/ui/icons";
 
 type TokenDetailScreenProps = {
   rpcClient: RpcClient;
@@ -50,100 +82,65 @@ const chartTimeframes = [
 
 type ChartTimeframe = (typeof chartTimeframes)[number];
 
+/* ── Formatters ── */
+
 function formatCompactUsd(value: number | undefined): string {
   if (!value || !Number.isFinite(value) || value <= 0) {
     return "$0";
   }
-
   const absValue = Math.abs(value);
-  if (absValue >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  }
-  if (absValue >= 1_000_000) {
-    return `$${(value / 1_000_000).toFixed(2)}M`;
-  }
-  if (absValue >= 1_000) {
-    return `$${(value / 1_000).toFixed(1)}K`;
-  }
+  if (absValue >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (absValue >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (absValue >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
   return `$${value.toFixed(2)}`;
 }
 
 function formatPercent(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) {
-    return "n/a";
-  }
+  if (value === undefined || !Number.isFinite(value)) return "n/a";
   const prefix = value > 0 ? "+" : "";
   return `${prefix}${value.toFixed(1)}%`;
 }
 
 function formatAgeFromSeconds(unixSeconds: number | undefined): string {
-  if (!unixSeconds || !Number.isFinite(unixSeconds) || unixSeconds <= 0) {
-    return "n/a";
-  }
-
+  if (!unixSeconds || !Number.isFinite(unixSeconds) || unixSeconds <= 0) return "n/a";
   const elapsedSeconds = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`;
-  }
-  if (elapsedSeconds < 3600) {
-    return `${Math.floor(elapsedSeconds / 60)}m`;
-  }
-  if (elapsedSeconds < 86400) {
-    return `${Math.floor(elapsedSeconds / 3600)}h`;
-  }
-  if (elapsedSeconds < 604800) {
-    return `${Math.floor(elapsedSeconds / 86400)}d`;
-  }
-
+  if (elapsedSeconds < 60) return `${elapsedSeconds}s`;
+  if (elapsedSeconds < 3600) return `${Math.floor(elapsedSeconds / 60)}m`;
+  if (elapsedSeconds < 86400) return `${Math.floor(elapsedSeconds / 3600)}h`;
+  if (elapsedSeconds < 604800) return `${Math.floor(elapsedSeconds / 86400)}d`;
   return `${Math.floor(elapsedSeconds / 604800)}w`;
 }
 
 function formatChartTimestamp(timestampSeconds: number, timeframeId: string): string {
-  if (!timestampSeconds) {
-    return "--";
-  }
-
+  if (!timestampSeconds) return "--";
   const date = new Date(timestampSeconds * 1000);
   const hours = date.getHours();
   const minutes = date.getMinutes().toString().padStart(2, "0");
-
-  if (timeframeId === "1h" || timeframeId === "6h") {
-    return `${hours}:${minutes}`;
-  }
-
-  if (timeframeId === "24h") {
-    return `${date.getMonth() + 1}/${date.getDate()} ${hours}:${minutes}`;
-  }
-
+  if (timeframeId === "1h" || timeframeId === "6h") return `${hours}:${minutes}`;
+  if (timeframeId === "24h") return `${date.getMonth() + 1}/${date.getDate()} ${hours}:${minutes}`;
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
 function formatSol(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) {
-    return "--";
-  }
-
-  if (Math.abs(value) >= 1000) {
-    return value.toFixed(0);
-  }
-
-  if (Math.abs(value) >= 10) {
-    return value.toFixed(2);
-  }
-
+  if (value === undefined || !Number.isFinite(value)) return "--";
+  if (Math.abs(value) >= 1000) return value.toFixed(0);
+  if (Math.abs(value) >= 10) return value.toFixed(2);
   return value.toFixed(3);
 }
 
 export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
+  const insets = useSafeAreaInsets();
   const { walletAddress, hasValidAccessToken, authenticateFromWallet } = useAuthSession();
   const chartRequestIdRef = useRef(0);
   const positionRequestIdRef = useRef(0);
-  const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(
-    chartTimeframes[2]
-  );
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const settingsSheetRef = useRef<BottomSheet>(null);
+
+  const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(chartTimeframes[2]);
   const [liveInfo, setLiveInfo] = useState<LiveTokenInfo | null>(null);
-  const [chartData, setChartData] = useState<TokenMarketCapPoint[]>([]);
+  const [chartData, setChartData] = useState<TokenChartPoint[]>([]);
+  const [chartMode, setChartMode] = useState<"mcap" | "price">("mcap");
   const [isChartLoading, setIsChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [positionInfo, setPositionInfo] = useState<TraderTokenPosition | null>(null);
@@ -152,17 +149,21 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const [watchlistError, setWatchlistError] = useState<string | null>(null);
   const [isWatchlistLoading, setIsWatchlistLoading] = useState(false);
   const [isWatchlistUpdating, setIsWatchlistUpdating] = useState(false);
+  const [tradeSettings, setTradeSettings] = useState<TradeSettings>(DEFAULT_SETTINGS);
+  const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
 
   if (!params?.tokenAddress) {
     return (
       <View style={styles.page}>
-        <Text style={styles.title}>Token Detail</Text>
-        <Text style={styles.subtitle}>No token context was provided.</Text>
+        <Text style={styles.fallbackTitle}>Token Detail</Text>
+        <Text style={styles.fallbackSubtitle}>No token context was provided.</Text>
       </View>
     );
   }
 
   const tokenAddress = params.tokenAddress;
+
+  /* ── Data fetching (unchanged logic) ── */
 
   useEffect(() => {
     let isActive = true;
@@ -186,37 +187,29 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           }),
         ]);
 
-        if (!isActive || requestId !== chartRequestIdRef.current) {
-          return;
-        }
+        if (!isActive || requestId !== chartRequestIdRef.current) return;
 
         setLiveInfo(tokenInfo ?? null);
 
-        const series = buildMarketCapSeries({
+        const result = buildChartSeries({
           candles: candlesResponse.candles ?? [],
           tokenInfo: tokenInfo ?? null,
           candlesResponse,
         });
 
-        setChartData(series);
+        setChartData(result.points);
+        setChartMode(result.mode);
       } catch (error) {
-        if (!isActive || requestId !== chartRequestIdRef.current) {
-          return;
-        }
+        if (!isActive || requestId !== chartRequestIdRef.current) return;
         setChartError(error instanceof Error ? error.message : "Failed to load chart.");
       } finally {
-        if (!isActive || requestId !== chartRequestIdRef.current) {
-          return;
-        }
+        if (!isActive || requestId !== chartRequestIdRef.current) return;
         setIsChartLoading(false);
       }
     };
 
     void load();
-
-    return () => {
-      isActive = false;
-    };
+    return () => { isActive = false; };
   }, [rpcClient, selectedTimeframe, tokenAddress]);
 
   useEffect(() => {
@@ -230,31 +223,15 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     setWatchlistError(null);
 
     fetchTokenWatchlists(rpcClient)
-      .then((data) => {
-        if (!isActive) {
-          return;
-        }
-        setWatchlists(data ?? []);
-      })
+      .then((data) => { if (isActive) setWatchlists(data ?? []); })
       .catch((error) => {
-        if (!isActive) {
-          return;
-        }
-        setWatchlistError(
-          error instanceof Error ? error.message : "Failed to load watchlists."
-        );
+        if (!isActive) return;
+        setWatchlistError(error instanceof Error ? error.message : "Failed to load watchlists.");
         setWatchlists([]);
       })
-      .finally(() => {
-        if (!isActive) {
-          return;
-        }
-        setIsWatchlistLoading(false);
-      });
+      .finally(() => { if (isActive) setIsWatchlistLoading(false); });
 
-    return () => {
-      isActive = false;
-    };
+    return () => { isActive = false; };
   }, [hasValidAccessToken, rpcClient]);
 
   useEffect(() => {
@@ -269,23 +246,25 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
     fetchPositionPnl(rpcClient, walletAddress, tokenAddress)
       .then((data) => {
-        if (!isActive || requestId !== positionRequestIdRef.current) {
-          return;
-        }
-        setPositionInfo(data);
+        if (isActive && requestId === positionRequestIdRef.current) setPositionInfo(data);
       })
       .catch((error) => {
-        if (!isActive || requestId !== positionRequestIdRef.current) {
-          return;
-        }
+        if (!isActive || requestId !== positionRequestIdRef.current) return;
         setPositionError(error instanceof Error ? error.message : "Failed to load position.");
         setPositionInfo(null);
       });
 
-    return () => {
-      isActive = false;
-    };
+    return () => { isActive = false; };
   }, [rpcClient, tokenAddress, walletAddress]);
+
+  // Load trade settings on mount
+  useEffect(() => {
+    loadTradeSettings().then(setTradeSettings);
+  }, []);
+
+  const currentProfile = activeProfile(tradeSettings);
+
+  /* ── Derived data ── */
 
   const tokenMeta = useMemo(() => {
     const metadata = liveInfo?.token_metadata;
@@ -300,10 +279,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   }, [liveInfo, params]);
 
   const activeWatchlist = useMemo(() => {
-    if (watchlists.length === 0) {
-      return undefined;
-    }
-
+    if (watchlists.length === 0) return undefined;
     return (
       watchlists.find(
         (list) => list.isFavorites || list.name.toLowerCase() === "favorites"
@@ -312,9 +288,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   }, [watchlists]);
 
   const isTracked = useMemo(() => {
-    if (!activeWatchlist) {
-      return false;
-    }
+    if (!activeWatchlist) return false;
     return activeWatchlist.tokens?.includes(tokenAddress) ?? false;
   }, [activeWatchlist, tokenAddress]);
 
@@ -323,25 +297,33 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const platformLabel = (params.platform || params.exchange || "unknown").toUpperCase();
   const mintedAtSeconds = liveInfo?.mint_transaction?.ts ?? params.mintedAtSeconds;
 
-  const handleCopyAddress = async () => {
-    await Clipboard.setStringAsync(tokenAddress);
-    Alert.alert("Copied", "Token address copied to clipboard.");
-  };
+  const socialLinks = useMemo<SocialLink[]>(() => {
+    const links: SocialLink[] = [];
+    if (tokenMeta.twitterUrl) links.push({ type: "twitter", url: tokenMeta.twitterUrl });
+    if (tokenMeta.telegramUrl) links.push({ type: "telegram", url: tokenMeta.telegramUrl });
+    if (tokenMeta.websiteUrl) links.push({ type: "website", url: tokenMeta.websiteUrl });
+    return links;
+  }, [tokenMeta]);
 
-  const handleToggleWatchlist = async () => {
+  /* ── Handlers ── */
+
+  const handleCopyAddress = useCallback(async () => {
+    await Clipboard.setStringAsync(tokenAddress);
+    toast.success("Copied", "Token address copied to clipboard.");
+  }, [tokenAddress]);
+
+  const handleToggleWatchlist = useCallback(async () => {
     if (!hasValidAccessToken) {
       await authenticateFromWallet();
       return;
     }
 
     if (!activeWatchlist) {
-      Alert.alert("No watchlists", "Create a watchlist on web to start tracking.");
+      toast.info("No watchlists", "Create a watchlist on web to start tracking.");
       return;
     }
 
-    if (isWatchlistUpdating) {
-      return;
-    }
+    if (isWatchlistUpdating) return;
 
     setIsWatchlistUpdating(true);
     setWatchlistError(null);
@@ -355,14 +337,10 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
       setWatchlists((prev) =>
         prev.map((list) => {
-          if (list.id !== activeWatchlist.id) {
-            return list;
-          }
-
+          if (list.id !== activeWatchlist.id) return list;
           const nextTokens = isTracked
             ? list.tokens.filter((mint) => mint !== tokenAddress)
             : [...list.tokens, tokenAddress];
-
           return { ...list, tokens: nextTokens };
         })
       );
@@ -373,52 +351,138 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     } finally {
       setIsWatchlistUpdating(false);
     }
-  };
+  }, [
+    hasValidAccessToken,
+    authenticateFromWallet,
+    activeWatchlist,
+    isWatchlistUpdating,
+    isTracked,
+    rpcClient,
+    tokenAddress,
+  ]);
 
-  const socialLinks = [
-    { label: "X", url: tokenMeta.twitterUrl },
-    { label: "TG", url: tokenMeta.telegramUrl },
-    { label: "Web", url: tokenMeta.websiteUrl },
-  ].filter((link) => Boolean(link.url));
+  const handleQuickTrade = useCallback(
+    (presetParams: { side: "buy" | "sell"; amount: number }) => {
+      navigation.navigate("TradeEntry", {
+        source: "deep-link",
+        tokenAddress,
+        outputMintDecimals: params.tokenDecimals,
+        amount: presetParams.amount.toString(),
+      });
+    },
+    [navigation, tokenAddress, params.tokenDecimals]
+  );
+
+  const handleExpandTrade = useCallback(() => {
+    bottomSheetRef.current?.snapToIndex(0);
+  }, []);
+
+  const handleBottomSheetClose = useCallback(() => {
+    bottomSheetRef.current?.close();
+  }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    settingsSheetRef.current?.snapToIndex(0);
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    settingsSheetRef.current?.close();
+  }, []);
+
+  const handleProfilePress = useCallback(
+    (index: 0 | 1 | 2) => {
+      setTradeSettings((prev) => ({ ...prev, activeProfileIndex: index }));
+      haptics.selection();
+    },
+    []
+  );
+
+  const handleSideChange = useCallback((side: "buy" | "sell") => {
+    setTradeSide(side);
+  }, []);
+
+  const handleQuoteRequest = useCallback(
+    (quoteParams: { side: "buy" | "sell"; amount: number; orderType: "market" }) => {
+      navigation.navigate("TradeEntry", {
+        source: "deep-link",
+        tokenAddress,
+        outputMintDecimals: params.tokenDecimals,
+        amount: quoteParams.amount.toString(),
+      });
+    },
+    [navigation, tokenAddress, params.tokenDecimals]
+  );
+
+  /* ── Render ── */
 
   return (
-    <View style={styles.page}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <View style={[styles.page, { paddingTop: insets.top }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Back button ── */}
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={({ pressed }) => [
+            styles.backButton,
+            { opacity: pressed ? 0.6 : 1 },
+          ]}
+        >
+          <ArrowLeft size={20} color={qsColors.textSecondary} />
+        </Pressable>
+
+        {/* ── Hero: Price LEFT, Token Image RIGHT (Robinhood pattern) ── */}
         <View style={styles.hero}>
+          <View style={styles.heroLeft}>
+            <Text style={styles.heroSymbol}>{tokenMeta.symbol}</Text>
+            <Text style={styles.heroName}>{tokenMeta.name}</Text>
+            <View style={styles.heroPriceRow}>
+              <Text style={styles.heroPrice}>
+                {formatCompactUsd(marketCapUsd)}
+              </Text>
+              {oneHourChange !== undefined && (
+                <Text
+                  style={[
+                    styles.heroChange,
+                    oneHourChange >= 0 ? styles.changePositive : styles.changeNegative,
+                  ]}
+                >
+                  {formatPercent(oneHourChange)}
+                </Text>
+              )}
+            </View>
+          </View>
           <Image
             source={{ uri: tokenMeta.imageUri || fallbackTokenImage }}
-            style={styles.tokenImage}
+            style={styles.heroImage}
           />
-          <View style={styles.heroText}>
-            <Text style={styles.symbol}>{tokenMeta.symbol}</Text>
-            <Text style={styles.name}>{tokenMeta.name}</Text>
-            <Text style={styles.tagPill}>{platformLabel}</Text>
-          </View>
         </View>
 
-        {socialLinks.length > 0 ? (
-          <View style={styles.socialRow}>
-            {socialLinks.map((link) => (
-              <Pressable
-                key={link.label}
-                style={styles.socialPill}
-                onPress={() => link.url && Linking.openURL(link.url)}
-              >
-                <Text style={styles.socialText}>{link.label}</Text>
-              </Pressable>
-            ))}
+        {/* ── Social + Platform + Watchlist row ── */}
+        <View style={styles.metaRow}>
+          <View style={styles.metaLeft}>
+            <Text style={styles.platformPill}>{platformLabel}</Text>
+            {socialLinks.length > 0 && <SocialChips links={socialLinks} size="sm" />}
           </View>
-        ) : null}
 
-        <View style={styles.watchlistRow}>
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.watchlistButton,
               isTracked && hasValidAccessToken ? styles.watchlistButtonActive : null,
+              { opacity: pressed ? 0.7 : 1 },
             ]}
             onPress={handleToggleWatchlist}
             disabled={isWatchlistLoading || isWatchlistUpdating}
           >
+            <Star
+              size={16}
+              color={
+                isTracked && hasValidAccessToken
+                  ? qsColors.accent
+                  : qsColors.textSecondary
+              }
+            />
             <Text
               style={[
                 styles.watchlistText,
@@ -426,90 +490,122 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
               ]}
             >
               {!hasValidAccessToken
-                ? "Authenticate for watchlists"
-                : activeWatchlist
-                  ? isTracked
-                    ? "In Watchlist"
-                    : "Add to Watchlist"
-                  : isWatchlistLoading
-                    ? "Loading watchlists..."
-                    : "No watchlists yet"}
+                ? "Login"
+                : isTracked
+                  ? "Tracked"
+                  : "Track"}
             </Text>
           </Pressable>
-          {watchlistError ? <Text style={styles.watchlistError}>Watchlist unavailable.</Text> : null}
+        </View>
+        {watchlistError ? (
+          <Text style={styles.errorHint}>Watchlist unavailable.</Text>
+        ) : null}
+
+        {/* ── Edge-to-edge Chart ── */}
+        <View style={styles.chartSection}>
+          {chartData.length > 0 && (
+            <Text style={styles.chartModeLabel}>
+              {chartMode === "mcap" ? "Market Cap" : "Price (USD)"}
+            </Text>
+          )}
+          <TokenChart
+            data={chartData}
+            height={280}
+            isLoading={isChartLoading}
+            formatValue={formatCompactUsd}
+            formatTimestamp={(ts) => formatChartTimestamp(ts, selectedTimeframe.id)}
+          />
+          {chartError ? <Text style={styles.errorHint}>Chart unavailable.</Text> : null}
         </View>
 
-        <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Market Cap</Text>
-            <Text style={styles.metricValue}>{formatCompactUsd(marketCapUsd)}</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>1h Volume</Text>
-            <Text style={styles.metricValue}>{formatCompactUsd(params.oneHourVolumeUsd)}</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>1h Tx</Text>
-            <Text style={styles.metricValue}>
-              {params.oneHourTxCount?.toLocaleString() || "n/a"}
-            </Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>1h Change</Text>
-            <Text
-              style={[
-                styles.metricValue,
-                oneHourChange !== undefined
-                  ? oneHourChange >= 0
-                    ? styles.metricPositive
-                    : styles.metricNegative
-                  : null,
-              ]}
-            >
-              {formatPercent(oneHourChange)}
-            </Text>
-          </View>
+        {/* ── Timeframe pills ── */}
+        <View style={styles.timeframeRow}>
+          {chartTimeframes.map((frame) => {
+            const isActive = frame.id === selectedTimeframe.id;
+            return (
+              <Pressable
+                key={frame.id}
+                onPress={() => setSelectedTimeframe(frame)}
+                style={({ pressed }) => [
+                  styles.timeframePill,
+                  isActive && styles.timeframePillActive,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.timeframeText,
+                    isActive && styles.timeframeTextActive,
+                  ]}
+                >
+                  {frame.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
+        {/* ── Metric badges ── */}
+        <View style={styles.metricsRow}>
+          <MetricBadge label="MC" value={formatCompactUsd(marketCapUsd)} />
+          <MetricBadge label="Vol 1h" value={formatCompactUsd(params.oneHourVolumeUsd)} />
+          <MetricBadge
+            label="TX 1h"
+            value={params.oneHourTxCount?.toLocaleString() || "n/a"}
+          />
+          <MetricBadge
+            label="Change"
+            value={formatPercent(oneHourChange)}
+            variant={
+              oneHourChange !== undefined
+                ? oneHourChange >= 0
+                  ? "positive"
+                  : "negative"
+                : "default"
+            }
+          />
+        </View>
+
+        {/* ── Holdings card (wallet connected) ── */}
         {walletAddress ? (
-          <View style={styles.holdingsCard}>
-            <View style={styles.holdingsHeader}>
-              <Text style={styles.sectionTitle}>Holdings</Text>
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Holdings</Text>
               {positionError ? (
-                <Text style={styles.holdingsError}>Unavailable</Text>
+                <Text style={styles.errorHint}>Unavailable</Text>
               ) : null}
             </View>
             <View style={styles.holdingsRow}>
-              <View style={styles.holdingsStat}>
-                <Text style={styles.holdingsLabel}>Balance</Text>
-                <Text style={styles.holdingsValue}>
+              <View style={styles.holdingStat}>
+                <Text style={styles.holdingLabel}>Balance</Text>
+                <Text style={styles.holdingValue}>
                   {formatSol(positionInfo?.position?.balance)}
                 </Text>
               </View>
-              <View style={styles.holdingsStat}>
-                <Text style={styles.holdingsLabel}>Total PnL</Text>
+              <View style={styles.holdingStat}>
+                <Text style={styles.holdingLabel}>Total PnL</Text>
                 <Text
                   style={[
-                    styles.holdingsValue,
+                    styles.holdingValue,
                     positionInfo?.position?.total_pnl_quote
                       ? positionInfo.position.total_pnl_quote >= 0
-                        ? styles.metricPositive
-                        : styles.metricNegative
+                        ? styles.changePositive
+                        : styles.changeNegative
                       : null,
                   ]}
                 >
                   {formatSol(positionInfo?.position?.total_pnl_quote)}
                 </Text>
               </View>
-              <View style={styles.holdingsStat}>
-                <Text style={styles.holdingsLabel}>PnL %</Text>
+              <View style={styles.holdingStat}>
+                <Text style={styles.holdingLabel}>PnL %</Text>
                 <Text
                   style={[
-                    styles.holdingsValue,
+                    styles.holdingValue,
                     positionInfo?.position?.total_pnl_change_proportion
                       ? positionInfo.position.total_pnl_change_proportion >= 0
-                        ? styles.metricPositive
-                        : styles.metricNegative
+                        ? styles.changePositive
+                        : styles.changeNegative
                       : null,
                   ]}
                 >
@@ -524,348 +620,344 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           </View>
         ) : null}
 
-        <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.sectionTitle}>Market Cap</Text>
-            <View style={styles.timeframeRow}>
-              {chartTimeframes.map((frame) => {
-                const isActive = frame.id === selectedTimeframe.id;
-                return (
-                  <Pressable
-                    key={frame.id}
-                    onPress={() => setSelectedTimeframe(frame)}
-                    style={[styles.timeframePill, isActive && styles.timeframePillActive]}
-                  >
-                    <Text
-                      style={[
-                        styles.timeframeText,
-                        isActive && styles.timeframeTextActive,
-                      ]}
-                    >
-                      {frame.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          <TokenChart
-            data={chartData}
-            height={170}
-            isLoading={isChartLoading}
-            formatValue={formatCompactUsd}
-            formatTimestamp={(ts) => formatChartTimestamp(ts, selectedTimeframe.id)}
-          />
-          {chartError ? <Text style={styles.chartError}>Chart unavailable.</Text> : null}
-        </View>
-
-        <View style={styles.detailsCard}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Address</Text>
-            <Pressable onPress={handleCopyAddress}>
+        {/* ── Token details card ── */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Details</Text>
+            <Pressable
+              onPress={handleCopyAddress}
+              style={({ pressed }) => [
+                styles.copyButton,
+                { opacity: pressed ? 0.6 : 1 },
+              ]}
+            >
+              <Copy size={14} color={qsColors.accent} />
               <Text style={styles.copyText}>Copy</Text>
             </Pressable>
           </View>
-          <Text style={styles.detailLine}>{tokenAddress}</Text>
+          <Text style={styles.addressText} numberOfLines={1} ellipsizeMode="middle">
+            {tokenAddress}
+          </Text>
           <Text style={styles.detailLine}>Age: {formatAgeFromSeconds(mintedAtSeconds)}</Text>
           {typeof params.scanMentionsOneHour === "number" ? (
             <Text style={styles.detailLine}>
               Scan mentions (1h): {params.scanMentionsOneHour}
             </Text>
           ) : null}
-          {params.source ? (
-            <Text style={styles.detailLine}>Opened from: {params.source}</Text>
-          ) : null}
         </View>
+
+        {/* Bottom spacer for QuickTradePanel */}
+        <View style={{ height: 160 }} />
       </ScrollView>
 
-      <View style={styles.ctaWrap}>
-        <Pressable
-          style={styles.primaryCta}
-          onPress={() =>
-            navigation.navigate("TradeEntry", {
-              source: "deep-link",
-              tokenAddress,
-              outputMintDecimals: params.tokenDecimals,
-            })
-          }
-        >
-          <Text style={styles.primaryCtaText}>Trade</Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondaryCta}
-          onPress={() => navigation.navigate("MainTabs", { screen: "Discovery" })}
-        >
-          <Text style={styles.secondaryCtaText}>Back to Discover</Text>
-        </Pressable>
+      {/* ── Persistent QuickTradePanel ── */}
+      <View style={styles.tradePanelWrap}>
+        <QuickTradePanel
+          tokenSymbol={tokenMeta.symbol}
+          tokenAddress={tokenAddress}
+          walletBalance={positionInfo?.position?.balance}
+          tokenBalance={positionInfo?.position?.balance}
+          onPresetPress={handleQuickTrade}
+          onExpandPress={handleExpandTrade}
+          onSettingsPress={handleOpenSettings}
+          onProfilePress={handleProfilePress}
+          onSideChange={handleSideChange}
+          activeSide={tradeSide}
+          activeProfileIndex={tradeSettings.activeProfileIndex}
+          buyPresets={tradeSettings.buyPresets}
+          sellPresets={tradeSettings.sellPresets}
+        />
       </View>
+
+      {/* ── TradeBottomSheet (expandable) ── */}
+      <TradeBottomSheet
+        ref={bottomSheetRef}
+        tokenAddress={tokenAddress}
+        tokenSymbol={tokenMeta.symbol}
+        tokenDecimals={params.tokenDecimals ?? 9}
+        userBalance={positionInfo?.position?.balance ?? 0}
+        onQuoteRequest={handleQuoteRequest}
+        onClose={handleBottomSheetClose}
+        onSettingsPress={handleOpenSettings}
+        onProfilePress={handleProfilePress}
+        activeSide={tradeSide}
+        activeProfileIndex={tradeSettings.activeProfileIndex}
+        buyPresets={tradeSettings.buyPresets}
+        sellPresets={tradeSettings.sellPresets}
+        slippageBps={currentProfile.slippageBps}
+        priorityLamports={currentProfile.priorityLamports}
+      />
+
+      {/* ── Trade Settings Modal ── */}
+      <TradeSettingsModal
+        ref={settingsSheetRef}
+        settings={tradeSettings}
+        onSettingsChanged={setTradeSettings}
+        onClose={handleCloseSettings}
+      />
     </View>
   );
 }
 
+/* ── Styles ── */
+
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
   },
   scrollContent: {
-    padding: qsSpacing.xl,
-    gap: qsSpacing.md,
     paddingBottom: qsSpacing.lg,
   },
-  title: {
+  fallbackTitle: {
     color: qsColors.textPrimary,
-    fontSize: 28,
-    fontWeight: "700",
+    fontSize: qsTypography.size.xxxl,
+    fontWeight: qsTypography.weight.bold,
+    padding: qsSpacing.xl,
   },
-  subtitle: {
-    color: qsColors.textMuted,
-    fontSize: 14,
+  fallbackSubtitle: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.sm,
+    paddingHorizontal: qsSpacing.xl,
   },
+
+  /* Back button */
+  backButton: {
+    paddingHorizontal: qsSpacing.lg,
+    paddingTop: qsSpacing.md,
+    paddingBottom: qsSpacing.xs,
+    alignSelf: "flex-start",
+  },
+
+  /* Hero — Price LEFT, Image RIGHT */
   hero: {
     flexDirection: "row",
-    gap: qsSpacing.md,
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: qsSpacing.lg,
+    paddingTop: qsSpacing.sm,
+    paddingBottom: qsSpacing.md,
   },
-  tokenImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: qsColors.bgCardSoft,
-  },
-  heroText: {
+  heroLeft: {
     flex: 1,
     gap: 2,
   },
-  symbol: {
+  heroSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 28,
-    fontWeight: "700",
+    fontSize: qsTypography.size.xxxxl,
+    fontWeight: qsTypography.weight.bold,
+    letterSpacing: -0.5,
   },
-  name: {
-    color: qsColors.textMuted,
-    fontSize: 14,
+  heroName: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.sm,
+    marginBottom: qsSpacing.xs,
   },
-  socialRow: {
+  heroPriceRow: {
     flexDirection: "row",
+    alignItems: "baseline",
     gap: qsSpacing.sm,
   },
-  socialPill: {
-    borderRadius: qsRadius.lg,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  heroPrice: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.xxl,
+    fontWeight: qsTypography.weight.semi,
   },
-  socialText: {
-    color: qsColors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
+  heroChange: {
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.semi,
   },
-  watchlistRow: {
+  changePositive: {
+    color: qsColors.buyGreen,
+  },
+  changeNegative: {
+    color: qsColors.sellRed,
+  },
+  heroImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: qsColors.layer2,
+    marginLeft: qsSpacing.md,
+  },
+
+  /* Meta row — social + platform + watchlist */
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: qsSpacing.lg,
+    paddingBottom: qsSpacing.md,
+  },
+  metaLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: qsSpacing.sm,
+    flex: 1,
   },
-  watchlistButton: {
-    borderRadius: qsRadius.lg,
+  platformPill: {
+    color: qsColors.textTertiary,
+    backgroundColor: qsColors.layer2,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
+    borderRadius: qsRadius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.semi,
+    overflow: "hidden",
+  },
+
+  /* Watchlist */
+  watchlistButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: qsRadius.pill,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.layer1,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   watchlistButtonActive: {
     borderColor: qsColors.accent,
-    backgroundColor: "rgba(78, 163, 255, 0.18)",
+    backgroundColor: "rgba(119, 102, 247, 0.15)",
   },
   watchlistText: {
     color: qsColors.textSecondary,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: qsTypography.weight.semi,
   },
   watchlistTextActive: {
     color: qsColors.textPrimary,
   },
-  watchlistError: {
-    color: qsColors.textSubtle,
-    fontSize: 12,
+
+  /* Edge-to-edge chart */
+  chartSection: {
+    marginHorizontal: 0, // edge-to-edge
+    marginBottom: qsSpacing.sm,
   },
-  tagPill: {
-    marginTop: 6,
-    alignSelf: "flex-start",
-    color: qsColors.textSubtle,
-    backgroundColor: qsColors.bgCardSoft,
+  chartModeLabel: {
+    color: qsColors.textTertiary,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.semi,
+    paddingHorizontal: qsSpacing.lg,
+    marginBottom: 4,
+  },
+
+  /* Timeframe pills */
+  timeframeRow: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.lg,
+    marginBottom: qsSpacing.lg,
+  },
+  timeframePill: {
+    borderRadius: qsRadius.pill,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.lg,
-    paddingHorizontal: 8,
-    fontSize: 10,
-    overflow: "hidden",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: qsColors.layer1,
   },
-  metricsGrid: {
+  timeframePillActive: {
+    borderColor: qsColors.accent,
+    backgroundColor: "rgba(119, 102, 247, 0.12)",
+  },
+  timeframeText: {
+    color: qsColors.textTertiary,
+    fontSize: 12,
+    fontWeight: qsTypography.weight.semi,
+  },
+  timeframeTextActive: {
+    color: qsColors.textPrimary,
+  },
+
+  /* Metric badges row */
+  metricsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.lg,
+    marginBottom: qsSpacing.lg,
   },
-  metricCard: {
-    width: "48%",
+
+  /* Card (reused for holdings + details) */
+  card: {
+    marginHorizontal: qsSpacing.lg,
+    marginBottom: qsSpacing.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCard,
-    padding: qsSpacing.sm,
-    gap: 4,
-  },
-  metricLabel: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
-  },
-  metricValue: {
-    color: qsColors.textSecondary,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  metricPositive: {
-    color: qsColors.success,
-  },
-  metricNegative: {
-    color: qsColors.danger,
-  },
-  chartCard: {
-    gap: qsSpacing.sm,
-  },
-  holdingsCard: {
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     padding: qsSpacing.md,
     gap: qsSpacing.sm,
   },
-  holdingsHeader: {
+  cardHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
   },
-  holdingsError: {
-    color: qsColors.textSubtle,
-    fontSize: 12,
+  cardTitle: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.semi,
   },
+
+  /* Holdings */
   holdingsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: qsSpacing.sm,
   },
-  holdingsStat: {
+  holdingStat: {
     flex: 1,
     gap: 4,
   },
-  holdingsLabel: {
-    color: qsColors.textSubtle,
+  holdingLabel: {
+    color: qsColors.textTertiary,
     fontSize: 11,
   },
-  holdingsValue: {
+  holdingValue: {
     color: qsColors.textSecondary,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: qsTypography.weight.semi,
   },
-  chartHeader: {
+
+  /* Details */
+  copyButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: qsSpacing.sm,
-  },
-  sectionTitle: {
-    color: qsColors.textPrimary,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  timeframeRow: {
-    flexDirection: "row",
-    gap: qsSpacing.xs,
-  },
-  timeframePill: {
-    borderRadius: qsRadius.sm,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: qsColors.bgCard,
-  },
-  timeframePillActive: {
-    borderColor: qsColors.accent,
-    backgroundColor: "rgba(78, 163, 255, 0.15)",
-  },
-  timeframeText: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  timeframeTextActive: {
-    color: qsColors.textPrimary,
-  },
-  chartError: {
-    color: qsColors.textSubtle,
-    fontSize: 12,
-  },
-  detailsCard: {
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
-    padding: qsSpacing.md,
-    gap: 6,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  detailLabel: {
-    color: qsColors.textSubtle,
-    fontSize: 12,
+    gap: 4,
   },
   copyText: {
     color: qsColors.accent,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: qsTypography.weight.semi,
+  },
+  addressText: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
+    fontFamily: "Courier",
   },
   detailLine: {
     color: qsColors.textSecondary,
     fontSize: 12,
   },
-  ctaWrap: {
-    borderTopWidth: 1,
-    borderTopColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCanvas,
-    paddingHorizontal: qsSpacing.xl,
-    paddingVertical: qsSpacing.sm,
-    gap: qsSpacing.sm,
+
+  /* Error */
+  errorHint: {
+    color: qsColors.textTertiary,
+    fontSize: 12,
+    paddingHorizontal: qsSpacing.lg,
   },
-  primaryCta: {
-    borderRadius: qsRadius.md,
-    backgroundColor: qsColors.accent,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  primaryCtaText: {
-    color: "#061326",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  secondaryCta: {
-    borderRadius: qsRadius.md,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  secondaryCtaText: {
-    color: qsColors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
+
+  /* Persistent QuickTradePanel */
+  tradePanelWrap: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
 });

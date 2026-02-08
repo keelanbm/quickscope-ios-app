@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AddressType,
@@ -15,7 +15,11 @@ import {
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Linking from "expo-linking";
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Toast from "react-native-toast-message";
+
+import { toastConfig } from "@/src/ui/toast/toastConfig";
 
 import { loadEnv } from "@/src/config/env";
 import { AuthSessionProvider } from "@/src/features/auth/AuthSessionProvider";
@@ -32,7 +36,9 @@ import {
 import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
 import { PortfolioScreen } from "@/src/screens/PortfolioScreen";
+import { DepositScreen } from "@/src/screens/DepositScreen";
 import { ReviewTradeScreen } from "@/src/screens/ReviewTradeScreen";
+import { RewardsScreen } from "@/src/screens/RewardsScreen";
 import { SearchScreen } from "@/src/screens/SearchScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
@@ -42,21 +48,24 @@ import { TradeEntryScreen } from "@/src/screens/TradeEntryScreen";
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
+import { SlideOutDrawer } from "@/src/ui/SlideOutDrawer";
+import { QSLogoIcon, Compass, Crosshair, Search, Activity, Wallet, Menu } from "@/src/ui/icons";
 
 const Tabs = createBottomTabNavigator<RootTabs>();
 const Stack = createNativeStackNavigator<RootStack>();
 const hiddenTabOptions = {
   tabBarButton: () => null,
+  tabBarItemStyle: { width: 0, flex: 0, padding: 0 },
 };
 
 const navigationTheme: Theme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    background: qsColors.bgCanvas,
-    card: qsColors.bgCard,
+    background: qsColors.layer0,
+    card: qsColors.layer0,
     text: qsColors.textPrimary,
-    border: qsColors.borderDefault,
+    border: "transparent",
     primary: qsColors.accent,
   },
 };
@@ -114,17 +123,35 @@ function navigateToTarget(
   }
 }
 
-function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost: string }) {
+function MainTabsNavigator({
+  rpcClient,
+  wsHost,
+  onOpenDrawer,
+}: {
+  rpcClient: RpcClient;
+  wsHost: string;
+  onOpenDrawer: () => void;
+}) {
   return (
     <Tabs.Navigator
       screenOptions={({ navigation, route }) => ({
-        headerStyle: { backgroundColor: qsColors.bgCard },
+        headerStyle: {
+          backgroundColor: qsColors.layer0,
+          shadowColor: "transparent",
+          elevation: 0,
+        },
+        headerShadowVisible: false,
         headerTintColor: qsColors.textPrimary,
         tabBarStyle: {
-          backgroundColor: qsColors.bgCard,
-          borderTopColor: qsColors.borderDefault,
+          backgroundColor: qsColors.layer0,
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        tabBarLabelStyle: { fontSize: 11 },
+        tabBarActiveTintColor: qsColors.accent,
+        tabBarInactiveTintColor: qsColors.textTertiary,
+        tabBarLabelStyle: { fontSize: 10 },
+        tabBarItemStyle: { flex: 1 },
         headerTitle: ({ children }) => (
           <Text style={{ color: qsColors.textPrimary, fontSize: 17, fontWeight: "600" }}>
             {children}
@@ -139,38 +166,50 @@ function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost
                   onPress={() => navigation.navigate("Dev")}
                   style={{
                     marginLeft: 12,
-                    width: 30,
-                    height: 30,
-                    borderRadius: 15,
-                    backgroundColor: "#2a2f4a",
-                    borderWidth: 1,
-                    borderColor: qsColors.borderDefault,
+                    width: 28,
+                    height: 28,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ color: qsColors.textPrimary, fontSize: 14, fontWeight: "700" }}>
-                    Q
-                  </Text>
+                  <QSLogoIcon size={28} />
+                </Pressable>
+              ),
+        headerRight:
+          route.name === "Dev"
+            ? undefined
+            : () => (
+                <Pressable
+                  accessibilityLabel="Open Menu"
+                  onPress={onOpenDrawer}
+                  style={{
+                    marginRight: 12,
+                    width: 32,
+                    height: 32,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Menu size={22} color={qsColors.textSecondary} />
                 </Pressable>
               ),
       })}
     >
-      <Tabs.Screen name="Discovery" options={{ title: "Discover", tabBarLabel: "Discover" }}>
+      <Tabs.Screen name="Discovery" options={{ title: "Discover", tabBarLabel: "Discover", tabBarIcon: ({ color, size }) => <Compass size={size} color={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Discovery">
             <DiscoveryScreen rpcClient={rpcClient} params={route.params} />
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>
-      <Tabs.Screen name="Scope" options={{ title: "Scope" }}>
+      <Tabs.Screen name="Scope" options={{ title: "Scope", tabBarIcon: ({ color, size }) => <Crosshair size={size} color={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Scope">
             <ScopeScreen rpcClient={rpcClient} params={route.params} />
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>
-      <Tabs.Screen name="Trade" options={{ title: "Search", tabBarLabel: "Search" }}>
+      <Tabs.Screen name="Trade" options={{ title: "Search", tabBarLabel: "Search", tabBarIcon: ({ color, size }) => <Search size={size} color={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Trade">
             <AuthRouteGate
@@ -182,7 +221,7 @@ function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>
-      <Tabs.Screen name="Tracking" options={{ title: "Tracking" }}>
+      <Tabs.Screen name="Tracking" options={{ title: "Tracking", tabBarIcon: ({ color, size }) => <Activity size={size} color={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Tracking">
             <AuthRouteGate
@@ -194,7 +233,7 @@ function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>
-      <Tabs.Screen name="Portfolio" options={{ title: "Portfolio" }}>
+      <Tabs.Screen name="Portfolio" options={{ title: "Portfolio", tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Portfolio">
             <AuthRouteGate
@@ -242,10 +281,11 @@ export default function App() {
   const pendingDeepLinkRef = useRef<ReturnType<typeof parseQuickscopeDeepLink> | null>(
     null
   );
+  const [drawerVisible, setDrawerVisible] = useState(false);
 
   const phantomConfig = useMemo<PhantomSDKConfig>(
     () => ({
-      providers: ["google", "apple"],
+      providers: ["google", "apple", "phantom"],
       appId: env.phantomAppId,
       scheme: "quickscope",
       addressTypes: [AddressType.solana],
@@ -288,84 +328,128 @@ export default function App() {
     };
   }, [navigateFromDeepLink]);
 
-  return (
-    <PhantomProvider
-      config={phantomConfig}
-      theme={darkTheme}
-      appName="Quickscope"
-      appIcon="https://app.quickscope.gg/favicon.ico"
-    >
-      <AuthSessionProvider rpcClient={rpcClient}>
-        <NavigationContainer
-          ref={navigationRef}
-          theme={navigationTheme}
-          onReady={() => {
-            const pendingDeepLink = pendingDeepLinkRef.current;
-            if (!pendingDeepLink) {
-              return;
-            }
+  const openDrawer = useCallback(() => setDrawerVisible(true), []);
+  const closeDrawer = useCallback(() => setDrawerVisible(false), []);
 
-            pendingDeepLinkRef.current = null;
-            navigateToTarget(navigationRef, pendingDeepLink);
-          }}
-        >
-          <Stack.Navigator
-            initialRouteName="MainTabs"
-            screenOptions={{
-              headerStyle: { backgroundColor: qsColors.bgCard },
-              headerTintColor: qsColors.textPrimary,
-              contentStyle: { backgroundColor: qsColors.bgCanvas },
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <PhantomProvider
+        config={phantomConfig}
+        theme={darkTheme}
+        appName="Quickscope"
+        appIcon="https://app.quickscope.gg/favicon.ico"
+      >
+        <AuthSessionProvider rpcClient={rpcClient}>
+          <NavigationContainer
+            ref={navigationRef}
+            theme={navigationTheme}
+            onReady={() => {
+              const pendingDeepLink = pendingDeepLinkRef.current;
+              if (!pendingDeepLink) {
+                return;
+              }
+
+              pendingDeepLinkRef.current = null;
+              navigateToTarget(navigationRef, pendingDeepLink);
             }}
           >
-            <Stack.Screen
-              name="MainTabs"
-              options={{ headerShown: false }}
-              children={() => <MainTabsNavigator rpcClient={rpcClient} wsHost={env.wsHost} />}
-            />
-            <Stack.Screen
-              name="TokenDetail"
-              options={{ title: "Token Detail", headerBackButtonDisplayMode: "minimal" }}
-              children={({ route }) => (
-                <RouteErrorBoundary routeName="Token Detail">
-                  <TokenDetailScreen rpcClient={rpcClient} params={route.params} />
-                </RouteErrorBoundary>
-              )}
-            />
-            <Stack.Screen
-              name="TradeEntry"
-              options={{ title: "Trade", headerBackButtonDisplayMode: "minimal" }}
-              children={({ route }) => (
-                <RouteErrorBoundary routeName="Trade">
-                  <AuthRouteGate
-                    featureName="Trade"
-                    subtitle="Connect to request quotes and execute trades."
-                  >
-                    <TradeEntryScreen rpcClient={rpcClient} params={route.params} />
-                  </AuthRouteGate>
-                </RouteErrorBoundary>
-              )}
-            />
-            <Stack.Screen
-              name="ReviewTrade"
-              options={{ title: "Review Trade", headerBackButtonDisplayMode: "minimal" }}
-              children={({ route }) => (
-                <RouteErrorBoundary routeName="Review Trade">
-                  <AuthRouteGate
-                    featureName="Trade"
-                    subtitle="Connect to review and execute trades."
-                  >
-                    <ReviewTradeScreen
-                      rpcClient={rpcClient}
-                      executionEnabled={env.enableSwapExecution}
-                      params={route.params}
-                    />
-                  </AuthRouteGate>
-                </RouteErrorBoundary>
-              )}
-            />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </AuthSessionProvider>
-    </PhantomProvider>
+            <Stack.Navigator
+              initialRouteName="MainTabs"
+              screenOptions={{
+                headerStyle: {
+                  backgroundColor: qsColors.layer0,
+                },
+                headerShadowVisible: false,
+                headerTintColor: qsColors.textPrimary,
+                contentStyle: { backgroundColor: qsColors.layer0 },
+              }}
+            >
+              <Stack.Screen
+                name="MainTabs"
+                options={{ headerShown: false }}
+                children={() => (
+                  <MainTabsNavigator
+                    rpcClient={rpcClient}
+                    wsHost={env.wsHost}
+                    onOpenDrawer={openDrawer}
+                  />
+                )}
+              />
+              <Stack.Screen
+                name="TokenDetail"
+                options={{ headerShown: false }}
+                children={({ route }) => (
+                  <RouteErrorBoundary routeName="Token Detail">
+                    <TokenDetailScreen rpcClient={rpcClient} params={route.params} />
+                  </RouteErrorBoundary>
+                )}
+              />
+              <Stack.Screen
+                name="TradeEntry"
+                options={{ title: "Trade", headerBackButtonDisplayMode: "minimal" }}
+                children={({ route }) => (
+                  <RouteErrorBoundary routeName="Trade">
+                    <AuthRouteGate
+                      featureName="Trade"
+                      subtitle="Connect to request quotes and execute trades."
+                    >
+                      <TradeEntryScreen rpcClient={rpcClient} params={route.params} />
+                    </AuthRouteGate>
+                  </RouteErrorBoundary>
+                )}
+              />
+              <Stack.Screen
+                name="ReviewTrade"
+                options={{ title: "Review Trade", headerBackButtonDisplayMode: "minimal" }}
+                children={({ route }) => (
+                  <RouteErrorBoundary routeName="Review Trade">
+                    <AuthRouteGate
+                      featureName="Trade"
+                      subtitle="Connect to review and execute trades."
+                    >
+                      <ReviewTradeScreen
+                        rpcClient={rpcClient}
+                        executionEnabled={env.enableSwapExecution}
+                        params={route.params}
+                      />
+                    </AuthRouteGate>
+                  </RouteErrorBoundary>
+                )}
+              />
+              <Stack.Screen
+                name="Rewards"
+                options={{ title: "Rewards", headerBackButtonDisplayMode: "minimal" }}
+                children={() => (
+                  <RouteErrorBoundary routeName="Rewards">
+                    <AuthRouteGate
+                      featureName="Rewards"
+                      subtitle="Connect to view earnings and claim rewards."
+                    >
+                      <RewardsScreen rpcClient={rpcClient} />
+                    </AuthRouteGate>
+                  </RouteErrorBoundary>
+                )}
+              />
+              <Stack.Screen
+                name="Deposit"
+                options={{ title: "Deposit", headerBackButtonDisplayMode: "minimal" }}
+                children={() => (
+                  <RouteErrorBoundary routeName="Deposit">
+                    <AuthRouteGate
+                      featureName="Deposit"
+                      subtitle="Connect to view your deposit address."
+                    >
+                      <DepositScreen />
+                    </AuthRouteGate>
+                  </RouteErrorBoundary>
+                )}
+              />
+            </Stack.Navigator>
+            <SlideOutDrawer visible={drawerVisible} onClose={closeDrawer} />
+          </NavigationContainer>
+        </AuthSessionProvider>
+      </PhantomProvider>
+      <Toast config={toastConfig} />
+    </GestureHandlerRootView>
   );
 }

@@ -42,10 +42,13 @@ export type TokenCandlesResponse = {
   candles?: TokenCandle[];
 };
 
-export type TokenMarketCapPoint = {
+export type TokenChartPoint = {
   ts: number;
   value: number;
 };
+
+/** @deprecated Use TokenChartPoint instead */
+export type TokenMarketCapPoint = TokenChartPoint;
 
 function toNumber(value: unknown): number {
   const parsed = Number(value);
@@ -76,7 +79,13 @@ function deriveSupplyFromInfo(
   return undefined;
 }
 
-export function buildMarketCapSeries({
+export type ChartSeriesResult = {
+  points: TokenChartPoint[];
+  /** "mcap" when supply is available, "price" as fallback */
+  mode: "mcap" | "price";
+};
+
+export function buildChartSeries({
   candles,
   tokenInfo,
   candlesResponse,
@@ -84,15 +93,15 @@ export function buildMarketCapSeries({
   candles: TokenCandle[];
   tokenInfo?: LiveTokenInfo | null;
   candlesResponse?: TokenCandlesResponse;
-}): TokenMarketCapPoint[] {
+}): ChartSeriesResult {
   const supplyInfo = deriveSupplyFromInfo(tokenInfo ?? undefined, candlesResponse);
-  if (!supplyInfo) {
-    return [];
-  }
 
-  const naturalSupply = supplyInfo.supply / Math.pow(10, supplyInfo.decimals);
+  const useMcap = !!supplyInfo;
+  const naturalSupply = useMcap
+    ? supplyInfo.supply / Math.pow(10, supplyInfo.decimals)
+    : 1;
 
-  return (candles ?? [])
+  const points = (candles ?? [])
     .map((candle) => {
       const closeQuote = toNumber(candle.close);
       const quoteUsd = toNumber(candle.quote_asset_price_usd);
@@ -100,11 +109,22 @@ export function buildMarketCapSeries({
 
       return {
         ts: toNumber(candle.ts),
-        value: priceUsd * naturalSupply,
+        value: useMcap ? priceUsd * naturalSupply : priceUsd,
       };
     })
-    .filter((point) => point.ts > 0 && Number.isFinite(point.value))
+    .filter((point) => point.ts > 0 && Number.isFinite(point.value) && point.value > 0)
     .sort((a, b) => a.ts - b.ts);
+
+  return { points, mode: useMcap ? "mcap" : "price" };
+}
+
+/** @deprecated Use buildChartSeries instead */
+export function buildMarketCapSeries(args: {
+  candles: TokenCandle[];
+  tokenInfo?: LiveTokenInfo | null;
+  candlesResponse?: TokenCandlesResponse;
+}): TokenChartPoint[] {
+  return buildChartSeries(args).points;
 }
 
 export async function fetchLiveTokenInfo(

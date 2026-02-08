@@ -93,4 +93,6 @@ export type RootStack = {
   TokenDetail: TokenDetailRouteParams;
   TradeEntry: TradeEntryRouteParams | undefined;
   ReviewTrade: ReviewTradeRouteParams;
+  Rewards: undefined;
+  Deposit: undefined;
 };

@@ -173,7 +173,7 @@ export function TokenChart({
               cy={activePoint.y}
               r={4}
               fill={chartStroke}
-              stroke={qsColors.bgCanvas}
+              stroke={qsColors.layer0}
               strokeWidth={2}
             />
           </>
@@ -199,7 +199,7 @@ export function TokenChart({
 const styles = StyleSheet.create({
   chartContainer: {
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     overflow: "hidden",
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   tooltip: {
     position: "absolute",
     top: qsSpacing.sm,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     borderRadius: qsRadius.sm,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,

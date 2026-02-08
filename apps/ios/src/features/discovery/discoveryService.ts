@@ -103,31 +103,42 @@ export async function fetchDiscoveryTokens(
   ]);
 
   const solPriceUsd = toNumber(response.sol_price_usd);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  let mappedRows = (response.table?.rows ?? []).map((row) => {
+    const tokenDecimals = toOptionalInteger(row.decimals);
+
+    return {
+      mint: row.mint,
+      symbol: row.symbol,
+      name: row.name,
+      imageUri: row.image_uri,
+      platform: row.platform,
+      exchange: row.exchange,
+      twitterUrl: row.twitter_url,
+      telegramUrl: row.telegram_url,
+      websiteUrl: row.website_url,
+      mintedAtSeconds: toNumber(row.mint_ts),
+      marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
+      oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
+      oneHourTxCount: toNumber(row.one_hour_tx_count),
+      oneHourChangePercent: toNumber(row.one_hour_change) * 100,
+      scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
+      ...(tokenDecimals !== undefined ? { tokenDecimals } : null),
+    };
+  });
+
+  // "trending" tab acts as "New Pairs" — only show tokens minted in the last hour
+  if (tab === "trending") {
+    const oneHourAgo = nowSeconds - 3600;
+    mappedRows = mappedRows.filter(
+      (row) => row.mintedAtSeconds > 0 && row.mintedAtSeconds >= oneHourAgo
+    );
+  }
 
   return {
     tab,
     fetchedAtMs: Date.now(),
-    rows: (response.table?.rows ?? []).map((row) => {
-      const tokenDecimals = toOptionalInteger(row.decimals);
-
-      return {
-        mint: row.mint,
-        symbol: row.symbol,
-        name: row.name,
-        imageUri: row.image_uri,
-        platform: row.platform,
-        exchange: row.exchange,
-        twitterUrl: row.twitter_url,
-        telegramUrl: row.telegram_url,
-        websiteUrl: row.website_url,
-        mintedAtSeconds: toNumber(row.mint_ts),
-        marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
-        oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
-        oneHourTxCount: toNumber(row.one_hour_tx_count),
-        oneHourChangePercent: toNumber(row.one_hour_change) * 100,
-        scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
-        ...(tokenDecimals !== undefined ? { tokenDecimals } : null),
-      };
-    }),
+    rows: mappedRows,
   };
 }

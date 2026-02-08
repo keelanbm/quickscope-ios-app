@@ -1,9 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import {
+  FlatList,
+  Image,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
+import { haptics } from "@/src/lib/haptics";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
@@ -14,14 +23,43 @@ import {
   type TrackedWallet,
   type WalletWatchlist,
 } from "@/src/features/tracking/trackingService";
-import type { RootStack, TrackingRouteParams } from "@/src/navigation/types";
-import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
-import { SectionCard } from "@/src/ui/SectionCard";
+import {
+  fetchTelegramEvents,
+  type TelegramEvent,
+} from "@/src/features/tracking/telegramEventsService";
+import {
+  fetchTokenWatchlists,
+  fetchWatchlistTokens,
+  type EnrichedWatchlistToken,
+  type TokenWatchlist,
+} from "@/src/features/watchlist/tokenWatchlistService";
+import type { RootStack, RootTabs, TrackingRouteParams } from "@/src/navigation/types";
+import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
+import { Activity, Eye, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
+import { EmptyState } from "@/src/ui/EmptyState";
+import { SkeletonRow } from "@/src/ui/Skeleton";
+
+/* ─── Types ─── */
 
 type TrackingScreenProps = {
   rpcClient: RpcClient;
   params?: TrackingRouteParams;
 };
+
+type TrackingTabId = "tokens" | "wallets" | "chats";
+
+type TrackingTab = {
+  id: TrackingTabId;
+  label: string;
+};
+
+const TRACKING_TABS: TrackingTab[] = [
+  { id: "tokens", label: "Tokens" },
+  { id: "wallets", label: "Wallets" },
+  { id: "chats", label: "Chats" },
+];
+
+/* ─── Wallet activity types ─── */
 
 type ActivityRow = {
   id: string;
@@ -41,37 +79,45 @@ const ACTION_LABELS: Record<string, ActivityRow["action"]> = {
   w: "Remove",
 };
 
+/* ─── Formatters ─── */
+
+const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
+
+function formatCompactUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "$0";
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  if (value >= 1) return `$${value.toFixed(0)}`;
+  return `$${value.toFixed(4)}`;
+}
+
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) return "0%";
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toFixed(1)}%`;
+}
+
+function formatCompactNumber(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return String(Math.round(value));
+}
+
 function formatAmount(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "--";
-  }
-
-  if (value >= 1000) {
-    return value.toFixed(0);
-  }
-
-  if (value >= 10) {
-    return value.toFixed(2);
-  }
-
+  if (!Number.isFinite(value)) return "--";
+  if (value >= 1000) return value.toFixed(0);
+  if (value >= 10) return value.toFixed(2);
   return value.toFixed(3);
 }
 
 function formatTimeAgo(unixSeconds: number): string {
-  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) {
-    return "--";
-  }
-
+  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return "--";
   const delta = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (delta < 60) {
-    return `${delta}s`;
-  }
-  if (delta < 3600) {
-    return `${Math.floor(delta / 60)}m`;
-  }
-  if (delta < 86400) {
-    return `${Math.floor(delta / 3600)}h`;
-  }
+  if (delta < 60) return `${delta}s`;
+  if (delta < 3600) return `${Math.floor(delta / 60)}m`;
+  if (delta < 86400) return `${Math.floor(delta / 3600)}h`;
   return `${Math.floor(delta / 86400)}d`;
 }
 
@@ -80,384 +126,910 @@ function resolveWalletLabel(wallets: TrackedWallet[], maker: string): string {
   return wallet?.name || `${maker.slice(0, 4)}...${maker.slice(-4)}`;
 }
 
+/* ─── Sub-components ─── */
+
+function ActionPill({ action }: { action: ActivityRow["action"] }) {
+  const isBuy = action === "Buy";
+  const isSell = action === "Sell";
+  const pillStyle = [
+    styles.actionPill,
+    isBuy ? styles.buyPill : isSell ? styles.sellPill : styles.neutralPill,
+  ];
+  const textColor = isBuy
+    ? qsColors.buyGreen
+    : isSell
+      ? qsColors.sellRed
+      : qsColors.textSecondary;
+
+  return (
+    <View style={pillStyle}>
+      {isBuy ? (
+        <TrendingUp size={11} color={qsColors.buyGreen} />
+      ) : isSell ? (
+        <TrendingDown size={11} color={qsColors.sellRed} />
+      ) : null}
+      <Text style={[styles.actionPillText, { color: textColor }]}>{action}</Text>
+    </View>
+  );
+}
+
+/* ─── Main component ─── */
+
 export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
+  const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
+  const rootNavigation = navigation.getParent<NavigationProp<RootStack>>();
   const { walletAddress } = useAuthSession();
   const requestRef = useRef(0);
-  const [watchlists, setWatchlists] = useState<WalletWatchlist[]>([]);
-  const [activeWatchlistId, setActiveWatchlistId] = useState<string | null>(null);
-  const [wallets, setWallets] = useState<TrackedWallet[]>([]);
-  const [activity, setActivity] = useState<ActivityRow[]>([]);
+
+  const [activeTab, setActiveTab] = useState<TrackingTabId>("tokens");
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingActivity, setIsLoadingActivity] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isActive = true;
-    const requestId = ++requestRef.current;
-    setIsLoading(true);
-    setErrorText(null);
+  // ── Tokens tab state ──
+  const [tokenWatchlists, setTokenWatchlists] = useState<TokenWatchlist[]>([]);
+  const [activeTokenWatchlistId, setActiveTokenWatchlistId] = useState<number | null>(null);
+  const [watchlistTokens, setWatchlistTokens] = useState<EnrichedWatchlistToken[]>([]);
 
-    fetchWalletWatchlists(rpcClient)
-      .then((data) => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
+  // ── Wallets tab state ──
+  const [walletWatchlists, setWalletWatchlists] = useState<WalletWatchlist[]>([]);
+  const [activeWalletWatchlistId, setActiveWalletWatchlistId] = useState<string | null>(null);
+  const [trackedWallets, setTrackedWallets] = useState<TrackedWallet[]>([]);
+  const [activity, setActivity] = useState<ActivityRow[]>([]);
+
+  // ── Chats tab state ──
+  const [telegramEvents, setTelegramEvents] = useState<TelegramEvent[]>([]);
+
+  /* ═══ Tokens tab loading ═══ */
+
+  const loadTokensTab = useCallback(
+    async (options?: { refreshing?: boolean }) => {
+      const requestId = ++requestRef.current;
+      if (options?.refreshing) setIsRefreshing(true);
+      else setIsLoading(true);
+      setErrorText(null);
+
+      try {
+        const lists = await fetchTokenWatchlists(rpcClient);
+        if (requestId !== requestRef.current) return;
+        setTokenWatchlists(lists ?? []);
+
+        const targetId = activeTokenWatchlistId ?? lists?.[0]?.id ?? null;
+        if (targetId !== activeTokenWatchlistId) setActiveTokenWatchlistId(targetId);
+
+        const targetList = (lists ?? []).find((l) => l.id === targetId);
+        const mints = targetList?.tokens ?? [];
+
+        if (mints.length > 0) {
+          const tokens = await fetchWatchlistTokens(rpcClient, mints);
+          if (requestId !== requestRef.current) return;
+          setWatchlistTokens(tokens);
+        } else {
+          setWatchlistTokens([]);
         }
-        setWatchlists(data ?? []);
-        setActiveWatchlistId((prev) => prev ?? data?.[0]?.list_id?.toString() ?? null);
-      })
-      .catch((error) => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
-        }
-        setErrorText(error instanceof Error ? error.message : "Failed to load watchlists.");
-      })
-      .finally(() => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
-        }
+      } catch (error) {
+        if (requestId !== requestRef.current) return;
+        setErrorText(error instanceof Error ? error.message : "Failed to load token watchlist.");
+      } finally {
+        if (requestId !== requestRef.current) return;
         setIsLoading(false);
-      });
+        setIsRefreshing(false);
+      }
+    },
+    [rpcClient, activeTokenWatchlistId]
+  );
 
-    return () => {
-      isActive = false;
-    };
-  }, [rpcClient]);
+  /* ═══ Wallets tab loading ═══ */
 
-  useEffect(() => {
-    if (!activeWatchlistId) {
-      setWallets([]);
-      return;
-    }
+  const loadWalletsTab = useCallback(
+    async (options?: { refreshing?: boolean }) => {
+      const requestId = ++requestRef.current;
+      if (options?.refreshing) setIsRefreshing(true);
+      else setIsLoading(true);
+      setErrorText(null);
 
-    let isActive = true;
-    const requestId = ++requestRef.current;
-    setErrorText(null);
+      try {
+        const lists = await fetchWalletWatchlists(rpcClient);
+        if (requestId !== requestRef.current) return;
+        setWalletWatchlists(lists ?? []);
 
-    fetchWalletWatchlist(rpcClient, Number(activeWatchlistId))
-      .then((data) => {
-        if (!isActive || requestId !== requestRef.current) {
+        const targetId = activeWalletWatchlistId ?? lists?.[0]?.list_id?.toString() ?? null;
+        if (targetId !== activeWalletWatchlistId) setActiveWalletWatchlistId(targetId);
+
+        if (!targetId) {
+          setTrackedWallets([]);
+          setActivity([]);
           return;
         }
-        setWallets(data.wallets ?? []);
-      })
-      .catch((error) => {
-        if (!isActive || requestId !== requestRef.current) {
+
+        const watchlist = await fetchWalletWatchlist(rpcClient, Number(targetId));
+        if (requestId !== requestRef.current) return;
+        const wallets = watchlist.wallets ?? [];
+        setTrackedWallets(wallets);
+
+        if (wallets.length === 0) {
+          setActivity([]);
           return;
         }
-        setErrorText(error instanceof Error ? error.message : "Failed to load watchlist.");
-        setWallets([]);
-      });
 
-    return () => {
-      isActive = false;
-    };
-  }, [activeWatchlistId, rpcClient]);
+        const walletAddresses = wallets.map((w) => w.public_key);
+        const data = await fetchWalletActivity(rpcClient, walletAddresses);
+        if (requestId !== requestRef.current) return;
 
-  useEffect(() => {
-    if (wallets.length === 0) {
-      setActivity([]);
-      return;
-    }
-
-    let isActive = true;
-    const requestId = ++requestRef.current;
-    setIsLoadingActivity(true);
-    setErrorText(null);
-
-    const walletAddresses = wallets.map((wallet) => wallet.public_key);
-
-    fetchWalletActivity(rpcClient, walletAddresses)
-      .then((data) => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
-        }
         const tokenInfoMap = data.mint_to_token_info ?? {};
-        const rows = data.table?.rows ?? [];
-        const mapped = rows.map((row: AllTransactionsTableRow) => {
+        const mapped = (data.table?.rows ?? []).map((row: AllTransactionsTableRow) => {
           const tokenInfo = tokenInfoMap[row.mint]?.token_metadata;
-          const tokenSymbol = tokenInfo?.symbol ?? row.mint.slice(0, 4);
-          const tokenName = tokenInfo?.name ?? "Unknown token";
-          const action = ACTION_LABELS[row.type] ?? "Buy";
           return {
             id: row.signature || row.index,
-            tokenSymbol,
-            tokenName,
+            tokenSymbol: tokenInfo?.symbol ?? row.mint.slice(0, 4),
+            tokenName: tokenInfo?.name ?? "Unknown token",
             tokenAddress: row.mint,
             walletLabel: resolveWalletLabel(wallets, row.maker),
-            action,
+            action: ACTION_LABELS[row.type] ?? ("Buy" as const),
             amountSol: formatAmount(row.amount_quote ?? 0),
             timeAgo: formatTimeAgo(row.ts),
           };
         });
-
         setActivity(mapped);
-      })
-      .catch((error) => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
-        }
-        setErrorText(error instanceof Error ? error.message : "Failed to load activity.");
-        setActivity([]);
-      })
-      .finally(() => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
-        }
-        setIsLoadingActivity(false);
-      });
+      } catch (error) {
+        if (requestId !== requestRef.current) return;
+        setErrorText(error instanceof Error ? error.message : "Failed to load wallet activity.");
+      } finally {
+        if (requestId !== requestRef.current) return;
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [rpcClient, activeWalletWatchlistId]
+  );
 
-    return () => {
-      isActive = false;
-    };
-  }, [rpcClient, wallets]);
+  /* ═══ Chats tab loading ═══ */
+
+  const loadChatsTab = useCallback(
+    async (options?: { refreshing?: boolean }) => {
+      const requestId = ++requestRef.current;
+      if (options?.refreshing) setIsRefreshing(true);
+      else setIsLoading(true);
+      setErrorText(null);
+
+      try {
+        const events = await fetchTelegramEvents(rpcClient);
+        if (requestId !== requestRef.current) return;
+        setTelegramEvents(events);
+      } catch (error) {
+        if (requestId !== requestRef.current) return;
+        setErrorText(error instanceof Error ? error.message : "Failed to load chat events.");
+      } finally {
+        if (requestId !== requestRef.current) return;
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [rpcClient]
+  );
+
+  /* ═══ Tab change / load effect ═══ */
+
+  const loadCurrentTab = useCallback(
+    (options?: { refreshing?: boolean }) => {
+      if (activeTab === "tokens") return loadTokensTab(options);
+      if (activeTab === "wallets") return loadWalletsTab(options);
+      return loadChatsTab(options);
+    },
+    [activeTab, loadTokensTab, loadWalletsTab, loadChatsTab]
+  );
+
+  useEffect(() => {
+    void loadCurrentTab();
+  }, [loadCurrentTab]);
+
+  const handleOpenTokenDetail = useCallback(
+    (tokenAddress: string, symbol?: string) => {
+      rootNavigation?.navigate("TokenDetail", {
+        source: "deep-link",
+        tokenAddress,
+        symbol,
+      });
+    },
+    [rootNavigation]
+  );
+
+  /* ═══ Render helpers ═══ */
+
+  /** Watchlist sub-pills (below main tabs) */
+  function renderWatchlistPills() {
+    if (activeTab === "tokens" && tokenWatchlists.length > 0) {
+      return (
+        <View style={styles.watchlistPills}>
+          {tokenWatchlists.map((wl) => {
+            const active = wl.id === activeTokenWatchlistId;
+            return (
+              <Pressable
+                key={wl.id}
+                style={[styles.watchlistPill, active && styles.watchlistPillActive]}
+                onPress={() => setActiveTokenWatchlistId(wl.id)}
+              >
+                <Text style={[styles.watchlistPillText, active && styles.watchlistPillTextActive]}>
+                  {wl.name} ({wl.tokens.length})
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      );
+    }
+
+    if (activeTab === "wallets" && walletWatchlists.length > 0) {
+      return (
+        <View style={styles.watchlistPills}>
+          {walletWatchlists.map((wl) => {
+            const id = wl.list_id.toString();
+            const active = id === activeWalletWatchlistId;
+            return (
+              <Pressable
+                key={wl.list_id}
+                style={[styles.watchlistPill, active && styles.watchlistPillActive]}
+                onPress={() => setActiveWalletWatchlistId(id)}
+              >
+                <Text style={[styles.watchlistPillText, active && styles.watchlistPillTextActive]}>
+                  {wl.name}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      );
+    }
+
+    return null;
+  }
+
+  /** Tab-specific column headers */
+  function renderColumnHeaders() {
+    if (activeTab === "tokens" && watchlistTokens.length > 0) {
+      return (
+        <View style={styles.columnHeaders}>
+          <View style={styles.colHeaderLeft}>
+            <Text style={styles.colHeaderText}>Token</Text>
+          </View>
+          <View style={styles.colHeaderMetric}>
+            <Text style={styles.colHeaderText}>MC</Text>
+          </View>
+          <View style={styles.colHeaderMetric}>
+            <Text style={styles.colHeaderText}>1h%</Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (activeTab === "wallets" && activity.length > 0) {
+      return (
+        <View style={styles.columnHeaders}>
+          <View style={styles.colHeaderLeft}>
+            <Text style={styles.colHeaderText}>Activity</Text>
+          </View>
+          <View style={styles.colHeaderRight}>
+            <Text style={styles.colHeaderText}>Amount</Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (activeTab === "chats" && telegramEvents.length > 0) {
+      return (
+        <View style={styles.columnHeaders}>
+          <View style={styles.colHeaderLeft}>
+            <Text style={styles.colHeaderText}>Token</Text>
+          </View>
+          <View style={styles.colHeaderRight}>
+            <Text style={styles.colHeaderText}>Return</Text>
+          </View>
+        </View>
+      );
+    }
+
+    return null;
+  }
+
+  /** Tab-specific summary line */
+  function renderSummary() {
+    if (activeTab === "wallets" && trackedWallets.length > 0) {
+      return (
+        <View style={styles.summaryRow}>
+          <Eye size={14} color={qsColors.textSubtle} />
+          <Text style={styles.summaryText}>
+            {trackedWallets.length} wallet{trackedWallets.length !== 1 ? "s" : ""} tracked
+          </Text>
+        </View>
+      );
+    }
+
+    if (activeTab === "chats" && telegramEvents.length > 0) {
+      return (
+        <View style={styles.summaryRow}>
+          <MessageCircle size={14} color={qsColors.textSubtle} />
+          <Text style={styles.summaryText}>
+            {telegramEvents.length} recent event{telegramEvents.length !== 1 ? "s" : ""}
+          </Text>
+        </View>
+      );
+    }
+
+    return null;
+  }
+
+  /** Empty state per tab */
+  function renderEmptyState() {
+    if (isLoading) return null;
+
+    if (activeTab === "tokens") {
+      if (tokenWatchlists.length === 0) {
+        return (
+          <EmptyState
+            icon={Star}
+            title="No token watchlists"
+            subtitle="Create a watchlist to track your favorite tokens."
+          />
+        );
+      }
+      if (watchlistTokens.length === 0) {
+        return (
+          <EmptyState
+            icon={Eye}
+            title="No tokens in this list"
+            subtitle="Add tokens to this watchlist from the discovery or search screen."
+          />
+        );
+      }
+    }
+
+    if (activeTab === "wallets") {
+      if (walletWatchlists.length === 0) {
+        return (
+          <EmptyState
+            icon={Wallet}
+            title="No wallet watchlists"
+            subtitle="Track wallet activity by adding wallets to watch."
+          />
+        );
+      }
+      if (trackedWallets.length === 0) {
+        return (
+          <EmptyState
+            icon={Wallet}
+            title="No wallets tracked"
+            subtitle="Add wallets to monitor their trading activity."
+          />
+        );
+      }
+      if (activity.length === 0) {
+        return (
+          <EmptyState
+            icon={Activity}
+            title="No activity yet"
+            subtitle="Tracked wallet activity will appear here."
+          />
+        );
+      }
+    }
+
+    if (activeTab === "chats") {
+      if (telegramEvents.length === 0) {
+        return (
+          <EmptyState
+            icon={MessageCircle}
+            title="No chat events"
+            subtitle="Connect Telegram channels to see token mentions."
+          />
+        );
+      }
+    }
+
+    return null;
+  }
+
+  /* ─── Build the flat list data based on active tab ─── */
+
+  type ListItem =
+    | { type: "token"; data: EnrichedWatchlistToken }
+    | { type: "activity"; data: ActivityRow }
+    | { type: "chat"; data: TelegramEvent };
+
+  let listData: ListItem[] = [];
+  if (activeTab === "tokens") {
+    listData = watchlistTokens.map((t) => ({ type: "token" as const, data: t }));
+  } else if (activeTab === "wallets") {
+    listData = activity.map((a) => ({ type: "activity" as const, data: a }));
+  } else {
+    listData = telegramEvents.map((e) => ({ type: "chat" as const, data: e }));
+  }
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Tracking</Text>
-        <Text style={styles.subtitle}>
-          Wallet and token tracking snapshots based on your watchlists.
-        </Text>
-      </View>
+    <FlatList
+      data={listData}
+      keyExtractor={(item, index) => {
+        if (item.type === "token") return item.data.mint;
+        if (item.type === "activity") return item.data.id;
+        return String(item.data.id ?? index);
+      }}
+      contentContainerStyle={styles.content}
+      style={styles.page}
+      refreshControl={
+        <RefreshControl
+          tintColor={qsColors.textMuted}
+          refreshing={isRefreshing}
+          onRefresh={() => {
+            haptics.light();
+            void loadCurrentTab({ refreshing: true });
+          }}
+        />
+      }
+      ListHeaderComponent={
+        <View style={styles.headerWrap}>
+          {/* Deep link context */}
+          {params?.source ? (
+            <View style={styles.deepLinkNote}>
+              <Text style={styles.deepLinkTitle}>Opened from deep link</Text>
+            </View>
+          ) : null}
 
-      <View style={styles.tabsRow}>
-        {watchlists.map((watchlist) => {
-          const id = watchlist.list_id.toString();
-          const isActive = id === activeWatchlistId;
+          {/* Error */}
+          {errorText ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{errorText}</Text>
+              <Pressable
+                style={styles.retryButton}
+                onPress={() => { void loadCurrentTab(); }}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Loading */}
+          {isLoading ? (
+            <View style={{ gap: 4 }}>
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </View>
+          ) : null}
+
+          {/* ── Main tabs: Tokens | Wallets | Chats ── */}
+          <View style={styles.mainTabs}>
+            {TRACKING_TABS.map((tab) => {
+              const active = tab.id === activeTab;
+              return (
+                <Pressable
+                  key={tab.id}
+                  style={[styles.mainTab, active && styles.mainTabActive]}
+                  onPress={() => {
+                    haptics.selection();
+                    setActiveTab(tab.id);
+                  }}
+                >
+                  <Text style={[styles.mainTabText, active && styles.mainTabTextActive]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* ── Watchlist sub-pills ── */}
+          {renderWatchlistPills()}
+
+          {/* ── Summary line ── */}
+          {renderSummary()}
+
+          {/* ── Column headers ── */}
+          {renderColumnHeaders()}
+        </View>
+      }
+      renderItem={({ item }) => {
+        /* ── Token watchlist row ── */
+        if (item.type === "token") {
+          const token = item.data;
+          const isPositive = token.oneHourChangePercent >= 0;
           return (
             <Pressable
-              key={watchlist.list_id}
-              style={[styles.tabPill, isActive && styles.tabPillActive]}
-              onPress={() => setActiveWatchlistId(id)}
+              style={styles.rowItem}
+              onPress={() => handleOpenTokenDetail(token.mint, token.symbol)}
             >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {watchlist.name}
-              </Text>
+              <View style={styles.rowMain}>
+                <Image
+                  source={{ uri: token.imageUri || fallbackTokenImage }}
+                  style={styles.tokenImage}
+                />
+                <View style={styles.nameColumn}>
+                  <Text numberOfLines={1} style={styles.tokenSymbol}>
+                    {token.symbol}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.tokenName}>
+                    {token.name}
+                  </Text>
+                </View>
+                <View style={styles.metricCol}>
+                  <Text numberOfLines={1} style={styles.metricValue}>
+                    {formatCompactUsd(token.marketCapUsd)}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.metricSub}>
+                    {formatCompactUsd(token.oneHourVolumeUsd)} vol
+                  </Text>
+                </View>
+                <View style={styles.metricCol}>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.changeValue,
+                      { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
+                    ]}
+                  >
+                    {formatPercent(token.oneHourChangePercent)}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.metricSub}>
+                    {formatCompactNumber(token.holders)} hldr
+                  </Text>
+                </View>
+              </View>
             </Pressable>
           );
-        })}
-      </View>
+        }
 
-      <SectionCard title="Recent Activity" subtitle="Latest tracked wallet actions">
-        {isLoading ? (
-          <Text style={styles.emptyText}>Loading watchlists...</Text>
-        ) : errorText ? (
-          <Text style={styles.emptyText}>{errorText}</Text>
-        ) : watchlists.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>Create a watchlist to begin tracking.</Text>
-            <Pressable style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Create watchlist</Text>
-            </Pressable>
-          </View>
-        ) : wallets.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>Add wallets to start tracking activity.</Text>
-            <Pressable style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Add wallets</Text>
-            </Pressable>
-          </View>
-        ) : isLoadingActivity ? (
-          <Text style={styles.emptyText}>Loading activity...</Text>
-        ) : activity.length === 0 ? (
-          <Text style={styles.emptyText}>No activity yet for this watchlist.</Text>
-        ) : (
-          activity.map((row) => (
+        /* ── Wallet activity row ── */
+        if (item.type === "activity") {
+          const row = item.data;
+          return (
             <Pressable
-              key={row.id}
-              style={styles.activityRow}
-              onPress={() =>
-                navigation.navigate("TokenDetail", {
-                  source: "deep-link",
-                  tokenAddress: row.tokenAddress,
-                })
-              }
+              style={styles.rowItem}
+              onPress={() => handleOpenTokenDetail(row.tokenAddress, row.tokenSymbol)}
             >
-              <View style={styles.rowLeft}>
+              <View style={styles.rowMain}>
                 <View style={styles.tokenAvatar}>
                   <Text style={styles.tokenAvatarText}>{row.tokenSymbol[0]}</Text>
                 </View>
-                <View style={styles.rowText}>
-                  <Text style={styles.tokenSymbol}>{row.tokenSymbol}</Text>
-                  <Text style={styles.tokenName}>{row.tokenName}</Text>
-                  <Text style={styles.walletLabel}>{row.walletLabel}</Text>
+                <View style={styles.nameColumn}>
+                  <View style={styles.nameRow}>
+                    <Text numberOfLines={1} style={styles.tokenSymbol}>
+                      {row.tokenSymbol}
+                    </Text>
+                    <ActionPill action={row.action} />
+                  </View>
+                  <Text numberOfLines={1} style={styles.tokenName}>
+                    {row.tokenName}
+                  </Text>
+                </View>
+                <View style={styles.metricCol}>
+                  <Text numberOfLines={1} style={styles.metricValue}>
+                    {row.amountSol} SOL
+                  </Text>
+                  <Text numberOfLines={1} style={styles.metricSub}>
+                    {row.timeAgo}
+                  </Text>
                 </View>
               </View>
-              <View style={styles.rowRight}>
-                <Text
-                  style={[
-                    styles.actionPill,
-                    row.action === "Buy"
-                      ? styles.buyPill
-                      : row.action === "Sell"
-                        ? styles.sellPill
-                        : styles.neutralPill,
-                  ]}
-                >
-                  {row.action}
+              <View style={styles.rowFooter}>
+                <Wallet size={10} color={qsColors.textSubtle} />
+                <Text numberOfLines={1} style={styles.walletLabel}>
+                  {row.walletLabel}
                 </Text>
-                <Text style={styles.amountText}>{row.amountSol} SOL</Text>
-                <Text style={styles.timeText}>{row.timeAgo}</Text>
               </View>
             </Pressable>
-          ))
-        )}
-      </SectionCard>
+          );
+        }
 
-      {params?.source ? (
-        <Text style={styles.contextText}>Opened from a deep link.</Text>
-      ) : null}
-    </ScrollView>
+        /* ── Telegram chat event row ── */
+        const event = item.data;
+        const returnPositive = event.peakReturnPercent >= 0;
+        return (
+          <Pressable
+            style={styles.rowItem}
+            onPress={() => handleOpenTokenDetail(event.mint, event.symbol)}
+          >
+            <View style={styles.rowMain}>
+              {event.imageUri ? (
+                <Image source={{ uri: event.imageUri }} style={styles.tokenImage} />
+              ) : (
+                <View style={styles.tokenAvatar}>
+                  <Text style={styles.tokenAvatarText}>{event.symbol[0]}</Text>
+                </View>
+              )}
+              <View style={styles.nameColumn}>
+                <Text numberOfLines={1} style={styles.tokenSymbol}>
+                  {event.symbol}
+                </Text>
+                <Text numberOfLines={1} style={styles.tokenName}>
+                  {event.eventType} · {formatTimeAgo(event.timestamp)}
+                </Text>
+              </View>
+              <View style={styles.metricCol}>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.changeValue,
+                    { color: returnPositive ? qsColors.buyGreen : qsColors.sellRed },
+                  ]}
+                >
+                  {formatPercent(event.peakReturnPercent)}
+                </Text>
+                <Text numberOfLines={1} style={styles.metricSub}>
+                  peak
+                </Text>
+              </View>
+            </View>
+            {event.chatId ? (
+              <View style={styles.rowFooter}>
+                <MessageCircle size={10} color={qsColors.textSubtle} />
+                <Text numberOfLines={1} style={styles.walletLabel}>
+                  {event.chatId}
+                </Text>
+              </View>
+            ) : null}
+          </Pressable>
+        );
+      }}
+      ListEmptyComponent={renderEmptyState()}
+    />
   );
 }
+
+/* ═══════════════════════════ Styles ═══════════════════════════ */
 
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
   },
   content: {
-    padding: qsSpacing.xl,
+    paddingTop: qsSpacing.xs,
+    paddingBottom: 140,
+  },
+  headerWrap: {
     gap: qsSpacing.md,
+    marginBottom: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.lg,
   },
-  header: {
-    gap: 4,
-  },
-  title: {
-    color: qsColors.textPrimary,
-    fontSize: 26,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: qsColors.textMuted,
-    fontSize: 14,
-  },
-  tabsRow: {
+
+  // ── Main tabs (Tokens | Wallets | Chats) ──
+  mainTabs: {
     flexDirection: "row",
     gap: qsSpacing.sm,
   },
-  tabPill: {
-    borderRadius: qsRadius.lg,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  tabPillActive: {
-    borderColor: qsColors.accent,
-    backgroundColor: "rgba(78, 163, 255, 0.15)",
-  },
-  tabText: {
-    color: qsColors.textSubtle,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  tabTextActive: {
-    color: qsColors.textPrimary,
-  },
-  emptyState: {
-    alignItems: "center",
-    gap: qsSpacing.sm,
+  mainTab: {
+    flex: 1,
+    borderRadius: qsRadius.pill,
+    backgroundColor: qsColors.layer2,
     paddingVertical: qsSpacing.sm,
+    alignItems: "center",
   },
-  emptyText: {
+  mainTabActive: {
+    backgroundColor: qsColors.accent,
+  },
+  mainTabText: {
+    color: qsColors.textTertiary,
+    fontWeight: qsTypography.weight.semi,
+    fontSize: 13,
+  },
+  mainTabTextActive: {
+    color: qsColors.textPrimary,
+  },
+
+  // ── Watchlist sub-pills ──
+  watchlistPills: {
+    flexDirection: "row",
+    gap: qsSpacing.xs,
+    flexWrap: "wrap",
+  },
+  watchlistPill: {
+    borderRadius: qsRadius.pill,
+    backgroundColor: qsColors.layer2,
+    paddingVertical: qsSpacing.xs,
+    paddingHorizontal: qsSpacing.md,
+  },
+  watchlistPillActive: {
+    backgroundColor: qsColors.accent,
+  },
+  watchlistPillText: {
+    color: qsColors.textTertiary,
+    fontSize: 12,
+    fontWeight: qsTypography.weight.medium,
+  },
+  watchlistPillTextActive: {
+    color: qsColors.textPrimary,
+  },
+
+  // ── Summary line ──
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  summaryText: {
     color: qsColors.textSubtle,
     fontSize: 12,
+    fontWeight: qsTypography.weight.medium,
   },
-  primaryButton: {
-    backgroundColor: qsColors.accent,
-    borderRadius: qsRadius.sm,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  primaryButtonText: {
-    color: "#061326",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  activityRow: {
+
+  // ── Column headers ──
+  columnHeaders: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
-    padding: qsSpacing.sm,
-    gap: qsSpacing.sm,
+    paddingVertical: 4,
   },
-  rowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: qsSpacing.sm,
+  colHeaderLeft: {
     flex: 1,
   },
+  colHeaderMetric: {
+    alignItems: "flex-end",
+    minWidth: 64,
+  },
+  colHeaderRight: {
+    alignItems: "flex-end",
+    minWidth: 80,
+  },
+  colHeaderText: {
+    color: qsColors.textSubtle,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.semi,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  // ── Deep link / error / loading ──
+  deepLinkNote: {
+    borderRadius: qsRadius.md,
+    backgroundColor: qsColors.layer1,
+    padding: qsSpacing.md,
+    gap: 4,
+  },
+  deepLinkTitle: {
+    color: qsColors.textMuted,
+    fontSize: 12,
+  },
+  errorBox: {
+    borderRadius: qsRadius.md,
+    backgroundColor: qsColors.dangerDark,
+    padding: qsSpacing.md,
+    gap: 4,
+  },
+  errorText: {
+    color: qsColors.dangerLight,
+    fontSize: 12,
+  },
+  retryButton: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+    borderRadius: qsRadius.sm,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: qsColors.dangerBg,
+  },
+  retryButtonText: {
+    color: qsColors.dangerLight,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.bold,
+  },
+
+  // ── Rows (shared across tabs) ──
+  rowItem: {
+    paddingHorizontal: qsSpacing.lg,
+    paddingTop: 10,
+    paddingBottom: 10,
+    backgroundColor: qsColors.layer0,
+  },
+  rowMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  // Token image (for tokens/chats tabs)
+  tokenImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: qsColors.layer3,
+  },
+
+  // Token avatar fallback (for wallets tab)
   tokenAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: qsColors.bgCard,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.layer2,
     alignItems: "center",
     justifyContent: "center",
   },
   tokenAvatarText: {
     color: qsColors.textPrimary,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: qsTypography.weight.bold,
   },
-  rowText: {
-    gap: 2,
+
+  // Name column
+  nameColumn: {
+    flex: 1,
+    gap: 1,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: qsTypography.weight.bold,
+    flexShrink: 1,
   },
   tokenName: {
-    color: qsColors.textMuted,
+    color: qsColors.textTertiary,
+    fontSize: 11,
+  },
+
+  // Metric columns
+  metricCol: {
+    alignItems: "flex-end",
+    gap: 2,
+    minWidth: 64,
+  },
+  metricValue: {
+    color: qsColors.textPrimary,
     fontSize: 12,
+    fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
+  },
+  metricSub: {
+    color: qsColors.textTertiary,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.medium,
+    fontVariant: ["tabular-nums"],
+  },
+  changeValue: {
+    fontSize: 12,
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
+  },
+
+  // Footer
+  rowFooter: {
+    marginTop: 4,
+    marginLeft: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   walletLabel: {
     color: qsColors.textSubtle,
-    fontSize: 11,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.medium,
   },
-  rowRight: {
-    alignItems: "flex-end",
-    gap: 4,
-  },
+
+  // ── Action pills (wallets tab) ──
   actionPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: qsRadius.sm,
-    fontSize: 11,
-    fontWeight: "700",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: qsRadius.xs,
     overflow: "hidden",
   },
+  actionPillText: {
+    fontSize: 10,
+    fontWeight: qsTypography.weight.bold,
+  },
   buyPill: {
-    backgroundColor: "rgba(53, 210, 142, 0.2)",
-    color: qsColors.success,
+    backgroundColor: qsColors.buyGreenBg,
   },
   sellPill: {
-    backgroundColor: "rgba(255, 107, 107, 0.2)",
-    color: qsColors.danger,
+    backgroundColor: qsColors.sellRedBg,
   },
   neutralPill: {
-    backgroundColor: "rgba(79, 92, 120, 0.35)",
-    color: qsColors.textSecondary,
+    backgroundColor: qsColors.layer3,
   },
-  amountText: {
-    color: qsColors.textSecondary,
-    fontSize: 12,
-  },
-  timeText: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
-  },
-  contextText: {
-    color: qsColors.textSubtle,
-    fontSize: 12,
-  },
+
 });

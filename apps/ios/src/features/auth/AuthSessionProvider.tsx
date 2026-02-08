@@ -29,7 +29,7 @@ import {
   parseExpirationToUnixMs,
   shouldInvalidateSessionForWalletChange,
 } from "@/src/features/auth/authSessionUtils";
-import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { RpcClient } from "@/src/lib/api/rpcClient";
 
 type AuthSessionStatus =
   | "bootstrapping"
@@ -74,11 +74,12 @@ export function AuthSessionProvider({
 
   const clearSession = useCallback(async () => {
     await clearStoredAuthSession();
+    rpcClient.clearCookies();
     setTokens(null);
     setSessionWalletAddress(undefined);
     setErrorText(undefined);
     setStatus("unauthenticated");
-  }, []);
+  }, [rpcClient]);
 
   const persistSession = useCallback(async (nextTokens: AuthTokens, nextWalletAddress?: string) => {
     await persistAuthSession({
