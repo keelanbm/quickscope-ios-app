@@ -143,6 +143,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | undefined>();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [lastUpdatedMs, setLastUpdatedMs] = useState<number | undefined>();
   const [starredMints, setStarredMints] = useState<Record<string, boolean>>({});
 

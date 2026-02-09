@@ -221,7 +221,7 @@ export function QuickTradePanel({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: qsColors.elevatedSurface,
+    backgroundColor: qsColors.layer1,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingTop: qsSpacing.md,

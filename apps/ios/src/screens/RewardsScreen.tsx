@@ -45,14 +45,6 @@ function formatSol(value?: number): string {
   return value.toFixed(4);
 }
 
-function formatUsd(value?: number): string {
-  if (!value || !Number.isFinite(value)) return "$0.00";
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(2)}`;
-}
-
 function truncateMint(mint?: string): string {
   if (!mint) return "UNK";
   if (mint.length <= 10) return mint;
@@ -60,7 +52,7 @@ function truncateMint(mint?: string): string {
 }
 
 export function RewardsScreen({ rpcClient }: RewardsScreenProps) {
-  const { walletAddress } = useAuthSession();
+  useAuthSession(); // ensures auth context is available
   const requestRef = useRef(0);
 
   const [earnings, setEarnings] = useState<CumulativeEarnings | null>(null);

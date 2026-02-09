@@ -91,7 +91,7 @@ export async function fetchScopeTokens(
       filter: {
         sort_column: sort.sortColumn,
         sort_order: !sort.sortOrderDescending,
-        row_limit: 50,
+        row_limit: 20,
       },
     },
   ]);

@@ -84,7 +84,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       if (activeSide && activeSide !== activeTab) {
         setActiveTab(activeSide);
       }
-    }, [activeSide]);
+    }, [activeSide, activeTab]);
 
     // Backdrop component
     const renderBackdrop = useCallback(

@@ -15,7 +15,7 @@ import {
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Linking from "expo-linking";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Toast from "react-native-toast-message";
 
@@ -212,12 +212,7 @@ function MainTabsNavigator({
       <Tabs.Screen name="Trade" options={{ title: "Search", tabBarLabel: "Search", tabBarIcon: ({ color, size }) => <Search size={size} color={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Trade">
-            <AuthRouteGate
-              featureName="Search"
-              subtitle="Connect to access token search and quick action workflows."
-            >
-              <SearchScreen rpcClient={rpcClient} params={route.params} />
-            </AuthRouteGate>
+            <SearchScreen rpcClient={rpcClient} params={route.params} />
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>

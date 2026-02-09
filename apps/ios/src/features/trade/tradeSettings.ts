@@ -23,6 +23,8 @@ export type TradeSettings = {
   buyPresets: [number, number, number, number];
   /** Fraction-of-balance for sell preset buttons (0-1) */
   sellPresets: [number, number, number, number];
+  /** When true, preset taps execute immediately (skip TradeEntry). */
+  instantTrade: boolean;
 };
 
 // ── Defaults ─────────────────────────────────────
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: TradeSettings = {
   activeProfileIndex: 0,
   buyPresets: [0.25, 0.5, 1, 5],
   sellPresets: [0.25, 0.5, 0.75, 1],
+  instantTrade: false,
 };
 
 const STORAGE_KEY = "qs_trade_settings_v1";

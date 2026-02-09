@@ -158,7 +158,7 @@ function ActionPill({ action }: { action: ActivityRow["action"] }) {
 export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
   const rootNavigation = navigation.getParent<NavigationProp<RootStack>>();
-  const { walletAddress } = useAuthSession();
+  useAuthSession(); // ensures auth context is available
   const requestRef = useRef(0);
 
   const [activeTab, setActiveTab] = useState<TrackingTabId>("tokens");

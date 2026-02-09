@@ -10,7 +10,10 @@
     "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.quickscope.iosapp"
+      "bundleIdentifier": "com.quickscope.iosapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,10 +33,15 @@
         }
       ],
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-dev-client"
     ],
     "extra": {
-      "projectName": "quickscope-ios-app"
-    }
+      "projectName": "quickscope-ios-app",
+      "eas": {
+        "projectId": "432c9fe0-204a-4b76-9e33-fde84aba4946"
+      }
+    },
+    "owner": "keelanbm"
   }
 }

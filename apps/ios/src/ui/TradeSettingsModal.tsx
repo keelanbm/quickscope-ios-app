@@ -1,14 +1,13 @@
 /**
- * TradeSettingsModal — Bottom sheet for editing trade profiles (P1/P2/P3).
+ * TradeSettingsModal — Bottom sheet for editing trade profiles (P1/P2/P3),
+ * buy/sell presets, and instant trade toggle.
  *
- * Allows the user to configure slippage, priority fee, and tip per profile.
  * Settings are persisted to AsyncStorage via tradeSettings module.
  */
 import React, { forwardRef, useCallback, useMemo, useState, useEffect } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import BottomSheet, {
   BottomSheetBackdrop,
-  BottomSheetView,
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
@@ -27,7 +26,7 @@ import {
   saveTradeSettings,
   formatSlippage,
 } from "@/src/features/trade/tradeSettings";
-import { X } from "@/src/ui/icons";
+import { X, Zap } from "@/src/ui/icons";
 
 type TradeSettingsModalProps = {
   settings: TradeSettings;
@@ -39,7 +38,7 @@ const SLIPPAGE_PRESETS = [500, 1000, 1500, 2500]; // bps
 
 export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProps>(
   ({ settings, onSettingsChanged, onClose }, ref) => {
-    const snapPoints = useMemo(() => ["70%", "90%"], []);
+    const snapPoints = useMemo(() => ["80%", "95%"], []);
 
     const [editingIndex, setEditingIndex] = useState<0 | 1 | 2>(
       settings.activeProfileIndex
@@ -48,6 +47,15 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
     const [priorityText, setPriorityText] = useState("");
     const [tipText, setTipText] = useState("");
 
+    // Buy preset text fields
+    const [buyPresetTexts, setBuyPresetTexts] = useState<[string, string, string, string]>(
+      settings.buyPresets.map(String) as [string, string, string, string]
+    );
+    // Sell preset text fields
+    const [sellPresetTexts, setSellPresetTexts] = useState<[string, string, string, string]>(
+      settings.sellPresets.map((v) => String(v * 100)) as [string, string, string, string]
+    );
+
     // Sync text fields when switching profiles
     useEffect(() => {
       const p = settings.profiles[editingIndex];
@@ -55,6 +63,14 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
       setPriorityText((p.priorityLamports / 1_000_000_000).toString());
       setTipText((p.tipLamports / 1_000_000_000).toString());
     }, [editingIndex, settings.profiles]);
+
+    // Sync presets when settings change externally
+    useEffect(() => {
+      setBuyPresetTexts(settings.buyPresets.map(String) as [string, string, string, string]);
+      setSellPresetTexts(
+        settings.sellPresets.map((v) => String(v * 100)) as [string, string, string, string]
+      );
+    }, [settings.buyPresets, settings.sellPresets]);
 
     const renderBackdrop = useCallback(
       (props: BottomSheetBackdropProps) => (
@@ -79,9 +95,23 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
         return;
       }
 
+      // Parse buy presets
+      const parsedBuyPresets = buyPresetTexts.map((t) => {
+        const v = parseFloat(t);
+        return isNaN(v) || v <= 0 ? 0.25 : v;
+      }) as [number, number, number, number];
+
+      // Parse sell presets (input as %, store as 0-1 fraction)
+      const parsedSellPresets = sellPresetTexts.map((t) => {
+        const v = parseFloat(t);
+        return isNaN(v) || v <= 0 || v > 100 ? 0.25 : v / 100;
+      }) as [number, number, number, number];
+
       const updated: TradeSettings = {
         ...settings,
         profiles: [...settings.profiles] as [TradeProfile, TradeProfile, TradeProfile],
+        buyPresets: parsedBuyPresets,
+        sellPresets: parsedSellPresets,
       };
 
       updated.profiles[editingIndex] = {
@@ -94,7 +124,7 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
       onSettingsChanged(updated);
       haptics.success();
       toast.success("Settings saved", `P${editingIndex + 1} profile updated`);
-    }, [slippageText, priorityText, tipText, editingIndex, settings, onSettingsChanged]);
+    }, [slippageText, priorityText, tipText, editingIndex, settings, onSettingsChanged, buyPresetTexts, sellPresetTexts]);
 
     const handleSlippagePreset = useCallback(
       (bps: number) => {
@@ -103,6 +133,52 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
       },
       []
     );
+
+    const handleInstantTradeToggle = useCallback(
+      (value: boolean) => {
+        if (value) {
+          Alert.alert(
+            "Enable Instant Trade?",
+            "Preset taps will execute trades immediately without confirmation. Make sure your slippage and settings are correct.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Enable",
+                style: "destructive",
+                onPress: () => {
+                  const updated = { ...settings, instantTrade: true };
+                  saveTradeSettings(updated);
+                  onSettingsChanged(updated);
+                  haptics.success();
+                },
+              },
+            ]
+          );
+        } else {
+          const updated = { ...settings, instantTrade: false };
+          saveTradeSettings(updated);
+          onSettingsChanged(updated);
+          haptics.light();
+        }
+      },
+      [settings, onSettingsChanged]
+    );
+
+    const updateBuyPresetText = useCallback((index: number, value: string) => {
+      setBuyPresetTexts((prev) => {
+        const next = [...prev] as [string, string, string, string];
+        next[index] = value;
+        return next;
+      });
+    }, []);
+
+    const updateSellPresetText = useCallback((index: number, value: string) => {
+      setSellPresetTexts((prev) => {
+        const next = [...prev] as [string, string, string, string];
+        next[index] = value;
+        return next;
+      });
+    }, []);
 
     return (
       <BottomSheet
@@ -211,6 +287,57 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
             placeholder="0.0001"
             placeholderTextColor={qsColors.textMuted}
           />
+
+          {/* ── Buy Presets ── */}
+          <Text style={styles.sectionTitle}>Buy Presets (SOL)</Text>
+          <View style={styles.presetsInputRow}>
+            {buyPresetTexts.map((text, index) => (
+              <TextInput
+                key={`buy-${index}`}
+                style={styles.presetInput}
+                value={text}
+                onChangeText={(v) => updateBuyPresetText(index, v)}
+                keyboardType="decimal-pad"
+                placeholder={`${settings.buyPresets[index]}`}
+                placeholderTextColor={qsColors.textMuted}
+              />
+            ))}
+          </View>
+
+          {/* ── Sell Presets ── */}
+          <Text style={styles.sectionTitle}>Sell Presets (%)</Text>
+          <View style={styles.presetsInputRow}>
+            {sellPresetTexts.map((text, index) => (
+              <TextInput
+                key={`sell-${index}`}
+                style={styles.presetInput}
+                value={text}
+                onChangeText={(v) => updateSellPresetText(index, v)}
+                keyboardType="decimal-pad"
+                placeholder={`${settings.sellPresets[index] * 100}`}
+                placeholderTextColor={qsColors.textMuted}
+              />
+            ))}
+          </View>
+
+          {/* ── Instant Trade Toggle ── */}
+          <View style={styles.instantTradeRow}>
+            <View style={styles.instantTradeLabel}>
+              <Zap size={16} color={settings.instantTrade ? qsColors.accent : qsColors.textTertiary} />
+              <View style={styles.instantTradeLabelText}>
+                <Text style={styles.instantTradeTitle}>Instant Trade</Text>
+                <Text style={styles.instantTradeHint}>
+                  Preset taps execute immediately
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={settings.instantTrade}
+              onValueChange={handleInstantTradeToggle}
+              trackColor={{ false: qsColors.layer3, true: qsColors.accent }}
+              thumbColor="#ffffff"
+            />
+          </View>
 
           {/* Save Button */}
           <Pressable
@@ -332,6 +459,64 @@ const styles = StyleSheet.create({
     color: qsColors.textPrimary,
     marginBottom: qsSpacing.sm,
   },
+
+  /* Section titles for preset editors */
+  sectionTitle: {
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textPrimary,
+    marginTop: qsSpacing.xl,
+    marginBottom: qsSpacing.sm,
+  },
+  presetsInputRow: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+  },
+  presetInput: {
+    flex: 1,
+    backgroundColor: qsColors.layer2,
+    borderWidth: 1,
+    borderColor: qsColors.layer3,
+    borderRadius: qsRadius.md,
+    paddingHorizontal: qsSpacing.sm,
+    paddingVertical: qsSpacing.sm,
+    fontSize: qsTypography.size.sm,
+    color: qsColors.textPrimary,
+    textAlign: "center",
+  },
+
+  /* Instant Trade toggle */
+  instantTradeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: qsSpacing.xl,
+    paddingVertical: qsSpacing.md,
+    paddingHorizontal: qsSpacing.sm,
+    backgroundColor: qsColors.layer2,
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.layer3,
+  },
+  instantTradeLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.sm,
+    flex: 1,
+  },
+  instantTradeLabelText: {
+    gap: 2,
+  },
+  instantTradeTitle: {
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textPrimary,
+  },
+  instantTradeHint: {
+    fontSize: qsTypography.size.xxs,
+    color: qsColors.textTertiary,
+  },
+
   saveBtn: {
     height: 48,
     borderRadius: qsRadius.lg,
