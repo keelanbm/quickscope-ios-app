@@ -15,6 +15,7 @@ import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { formatPercent } from "@/src/lib/format";
 import type { ReviewTradeRouteParams, RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { useInlineToast } from "@/src/ui/InlineToast";
 
 type ReviewTradeScreenProps = {
   rpcClient: RpcClient;
@@ -52,6 +53,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
   const [executionSignature, setExecutionSignature] = useState<string | undefined>();
   const [executionCreationTime, setExecutionCreationTime] = useState<string | undefined>();
   const [executionTime, setExecutionTime] = useState<string | undefined>();
+  const [toastElement, toast] = useInlineToast();
   const quoteIsStale = isQuoteStale(params.quoteRequestedAtMs, nowMs);
   const quoteTtlSeconds = getQuoteTtlSecondsRemaining(params.quoteRequestedAtMs, nowMs);
   const walletMismatch = walletAddress !== undefined && walletAddress !== params.walletAddress;
@@ -128,19 +130,19 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
       if (isFailure) {
         const body = result.errorPreview ?? "Swap execution failed.";
         setExecutionTone("error");
-        Alert.alert("Trade failed", body);
+        toast.show(body, "error");
       } else if (isSuccess) {
         setExecutionTone("success");
-        Alert.alert("Trade success", "Trade executed successfully.");
+        toast.show("Trade executed successfully.", "success");
       } else {
         setExecutionTone("info");
-        Alert.alert("Trade submitted", "Trade submitted. Status will update when finalized.");
+        toast.show("Trade submitted. Status will update when finalized.", "info");
       }
     } catch (error) {
       const message = String(error);
       setExecutionError(message);
       setExecutionTone("error");
-      Alert.alert("Trade failed", message);
+      toast.show(message, "error");
     } finally {
       setIsExecuting(false);
     }
@@ -152,7 +154,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
     }
 
     await Clipboard.setStringAsync(executionSignature);
-    Alert.alert("Signature copied", executionSignature);
+    toast.show("Signature copied", "success");
   };
 
   const handleOpenExplorer = async () => {
@@ -164,18 +166,19 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
     try {
       const canOpen = await Linking.canOpenURL(url);
       if (!canOpen) {
-        Alert.alert("Invalid link", "Unable to open explorer link.");
+        toast.show("Unable to open explorer link.", "error");
         return;
       }
 
       await Linking.openURL(url);
     } catch (error) {
-      Alert.alert("Open failed", String(error));
+      toast.show("Failed to open explorer.", "error");
     }
   };
 
   return (
     <View style={styles.page}>
+      {toastElement}
       <View style={styles.headerRow}>
         <View
           style={[
