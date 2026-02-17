@@ -3,17 +3,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import {
   FlatList,
   type GestureResponderEvent,
   Image,
   Linking,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 
 import {
   fetchDiscoveryTokens,
@@ -234,15 +236,15 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             {tabs.map((tab) => {
               const active = tab.id === activeTab;
               return (
-                <Pressable
+                <AnimatedPressable
                   key={tab.id}
                   onPress={() => setActiveTab(tab.id)}
-                  style={[styles.tabButton, active ? styles.tabButtonActive : null]}
+                  style={active ? [styles.tabButton, styles.tabButtonActive] : styles.tabButton}
                 >
                   <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
                     {tab.label}
                   </Text>
-                </Pressable>
+                </AnimatedPressable>
               );
             })}
           </View>
@@ -258,14 +260,14 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>Failed to load discovery list.</Text>
               <Text style={styles.errorText}>{errorText}</Text>
-              <Pressable
+              <AnimatedPressable
                 style={styles.retryButton}
                 onPress={() => {
                   void loadRows();
                 }}
               >
                 <Text style={styles.retryButtonText}>Retry</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           ) : null}
 
@@ -288,8 +290,8 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         const platformLabel = (item.platform || item.exchange || "unknown").toUpperCase();
 
         return (
-          <Pressable
-            style={[styles.rowItem, highlighted ? styles.rowItemHighlighted : null]}
+          <AnimatedPressable
+            style={highlighted ? [styles.rowItem, styles.rowItemHighlighted] : styles.rowItem}
             onPress={() => handleOpenTokenDetail(item)}
           >
             <View style={styles.rowMain}>
@@ -336,16 +338,17 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
               </View>
 
               <View style={styles.actionsColumn}>
-                <Pressable
+                <AnimatedPressable
                   onPress={(event) => {
                     stopRowPress(event);
                     toggleStar(item.mint);
                   }}
                   hitSlop={6}
+                  hapticStyle={Haptics.ImpactFeedbackStyle.Light}
                 >
                   <Text style={styles.starText}>{isStarred ? "★" : "☆"}</Text>
-                </Pressable>
-                <Pressable
+                </AnimatedPressable>
+                <AnimatedPressable
                   style={styles.tradeButton}
                   onPress={(event) => {
                     stopRowPress(event);
@@ -357,7 +360,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                   }}
                 >
                   <Text style={styles.tradeButtonText}>Trade</Text>
-                </Pressable>
+                </AnimatedPressable>
               </View>
             </View>
 
@@ -368,7 +371,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
               </Text>
               <View style={styles.linksRow}>
                 {item.twitterUrl ? (
-                  <Pressable
+                  <AnimatedPressable
                     style={styles.linkChip}
                     onPress={(event) => {
                       stopRowPress(event);
@@ -376,10 +379,10 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                     }}
                   >
                     <Text style={styles.linkChipText}>X</Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
                 {item.telegramUrl ? (
-                  <Pressable
+                  <AnimatedPressable
                     style={styles.linkChip}
                     onPress={(event) => {
                       stopRowPress(event);
@@ -387,10 +390,10 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                     }}
                   >
                     <Text style={styles.linkChipText}>TG</Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
                 {item.websiteUrl ? (
-                  <Pressable
+                  <AnimatedPressable
                     style={styles.linkChip}
                     onPress={(event) => {
                       stopRowPress(event);
@@ -398,9 +401,9 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                     }}
                   >
                     <Text style={styles.linkChipText}>Web</Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
-                <Pressable
+                <AnimatedPressable
                   style={styles.linkChip}
                   onPress={(event) => {
                     stopRowPress(event);
@@ -408,10 +411,10 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                   }}
                 >
                   <Text style={styles.linkChipText}>Copy</Text>
-                </Pressable>
+                </AnimatedPressable>
               </View>
             </View>
-          </Pressable>
+          </AnimatedPressable>
         );
       }}
       ListEmptyComponent={
