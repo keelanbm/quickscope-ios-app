@@ -4,7 +4,6 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Clipboard from "expo-clipboard";
 import {
-  Alert,
   Image,
   Linking,
   Pressable,
@@ -19,6 +18,7 @@ import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { useInlineToast } from "@/src/ui/InlineToast";
 import { fetchPositionPnl, type TraderTokenPosition } from "@/src/features/portfolio/portfolioService";
 import {
   buildMarketCapSeries,
@@ -89,6 +89,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const [watchlistError, setWatchlistError] = useState<string | null>(null);
   const [isWatchlistLoading, setIsWatchlistLoading] = useState(false);
   const [isWatchlistUpdating, setIsWatchlistUpdating] = useState(false);
+  const [toastElement, toast] = useInlineToast();
 
   if (!params?.tokenAddress) {
     return (
@@ -262,7 +263,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   const handleCopyAddress = async () => {
     await Clipboard.setStringAsync(tokenAddress);
-    Alert.alert("Copied", "Token address copied to clipboard.");
+    toast.show("Address copied", "success");
   };
 
   const handleToggleWatchlist = async () => {
@@ -272,7 +273,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     }
 
     if (!activeWatchlist) {
-      Alert.alert("No watchlists", "Create a watchlist on web to start tracking.");
+      toast.show("Create a watchlist on web to start tracking.", "info");
       return;
     }
 
@@ -320,6 +321,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   return (
     <View style={styles.page}>
+      {toastElement}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <Image

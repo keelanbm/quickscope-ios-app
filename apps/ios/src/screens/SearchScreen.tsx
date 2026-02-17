@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import {
-  Alert,
   FlatList,
   type GestureResponderEvent,
   Image,
@@ -23,6 +22,7 @@ import { formatCompactUsd, formatPercent } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, TradeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { useInlineToast } from "@/src/ui/InlineToast";
 
 type SearchScreenProps = {
   rpcClient: RpcClient;
@@ -76,6 +76,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
   const [query, setQuery] = useState(initialQueryFromParams(params));
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [toastElement, toast] = useInlineToast();
   const [errorText, setErrorText] = useState<string | undefined>();
   const [lastUpdatedMs, setLastUpdatedMs] = useState<number | undefined>();
 
@@ -193,15 +194,16 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
 
   const handleCopyAddress = useCallback(async (mint: string) => {
     await Clipboard.setStringAsync(mint);
-    Alert.alert("Address copied", mint);
-  }, []);
+    toast.show("Address copied", "success");
+  }, [toast]);
 
   return (
-    <FlatList
-      data={filteredRows}
-      keyExtractor={(item) => item.mint}
-      contentContainerStyle={styles.content}
-      style={styles.page}
+    <View style={styles.page}>
+      {toastElement}
+      <FlatList
+        data={filteredRows}
+        keyExtractor={(item) => item.mint}
+        contentContainerStyle={styles.content}
       refreshControl={
         <RefreshControl
           tintColor={qsColors.textMuted}
@@ -336,7 +338,8 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
           </View>
         ) : null
       }
-    />
+      />
+    </View>
   );
 }
 

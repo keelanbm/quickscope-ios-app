@@ -4,7 +4,6 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import {
-  Alert,
   FlatList,
   type GestureResponderEvent,
   Image,
@@ -24,6 +23,7 @@ import { formatAgeFromSeconds, formatCompactUsd, formatPercent } from "@/src/lib
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, RootTabs, ScopeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { useInlineToast } from "@/src/ui/InlineToast";
 
 type ScopeScreenProps = {
   rpcClient: RpcClient;
@@ -67,6 +67,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | undefined>();
   const [lastUpdatedMs, setLastUpdatedMs] = useState<number | undefined>();
+  const [toastElement, toast] = useInlineToast();
 
   const loadRows = useCallback(
     async (options?: { refreshing?: boolean }) => {
@@ -150,8 +151,8 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
 
   const handleCopyAddress = useCallback(async (mint: string) => {
     await Clipboard.setStringAsync(mint);
-    Alert.alert("Address copied", mint);
-  }, []);
+    toast.show("Address copied", "success");
+  }, [toast]);
 
   const handleOpenTokenDetail = useCallback(
     (token: ScopeToken) => {
@@ -180,11 +181,12 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   }, []);
 
   return (
-    <FlatList
-      data={rows}
-      keyExtractor={(item) => item.mint}
-      contentContainerStyle={styles.content}
-      style={styles.page}
+    <View style={styles.page}>
+      {toastElement}
+      <FlatList
+        data={rows}
+        keyExtractor={(item) => item.mint}
+        contentContainerStyle={styles.content}
       refreshControl={
         <RefreshControl
           tintColor={qsColors.textMuted}
@@ -348,7 +350,8 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
           </View>
         ) : null
       }
-    />
+      />
+    </View>
   );
 }
 
