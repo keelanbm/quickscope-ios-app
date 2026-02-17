@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: qsColors.textPrimary,
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "700",
   },
   subtitle: {
