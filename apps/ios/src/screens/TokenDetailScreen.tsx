@@ -43,10 +43,10 @@ type TokenDetailScreenProps = {
 const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
 
 const chartTimeframes = [
-  { id: "1h", label: "1h", rangeSeconds: 60 * 60, resolutionSeconds: 60 },
-  { id: "6h", label: "6h", rangeSeconds: 6 * 60 * 60, resolutionSeconds: 5 * 60 },
-  { id: "24h", label: "24h", rangeSeconds: 24 * 60 * 60, resolutionSeconds: 15 * 60 },
-  { id: "7d", label: "7d", rangeSeconds: 7 * 24 * 60 * 60, resolutionSeconds: 60 * 60 },
+  { id: "1m", label: "1m", rangeSeconds: 60 * 60, resolutionSeconds: 60 },
+  { id: "15m", label: "15m", rangeSeconds: 6 * 60 * 60, resolutionSeconds: 15 * 60 },
+  { id: "1h", label: "1h", rangeSeconds: 24 * 60 * 60, resolutionSeconds: 60 * 60 },
+  { id: "6h", label: "6h", rangeSeconds: 7 * 24 * 60 * 60, resolutionSeconds: 6 * 60 * 60 },
 ] as const;
 
 type ChartTimeframe = (typeof chartTimeframes)[number];
@@ -60,11 +60,11 @@ function formatChartTimestamp(timestampSeconds: number, timeframeId: string): st
   const hours = date.getHours();
   const minutes = date.getMinutes().toString().padStart(2, "0");
 
-  if (timeframeId === "1h" || timeframeId === "6h") {
+  if (timeframeId === "1m" || timeframeId === "15m") {
     return `${hours}:${minutes}`;
   }
 
-  if (timeframeId === "24h") {
+  if (timeframeId === "1h") {
     return `${date.getMonth() + 1}/${date.getDate()} ${hours}:${minutes}`;
   }
 
