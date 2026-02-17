@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -46,81 +46,50 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!walletAddress) {
-      setOverview(null);
-      setHoldings(null);
-      setIsLoading(false);
-      return;
-    }
-
-    let isActive = true;
-    const requestId = ++requestRef.current;
-    setIsLoading(true);
-    setErrorText(null);
-
-    Promise.all([
-      fetchTraderOverview(rpcClient, walletAddress),
-      fetchAccountTokenHoldings(rpcClient, walletAddress),
-    ])
-      .then(([nextOverview, nextHoldings]) => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
-        }
-        setOverview(nextOverview);
-        setHoldings(nextHoldings);
-      })
-      .catch((error) => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
-        }
-        setErrorText(error instanceof Error ? error.message : "Failed to load portfolio.");
-      })
-      .finally(() => {
-        if (!isActive || requestId !== requestRef.current) {
-          return;
-        }
+  const loadData = useCallback(
+    (options?: { refreshing?: boolean }) => {
+      if (!walletAddress) {
+        setOverview(null);
+        setHoldings(null);
         setIsLoading(false);
-      });
+        return;
+      }
 
-    return () => {
-      isActive = false;
-    };
-  }, [rpcClient, walletAddress]);
+      const requestId = ++requestRef.current;
+      if (options?.refreshing) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      setErrorText(null);
 
-  const handleRefresh = () => {
-    if (!walletAddress) {
-      return;
-    }
+      Promise.all([
+        fetchTraderOverview(rpcClient, walletAddress),
+        fetchAccountTokenHoldings(rpcClient, walletAddress),
+      ])
+        .then(([nextOverview, nextHoldings]) => {
+          if (requestId !== requestRef.current) return;
+          setOverview(nextOverview);
+          setHoldings(nextHoldings);
+        })
+        .catch((error) => {
+          if (requestId !== requestRef.current) return;
+          setErrorText(error instanceof Error ? error.message : "Failed to load portfolio.");
+        })
+        .finally(() => {
+          if (requestId !== requestRef.current) return;
+          setIsLoading(false);
+          setIsRefreshing(false);
+        });
+    },
+    [rpcClient, walletAddress],
+  );
 
-    const requestId = ++requestRef.current;
-    setIsRefreshing(true);
-    setErrorText(null);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-    Promise.all([
-      fetchTraderOverview(rpcClient, walletAddress),
-      fetchAccountTokenHoldings(rpcClient, walletAddress),
-    ])
-      .then(([nextOverview, nextHoldings]) => {
-        if (requestId !== requestRef.current) {
-          return;
-        }
-        setOverview(nextOverview);
-        setHoldings(nextHoldings);
-      })
-      .catch((error) => {
-        if (requestId !== requestRef.current) {
-          return;
-        }
-        setErrorText(error instanceof Error ? error.message : "Failed to load portfolio.");
-      })
-      .finally(() => {
-        if (requestId !== requestRef.current) {
-          return;
-        }
-        setIsRefreshing(false);
-      });
-  };
+  const handleRefresh = () => loadData({ refreshing: true });
 
   const positions = useMemo<PositionRow[]>(() => {
     if (!holdings?.token_holdings) {
@@ -222,8 +191,10 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
               style={styles.positionRow}
               onPress={() =>
                 navigation.navigate("TokenDetail", {
-                  source: "deep-link",
+                  source: "portfolio-row",
                   tokenAddress: position.id,
+                  symbol: position.symbol,
+                  name: position.name,
                 })
               }
             >
