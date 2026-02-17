@@ -16,6 +16,7 @@ import {
 } from "react-native";
 
 import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
+import { SkeletonRows } from "@/src/ui/Skeleton";
 
 import {
   fetchDiscoveryTokens,
@@ -272,7 +273,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
           ) : null}
 
           {isInitialLoading ? (
-            <Text style={styles.loadingText}>Loading tokens...</Text>
+            <SkeletonRows count={6} />
           ) : null}
 
           <View style={styles.tableHeader}>
@@ -528,10 +529,6 @@ const styles = StyleSheet.create({
     color: "#ffcece",
     fontSize: 11,
     fontWeight: "700",
-  },
-  loadingText: {
-    color: qsColors.textSubtle,
-    fontSize: 13,
   },
   tableHeader: {
     flexDirection: "row",
