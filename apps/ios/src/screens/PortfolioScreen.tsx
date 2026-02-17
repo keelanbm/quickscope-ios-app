@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 import { SkeletonRows } from "@/src/ui/Skeleton";
@@ -14,7 +17,7 @@ import {
   type AccountTokenHoldings,
   type TraderOverview,
 } from "@/src/features/portfolio/portfolioService";
-import type { PortfolioRouteParams } from "@/src/navigation/types";
+import type { PortfolioRouteParams, RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 import { SectionCard } from "@/src/ui/SectionCard";
 
@@ -34,11 +37,13 @@ type PositionRow = {
 };
 
 export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
   const { walletAddress } = useAuthSession();
   const requestRef = useRef(0);
   const [overview, setOverview] = useState<TraderOverview | null>(null);
   const [holdings, setHoldings] = useState<AccountTokenHoldings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
   useEffect(() => {
@@ -82,6 +87,40 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
       isActive = false;
     };
   }, [rpcClient, walletAddress]);
+
+  const handleRefresh = () => {
+    if (!walletAddress) {
+      return;
+    }
+
+    const requestId = ++requestRef.current;
+    setIsRefreshing(true);
+    setErrorText(null);
+
+    Promise.all([
+      fetchTraderOverview(rpcClient, walletAddress),
+      fetchAccountTokenHoldings(rpcClient, walletAddress),
+    ])
+      .then(([nextOverview, nextHoldings]) => {
+        if (requestId !== requestRef.current) {
+          return;
+        }
+        setOverview(nextOverview);
+        setHoldings(nextHoldings);
+      })
+      .catch((error) => {
+        if (requestId !== requestRef.current) {
+          return;
+        }
+        setErrorText(error instanceof Error ? error.message : "Failed to load portfolio.");
+      })
+      .finally(() => {
+        if (requestId !== requestRef.current) {
+          return;
+        }
+        setIsRefreshing(false);
+      });
+  };
 
   const positions = useMemo<PositionRow[]>(() => {
     if (!holdings?.token_holdings) {
@@ -129,7 +168,17 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
   }, [holdings, overview, positions.length]);
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          tintColor={qsColors.textMuted}
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+        />
+      }
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Portfolio</Text>
         <Text style={styles.subtitle}>Snapshot of balances and active positions.</Text>
@@ -168,7 +217,16 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
           <Text style={styles.contextText}>No positions yet.</Text>
         ) : (
           positions.map((position) => (
-            <View key={position.id} style={styles.positionRow}>
+            <AnimatedPressable
+              key={position.id}
+              style={styles.positionRow}
+              onPress={() =>
+                navigation.navigate("TokenDetail", {
+                  source: "deep-link",
+                  tokenAddress: position.id,
+                })
+              }
+            >
               <View style={styles.positionLeft}>
                 <View style={styles.positionAvatar}>
                   <Text style={styles.positionAvatarText}>{position.symbol[0]}</Text>
@@ -189,7 +247,7 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
                   {position.pnl}
                 </Text>
               </View>
-            </View>
+            </AnimatedPressable>
           ))
         )}
       </SectionCard>
