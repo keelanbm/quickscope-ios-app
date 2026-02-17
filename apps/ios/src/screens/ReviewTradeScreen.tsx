@@ -12,6 +12,7 @@ import {
 } from "@/src/features/trade/quoteUtils";
 import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { formatPercent } from "@/src/lib/format";
 import type { ReviewTradeRouteParams, RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
@@ -31,14 +32,6 @@ function formatAmount(value: number | undefined, decimals = 6): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: clamped,
   });
-}
-
-function formatPercent(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) {
-    return "n/a";
-  }
-
-  return `${value.toFixed(2)}%`;
 }
 
 function formatTime(value: number): string {

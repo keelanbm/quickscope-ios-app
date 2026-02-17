@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { formatAgeFromSeconds, formatCompactUsd, formatPercent, formatSol } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
@@ -50,54 +51,6 @@ const chartTimeframes = [
 
 type ChartTimeframe = (typeof chartTimeframes)[number];
 
-function formatCompactUsd(value: number | undefined): string {
-  if (!value || !Number.isFinite(value) || value <= 0) {
-    return "$0";
-  }
-
-  const absValue = Math.abs(value);
-  if (absValue >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  }
-  if (absValue >= 1_000_000) {
-    return `$${(value / 1_000_000).toFixed(2)}M`;
-  }
-  if (absValue >= 1_000) {
-    return `$${(value / 1_000).toFixed(1)}K`;
-  }
-  return `$${value.toFixed(2)}`;
-}
-
-function formatPercent(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) {
-    return "n/a";
-  }
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(1)}%`;
-}
-
-function formatAgeFromSeconds(unixSeconds: number | undefined): string {
-  if (!unixSeconds || !Number.isFinite(unixSeconds) || unixSeconds <= 0) {
-    return "n/a";
-  }
-
-  const elapsedSeconds = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`;
-  }
-  if (elapsedSeconds < 3600) {
-    return `${Math.floor(elapsedSeconds / 60)}m`;
-  }
-  if (elapsedSeconds < 86400) {
-    return `${Math.floor(elapsedSeconds / 3600)}h`;
-  }
-  if (elapsedSeconds < 604800) {
-    return `${Math.floor(elapsedSeconds / 86400)}d`;
-  }
-
-  return `${Math.floor(elapsedSeconds / 604800)}w`;
-}
-
 function formatChartTimestamp(timestampSeconds: number, timeframeId: string): string {
   if (!timestampSeconds) {
     return "--";
@@ -116,22 +69,6 @@ function formatChartTimestamp(timestampSeconds: number, timeframeId: string): st
   }
 
   return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-
-function formatSol(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) {
-    return "--";
-  }
-
-  if (Math.abs(value) >= 1000) {
-    return value.toFixed(0);
-  }
-
-  if (Math.abs(value) >= 10) {
-    return value.toFixed(2);
-  }
-
-  return value.toFixed(3);
 }
 
 export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps) {

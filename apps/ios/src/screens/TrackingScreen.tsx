@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { formatSol } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
@@ -40,22 +41,6 @@ const ACTION_LABELS: Record<string, ActivityRow["action"]> = {
   d: "Add",
   w: "Remove",
 };
-
-function formatAmount(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "--";
-  }
-
-  if (value >= 1000) {
-    return value.toFixed(0);
-  }
-
-  if (value >= 10) {
-    return value.toFixed(2);
-  }
-
-  return value.toFixed(3);
-}
 
 function formatTimeAgo(unixSeconds: number): string {
   if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) {
@@ -186,7 +171,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
             tokenAddress: row.mint,
             walletLabel: resolveWalletLabel(wallets, row.maker),
             action,
-            amountSol: formatAmount(row.amount_quote ?? 0),
+            amountSol: formatSol(row.amount_quote ?? 0),
             timeAgo: formatTimeAgo(row.ts),
           };
         });

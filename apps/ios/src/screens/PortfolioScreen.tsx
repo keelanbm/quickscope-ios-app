@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { formatCompactUsd, formatWalletAddress } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
@@ -28,35 +29,6 @@ type PositionRow = {
   pnlPositive: boolean;
   valueUsd: number;
 };
-
-function formatWalletAddress(address?: string): string {
-  if (!address) {
-    return "Not connected";
-  }
-
-  if (address.length <= 10) {
-    return address;
-  }
-
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
-function formatUsd(value?: number): string {
-  if (!value || !Number.isFinite(value)) {
-    return "--";
-  }
-
-  if (value >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  }
-  if (value >= 1_000_000) {
-    return `$${(value / 1_000_000).toFixed(2)}M`;
-  }
-  if (value >= 1_000) {
-    return `$${(value / 1_000).toFixed(1)}K`;
-  }
-  return `$${value.toFixed(2)}`;
-}
 
 export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
   const { walletAddress } = useAuthSession();
@@ -125,7 +97,7 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
           id: tokenMeta?.mint ?? symbol,
           symbol,
           name,
-          value: formatUsd(valueUsd),
+          value: formatCompactUsd(valueUsd),
           pnl: "--",
           pnlPositive: true,
           valueUsd,
@@ -146,9 +118,9 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
       (overview?.cumulatives?.sold_usd_cumulative ?? 0);
 
     return [
-      { label: "Balance", value: formatUsd(solBalanceUsd) },
+      { label: "Balance", value: formatCompactUsd(solBalanceUsd) },
       { label: "Positions", value: positions.length.toString() },
-      { label: "Total Volume", value: formatUsd(totalVolumeUsd || undefined) },
+      { label: "Total Volume", value: formatCompactUsd(totalVolumeUsd || undefined) },
       { label: "Unrealized PnL", value: "--" },
     ];
   }, [holdings, overview, positions.length]);

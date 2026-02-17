@@ -19,6 +19,7 @@ import {
   fetchSearchTokens,
   type SearchToken,
 } from "@/src/features/search/searchService";
+import { formatCompactUsd, formatPercent } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, TradeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
@@ -29,37 +30,6 @@ type SearchScreenProps = {
 };
 
 const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
-
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "$0";
-  }
-
-  const absValue = Math.abs(value);
-  if (absValue >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  }
-  if (absValue >= 1_000_000) {
-    return `$${(value / 1_000_000).toFixed(2)}M`;
-  }
-  if (absValue >= 1_000) {
-    return `$${(value / 1_000).toFixed(1)}K`;
-  }
-  if (absValue >= 1) {
-    return `$${value.toFixed(2)}`;
-  }
-
-  return `$${value.toFixed(4)}`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "0.0%";
-  }
-
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(1)}%`;
-}
 
 function initialQueryFromParams(params?: TradeRouteParams): string {
   if (!params) {

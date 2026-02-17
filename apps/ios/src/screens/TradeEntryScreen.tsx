@@ -13,6 +13,7 @@ import {
   requestSwapQuote,
   type QuoteResult,
 } from "@/src/features/trade/tradeQuoteService";
+import { formatPercent } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, TradeEntryRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
@@ -42,14 +43,6 @@ function formatTokenAmount(value: number | undefined, decimals = 6): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: clampedDecimals,
   });
-}
-
-function formatPercent(value: number | undefined): string {
-  if (value === undefined) {
-    return "n/a";
-  }
-
-  return `${value.toFixed(2)}%`;
 }
 
 function parseAmount(value: string): number {
