@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 import {
   getQuoteTtlSecondsRemaining,
   isQuoteStale,
@@ -20,6 +21,7 @@ import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 import { useInlineToast } from "@/src/ui/InlineToast";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
+const QUICK_AMOUNTS = ["0.1", "0.5", "1", "5"] as const;
 
 type TradeEntryScreenProps = {
   rpcClient: RpcClient;
@@ -200,13 +202,26 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
           placeholderTextColor={qsColors.textSubtle}
           style={styles.amountInput}
         />
+        <View style={styles.presetsRow}>
+          {QUICK_AMOUNTS.map((preset) => (
+            <AnimatedPressable
+              key={preset}
+              style={amount === preset ? [styles.presetPill, styles.presetPillActive] : styles.presetPill}
+              onPress={() => setAmount(preset)}
+            >
+              <Text style={amount === preset ? [styles.presetText, styles.presetTextActive] : styles.presetText}>
+                {preset} SOL
+              </Text>
+            </AnimatedPressable>
+          ))}
+        </View>
       </View>
 
       {!hasValidAccessToken ? (
         <View style={styles.authCard}>
           <Text style={styles.authTitle}>Session required</Text>
           <Text style={styles.contextText}>Authenticate to request protected tx quotes.</Text>
-          <Pressable
+          <AnimatedPressable
             style={styles.authButton}
             onPress={() => {
               void authenticateFromWallet();
@@ -216,7 +231,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
             <Text style={styles.authButtonText}>
               {status === "authenticating" ? "Authenticating..." : "Authenticate Session"}
             </Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
       ) : null}
 
@@ -265,22 +280,22 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       ) : null}
 
       <View style={styles.actions}>
-        <Pressable style={styles.primaryButton} onPress={handleGetQuote} disabled={isLoadingQuote}>
+        <AnimatedPressable style={styles.primaryButton} onPress={handleGetQuote} disabled={isLoadingQuote}>
           <Text style={styles.primaryButtonText}>
             {isLoadingQuote ? "Getting Quote..." : "Get Quote"}
           </Text>
-        </Pressable>
+        </AnimatedPressable>
         {quote ? (
-          <Pressable style={styles.reviewButton} onPress={handleReviewTrade}>
+          <AnimatedPressable style={styles.reviewButton} onPress={handleReviewTrade}>
             <Text style={styles.reviewButtonText}>Review Trade</Text>
-          </Pressable>
+          </AnimatedPressable>
         ) : null}
-        <Pressable
+        <AnimatedPressable
           style={styles.secondaryButton}
           onPress={() => navigation.navigate("MainTabs", { screen: "Trade" })}
         >
           <Text style={styles.secondaryButtonText}>Open Search</Text>
-        </Pressable>
+        </AnimatedPressable>
       </View>
     </View>
   );
@@ -331,6 +346,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingHorizontal: qsSpacing.md,
     paddingVertical: 10,
+  },
+  presetsRow: {
+    flexDirection: "row",
+    gap: qsSpacing.xs,
+  },
+  presetPill: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    borderRadius: qsRadius.sm,
+    backgroundColor: qsColors.bgCardSoft,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  presetPillActive: {
+    borderColor: qsColors.accent,
+    backgroundColor: "rgba(78, 163, 255, 0.15)",
+  },
+  presetText: {
+    color: qsColors.textSubtle,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  presetTextActive: {
+    color: qsColors.textPrimary,
   },
   quoteCard: {
     borderWidth: 1,
