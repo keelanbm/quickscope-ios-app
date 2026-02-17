@@ -1,183 +1,146 @@
-/**
- * Skeleton loading components with animated shimmer effect.
- *
- * Uses react-native-reanimated for smooth shimmer animation.
- * Colours: layer2 base → layer3 highlight.
- */
-import React, { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect } from "react";
+import { StyleSheet, View, type DimensionValue, type ViewStyle } from "react-native";
 import Animated, {
-  useAnimatedStyle,
   useSharedValue,
+  useAnimatedStyle,
   withRepeat,
   withTiming,
   Easing,
-  interpolate,
 } from "react-native-reanimated";
-
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
-// ── Shimmer wrapper ──────────────────────────────
+type SkeletonBaseProps = {
+  width?: number | string;
+  height?: number;
+  borderRadius?: number;
+  style?: ViewStyle;
+};
 
-function Shimmer({
+function SkeletonBase({
   width,
-  height,
-  radius = qsRadius.sm,
+  height = 14,
+  borderRadius = 4,
   style,
-}: {
-  width: number | string;
-  height: number;
-  radius?: number;
-  style?: object;
-}) {
-  const progress = useSharedValue(0);
+}: SkeletonBaseProps) {
+  const opacity = useSharedValue(0.3);
 
   useEffect(() => {
-    progress.value = withRepeat(
-      withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+    opacity.value = withRepeat(
+      withTiming(0.7, { duration: 800, easing: Easing.inOut(Easing.ease) }),
       -1,
-      true
+      true,
     );
-  }, [progress]);
+  }, [opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0.4, 0.8]),
+    opacity: opacity.value,
   }));
 
   return (
     <Animated.View
       style={[
         {
-          width,
+          width: (width ?? "100%") as DimensionValue,
           height,
-          borderRadius: radius,
-          backgroundColor: qsColors.layer3,
+          borderRadius,
+          backgroundColor: qsColors.borderDefault,
         },
-        animatedStyle,
         style,
+        animatedStyle,
       ]}
     />
   );
 }
 
-// ── Primitive components ─────────────────────────
+export function SkeletonRow({ style }: { style?: ViewStyle }) {
+  return (
+    <View style={[skeletonStyles.row, style]}>
+      <SkeletonBase width={32} height={32} borderRadius={16} />
+      <View style={skeletonStyles.rowContent}>
+        <SkeletonBase width={100} height={12} />
+        <SkeletonBase width={60} height={10} />
+      </View>
+      <View style={skeletonStyles.rowRight}>
+        <SkeletonBase width={50} height={12} />
+        <SkeletonBase width={40} height={10} />
+      </View>
+    </View>
+  );
+}
 
-/** Single line placeholder (text, numbers). */
-export function SkeletonLine({
-  width = "100%",
-  height = 14,
-  radius,
+export function SkeletonCard({ style }: { style?: ViewStyle }) {
+  return (
+    <View style={[skeletonStyles.card, style]}>
+      <SkeletonBase width={80} height={12} />
+      <SkeletonBase width={120} height={20} style={{ marginTop: 8 }} />
+      <SkeletonBase width={60} height={10} style={{ marginTop: 6 }} />
+    </View>
+  );
+}
+
+export function SkeletonChart({
+  height = 160,
+  style,
 }: {
-  width?: number | string;
   height?: number;
-  radius?: number;
+  style?: ViewStyle;
 }) {
-  return <Shimmer width={width} height={height} radius={radius ?? qsRadius.xs} />;
+  return (
+    <View style={[skeletonStyles.chart, { height }, style]}>
+      <SkeletonBase
+        width="100%"
+        height={height - 24}
+        borderRadius={qsRadius.md}
+      />
+    </View>
+  );
 }
 
-/** Box placeholder (images, cards, icons). */
-export function SkeletonBox({
-  width,
-  height,
-  radius,
+export function SkeletonRows({
+  count = 5,
+  style,
 }: {
-  width: number;
-  height: number;
-  radius?: number;
+  count?: number;
+  style?: ViewStyle;
 }) {
-  return <Shimmer width={width} height={height} radius={radius ?? qsRadius.md} />;
-}
-
-// ── Composite components ─────────────────────────
-
-/** Token row skeleton — icon + 2 text lines + metric on right. */
-export function SkeletonRow() {
   return (
-    <View style={skStyles.row}>
-      {/* Icon */}
-      <Shimmer width={36} height={36} radius={18} />
-
-      {/* Text lines */}
-      <View style={skStyles.rowTextCol}>
-        <Shimmer width={80} height={13} radius={qsRadius.xs} />
-        <Shimmer width={56} height={10} radius={qsRadius.xs} />
-      </View>
-
-      {/* Right metric */}
-      <View style={skStyles.rowRight}>
-        <Shimmer width={52} height={13} radius={qsRadius.xs} />
-        <Shimmer width={36} height={10} radius={qsRadius.xs} />
-      </View>
-    </View>
-  );
-}
-
-/** Card skeleton — full-width card with a few lines. */
-export function SkeletonCard() {
-  return (
-    <View style={skStyles.card}>
-      <Shimmer width="60%" height={16} radius={qsRadius.xs} />
-      <Shimmer width="100%" height={12} radius={qsRadius.xs} />
-      <Shimmer width="80%" height={12} radius={qsRadius.xs} />
-      <Shimmer width="40%" height={12} radius={qsRadius.xs} />
-    </View>
-  );
-}
-
-/** Chart area skeleton — full-width rectangle. */
-export function SkeletonChart({ height = 280 }: { height?: number }) {
-  return (
-    <View style={skStyles.chartWrap}>
-      <Shimmer width="100%" height={height} radius={0} />
-    </View>
-  );
-}
-
-/** Stats grid skeleton — 4 metric badges. */
-export function SkeletonMetrics() {
-  return (
-    <View style={skStyles.metricsRow}>
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Shimmer key={i} width={72} height={40} radius={qsRadius.md} />
+    <View style={style}>
+      {Array.from({ length: count }, (_, i) => (
+        <SkeletonRow key={i} />
       ))}
     </View>
   );
 }
 
-// ── Styles ───────────────────────────────────────
-
-const skStyles = StyleSheet.create({
+const skeletonStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: qsSpacing.lg,
-    paddingVertical: qsSpacing.md,
-    gap: qsSpacing.md,
+    paddingHorizontal: qsSpacing.md,
+    paddingVertical: qsSpacing.sm,
+    gap: qsSpacing.sm,
   },
-  rowTextCol: {
+  rowContent: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   rowRight: {
     alignItems: "flex-end",
-    gap: 6,
+    gap: 4,
   },
   card: {
-    marginHorizontal: qsSpacing.lg,
+    backgroundColor: qsColors.bgCardSoft,
+    borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.md,
-    backgroundColor: qsColors.layer1,
     padding: qsSpacing.md,
-    gap: qsSpacing.sm,
+    gap: 4,
   },
-  chartWrap: {
-    marginBottom: qsSpacing.sm,
-  },
-  metricsRow: {
-    flexDirection: "row",
-    gap: qsSpacing.sm,
-    paddingHorizontal: qsSpacing.lg,
-    marginBottom: qsSpacing.lg,
+  chart: {
+    backgroundColor: qsColors.bgCardSoft,
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    padding: qsSpacing.sm,
   },
 });

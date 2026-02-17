@@ -62,7 +62,7 @@ export type TelegramRouteParams = {
 };
 
 export type TokenDetailRouteParams = {
-  source?: DeepLinkMeta["source"] | "discovery-row" | "scope-row";
+  source?: DeepLinkMeta["source"] | "discovery-row" | "scope-row" | "portfolio-row";
   tokenAddress: string;
   tokenDecimals?: number;
   symbol?: string;
