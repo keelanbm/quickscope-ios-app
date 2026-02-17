@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { formatSol } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
@@ -232,14 +232,20 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         ) : watchlists.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>Create a watchlist to begin tracking.</Text>
-            <Pressable style={styles.primaryButton}>
+            <Pressable
+              style={styles.primaryButton}
+              onPress={() => Alert.alert("Coming soon", "Watchlist creation is not yet available.")}
+            >
               <Text style={styles.primaryButtonText}>Create watchlist</Text>
             </Pressable>
           </View>
         ) : wallets.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>Add wallets to start tracking activity.</Text>
-            <Pressable style={styles.primaryButton}>
+            <Pressable
+              style={styles.primaryButton}
+              onPress={() => Alert.alert("Coming soon", "Wallet tracking setup is not yet available.")}
+            >
               <Text style={styles.primaryButtonText}>Add wallets</Text>
             </Pressable>
           </View>
@@ -290,9 +296,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         )}
       </SectionCard>
 
-      {params?.source ? (
-        <Text style={styles.contextText}>Opened from a deep link.</Text>
-      ) : null}
     </ScrollView>
   );
 }
@@ -440,9 +443,5 @@ const styles = StyleSheet.create({
   timeText: {
     color: qsColors.textSubtle,
     fontSize: 11,
-  },
-  contextText: {
-    color: qsColors.textSubtle,
-    fontSize: 12,
   },
 });
