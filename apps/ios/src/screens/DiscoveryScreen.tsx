@@ -4,7 +4,6 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import {
-  Alert,
   FlatList,
   type GestureResponderEvent,
   Image,
@@ -25,6 +24,7 @@ import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { formatAgeFromSeconds, formatCompactUsd, formatPercent } from "@/src/lib/format";
 import type { DiscoveryRouteParams, RootStack, RootTabs } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { useInlineToast } from "@/src/ui/InlineToast";
 
 type DiscoveryScreenProps = {
   rpcClient: RpcClient;
@@ -70,6 +70,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   const [errorText, setErrorText] = useState<string | undefined>();
   const [lastUpdatedMs, setLastUpdatedMs] = useState<number | undefined>();
   const [starredMints, setStarredMints] = useState<Record<string, boolean>>({});
+  const [toastElement, toast] = useInlineToast();
 
   const loadRows = useCallback(
     async (options?: { refreshing?: boolean }) => {
@@ -161,22 +162,22 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
 
   const handleCopyAddress = useCallback(async (mint: string) => {
     await Clipboard.setStringAsync(mint);
-    Alert.alert("Address copied", mint);
-  }, []);
+    toast.show("Address copied", "success");
+  }, [toast]);
 
   const handleOpenExternal = useCallback(async (url: string) => {
     try {
       const canOpen = await Linking.canOpenURL(url);
       if (!canOpen) {
-        Alert.alert("Invalid link", "Unable to open this URL.");
+        toast.show("Unable to open link", "error");
         return;
       }
 
       await Linking.openURL(url);
-    } catch (error) {
-      Alert.alert("Open failed", String(error));
+    } catch {
+      toast.show("Unable to open link", "error");
     }
-  }, []);
+  }, [toast]);
 
   const handleOpenTokenDetail = useCallback(
     (token: DiscoveryToken) => {
@@ -205,11 +206,12 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   }, []);
 
   return (
-    <FlatList
-      data={rows}
+    <View style={styles.page}>
+      {toastElement}
+      <FlatList
+        data={rows}
       keyExtractor={(item) => item.mint}
       contentContainerStyle={styles.content}
-      style={styles.page}
       refreshControl={
         <RefreshControl
           tintColor={qsColors.textMuted}
@@ -421,6 +423,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         )
       }
     />
+    </View>
   );
 }
 
