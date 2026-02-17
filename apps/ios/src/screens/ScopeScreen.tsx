@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
+import { SkeletonRows } from "@/src/ui/Skeleton";
 
 import {
   fetchScopeTokens,
@@ -247,7 +248,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
             </View>
           ) : null}
 
-          {isInitialLoading ? <Text style={styles.loadingText}>Loading scope feed...</Text> : null}
+          {isInitialLoading ? <SkeletonRows count={6} /> : null}
 
           <View style={styles.tableHeader}>
             <Text style={[styles.tableHeaderText, styles.tableHeaderToken]}>Token</Text>
@@ -456,10 +457,6 @@ const styles = StyleSheet.create({
     color: "#ffcece",
     fontSize: 11,
     fontWeight: "700",
-  },
-  loadingText: {
-    color: qsColors.textMuted,
-    fontSize: 12,
   },
   tableHeader: {
     flexDirection: "row",

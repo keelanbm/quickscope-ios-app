@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
+import { SkeletonRows } from "@/src/ui/Skeleton";
 
 import { formatCompactUsd, formatWalletAddress } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
@@ -160,7 +161,7 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
 
       <SectionCard title="Positions" subtitle="Top holdings by value">
         {isLoading ? (
-          <Text style={styles.contextText}>Loading positions...</Text>
+          <SkeletonRows count={4} />
         ) : errorText ? (
           <Text style={styles.contextText}>{errorText}</Text>
         ) : positions.length === 0 ? (

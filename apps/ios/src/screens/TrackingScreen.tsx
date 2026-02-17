@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
+import { SkeletonRows } from "@/src/ui/Skeleton";
 
 import { formatSol } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
@@ -228,7 +229,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
 
       <SectionCard title="Recent Activity" subtitle="Latest tracked wallet actions">
         {isLoading ? (
-          <Text style={styles.emptyText}>Loading watchlists...</Text>
+          <SkeletonRows count={4} />
         ) : errorText ? (
           <Text style={styles.emptyText}>{errorText}</Text>
         ) : watchlists.length === 0 ? (
@@ -252,7 +253,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
             </AnimatedPressable>
           </View>
         ) : isLoadingActivity ? (
-          <Text style={styles.emptyText}>Loading activity...</Text>
+          <SkeletonRows count={4} />
         ) : activity.length === 0 ? (
           <Text style={styles.emptyText}>No activity yet for this watchlist.</Text>
         ) : (

@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
+import { SkeletonRows } from "@/src/ui/Skeleton";
 
 import {
   fetchSearchTokens,
@@ -269,7 +270,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
             </View>
           ) : null}
 
-          {isInitialLoading ? <Text style={styles.loadingText}>Loading search index...</Text> : null}
+          {isInitialLoading ? <SkeletonRows count={6} /> : null}
         </View>
       }
       renderItem={({ item }) => {
@@ -439,10 +440,6 @@ const styles = StyleSheet.create({
     color: "#ffcece",
     fontSize: 11,
     fontWeight: "700",
-  },
-  loadingText: {
-    color: qsColors.textMuted,
-    fontSize: 12,
   },
   rowItem: {
     borderWidth: 1,
