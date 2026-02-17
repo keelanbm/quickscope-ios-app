@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 
 import { formatSol } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
@@ -211,15 +213,15 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
           const id = watchlist.list_id.toString();
           const isActive = id === activeWatchlistId;
           return (
-            <Pressable
+            <AnimatedPressable
               key={watchlist.list_id}
-              style={[styles.tabPill, isActive && styles.tabPillActive]}
+              style={isActive ? [styles.tabPill, styles.tabPillActive] : styles.tabPill}
               onPress={() => setActiveWatchlistId(id)}
             >
               <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
                 {watchlist.name}
               </Text>
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </View>
@@ -232,22 +234,22 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         ) : watchlists.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>Create a watchlist to begin tracking.</Text>
-            <Pressable
+            <AnimatedPressable
               style={styles.primaryButton}
               onPress={() => Alert.alert("Coming soon", "Watchlist creation is not yet available.")}
             >
               <Text style={styles.primaryButtonText}>Create watchlist</Text>
-            </Pressable>
+            </AnimatedPressable>
           </View>
         ) : wallets.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>Add wallets to start tracking activity.</Text>
-            <Pressable
+            <AnimatedPressable
               style={styles.primaryButton}
               onPress={() => Alert.alert("Coming soon", "Wallet tracking setup is not yet available.")}
             >
               <Text style={styles.primaryButtonText}>Add wallets</Text>
-            </Pressable>
+            </AnimatedPressable>
           </View>
         ) : isLoadingActivity ? (
           <Text style={styles.emptyText}>Loading activity...</Text>
@@ -255,7 +257,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
           <Text style={styles.emptyText}>No activity yet for this watchlist.</Text>
         ) : (
           activity.map((row) => (
-            <Pressable
+            <AnimatedPressable
               key={row.id}
               style={styles.activityRow}
               onPress={() =>
@@ -291,7 +293,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
                 <Text style={styles.amountText}>{row.amountSol} SOL</Text>
                 <Text style={styles.timeText}>{row.timeAgo}</Text>
               </View>
-            </Pressable>
+            </AnimatedPressable>
           ))
         )}
       </SectionCard>

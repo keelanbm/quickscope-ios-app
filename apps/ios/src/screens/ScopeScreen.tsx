@@ -7,12 +7,13 @@ import {
   FlatList,
   type GestureResponderEvent,
   Image,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 
 import {
   fetchScopeTokens,
@@ -209,15 +210,15 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
             {tabs.map((tab) => {
               const active = tab.id === activeTab;
               return (
-                <Pressable
+                <AnimatedPressable
                   key={tab.id}
                   onPress={() => setActiveTab(tab.id)}
-                  style={[styles.tabButton, active ? styles.tabButtonActive : null]}
+                  style={active ? [styles.tabButton, styles.tabButtonActive] : styles.tabButton}
                 >
                   <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
                     {tab.label}
                   </Text>
-                </Pressable>
+                </AnimatedPressable>
               );
             })}
           </View>
@@ -235,14 +236,14 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>Failed to load scope feed.</Text>
               <Text style={styles.errorText}>{errorText}</Text>
-              <Pressable
+              <AnimatedPressable
                 style={styles.retryButton}
                 onPress={() => {
                   void loadRows();
                 }}
               >
                 <Text style={styles.retryButtonText}>Retry</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           ) : null}
 
@@ -262,7 +263,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
         const platformLabel = (item.platform || item.exchange || "unknown").toUpperCase();
 
         return (
-          <Pressable style={styles.rowItem} onPress={() => handleOpenTokenDetail(item)}>
+          <AnimatedPressable style={styles.rowItem} onPress={() => handleOpenTokenDetail(item)}>
             <View style={styles.rowMain}>
               <View style={styles.tokenColumn}>
                 <Image
@@ -313,7 +314,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
               </View>
 
               <View style={styles.actionsColumn}>
-                <Pressable
+                <AnimatedPressable
                   onPress={(event) => {
                     stopRowPress(event);
                     void handleCopyAddress(item.mint);
@@ -321,8 +322,8 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                   hitSlop={6}
                 >
                   <Text style={styles.linkText}>Copy</Text>
-                </Pressable>
-                <Pressable
+                </AnimatedPressable>
+                <AnimatedPressable
                   onPress={(event) => {
                     stopRowPress(event);
                     navigation.navigate("Trade", {
@@ -334,10 +335,10 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                   hitSlop={6}
                 >
                   <Text style={styles.tradeText}>Search</Text>
-                </Pressable>
+                </AnimatedPressable>
               </View>
             </View>
-          </Pressable>
+          </AnimatedPressable>
         );
       }}
       ListEmptyComponent={

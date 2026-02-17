@@ -6,13 +6,14 @@ import {
   FlatList,
   type GestureResponderEvent,
   Image,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 
 import {
   fetchSearchTokens,
@@ -235,12 +236,12 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
               {params.tokenAddress ? (
                 <>
                   <Text style={styles.deepLinkBody}>Token: {params.tokenAddress}</Text>
-                  <Pressable
+                  <AnimatedPressable
                     style={styles.deepLinkAction}
                     onPress={() => handleOpenTokenDetailFromAddress(params.tokenAddress!)}
                   >
                     <Text style={styles.deepLinkActionText}>Open token detail</Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 </>
               ) : null}
               {params.inputMint ? (
@@ -257,14 +258,14 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>Failed to load token search index.</Text>
               <Text style={styles.errorText}>{errorText}</Text>
-              <Pressable
+              <AnimatedPressable
                 style={styles.retryButton}
                 onPress={() => {
                   void loadRows();
                 }}
               >
                 <Text style={styles.retryButtonText}>Retry</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           ) : null}
 
@@ -275,7 +276,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
         const platformLabel = (item.platform || item.exchange || "unknown").toUpperCase();
 
         return (
-          <Pressable style={styles.rowItem} onPress={() => handleOpenTokenDetail(item)}>
+          <AnimatedPressable style={styles.rowItem} onPress={() => handleOpenTokenDetail(item)}>
             <View style={styles.rowMain}>
               <View style={styles.tokenColumn}>
                 <Image source={{ uri: item.imageUri || fallbackTokenImage }} style={styles.tokenImage} />
@@ -305,7 +306,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
               </View>
 
               <View style={styles.actionsColumn}>
-                <Pressable
+                <AnimatedPressable
                   onPress={(event) => {
                     stopRowPress(event);
                     void handleCopyAddress(item.mint);
@@ -313,8 +314,8 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
                   hitSlop={6}
                 >
                   <Text style={styles.linkText}>Copy</Text>
-                </Pressable>
-                <Pressable
+                </AnimatedPressable>
+                <AnimatedPressable
                   onPress={(event) => {
                     stopRowPress(event);
                     handleOpenTokenDetail(item);
@@ -322,10 +323,10 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
                   hitSlop={6}
                 >
                   <Text style={styles.openText}>Open</Text>
-                </Pressable>
+                </AnimatedPressable>
               </View>
             </View>
-          </Pressable>
+          </AnimatedPressable>
         );
       }}
       ListEmptyComponent={

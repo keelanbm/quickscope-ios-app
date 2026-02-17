@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 
 import { formatCompactUsd, formatWalletAddress } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
@@ -142,9 +144,9 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
             {formatWalletAddress(walletAddress ?? params?.walletAddress)}
           </Text>
         </View>
-        <Pressable style={styles.walletButton}>
+        <AnimatedPressable style={styles.walletButton}>
           <Text style={styles.walletButtonText}>Manage</Text>
-        </Pressable>
+        </AnimatedPressable>
       </View>
 
       <View style={styles.statsRow}>
