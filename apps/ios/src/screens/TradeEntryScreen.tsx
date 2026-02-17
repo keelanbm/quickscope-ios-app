@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
@@ -17,6 +17,7 @@ import { formatPercent } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, TradeEntryRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { useInlineToast } from "@/src/ui/InlineToast";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -57,6 +58,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
   const [quoteError, setQuoteError] = useState<string | undefined>();
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [toastElement, toast] = useInlineToast();
 
   const inputMint = params?.inputMint ?? SOL_MINT;
   const outputMint = params?.outputMint ?? params?.tokenAddress;
@@ -95,12 +97,12 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
   const handleGetQuote = async () => {
     if (!walletAddress) {
-      Alert.alert("Wallet required", "Connect your wallet to request a quote.");
+      setQuoteError("Connect your wallet to request a quote.");
       return;
     }
 
     if (!outputMint) {
-      Alert.alert("Token required", "Select a token before requesting a quote.");
+      setQuoteError("Select a token before requesting a quote.");
       return;
     }
 
@@ -111,7 +113,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
     const amountUi = parseAmount(amount);
     if (!Number.isFinite(amountUi) || amountUi <= 0) {
-      Alert.alert("Invalid amount", "Enter an amount greater than 0.");
+      setQuoteError("Enter an amount greater than 0.");
       return;
     }
 
@@ -146,7 +148,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       return;
     }
     if (quoteIsStale) {
-      Alert.alert("Quote expired", "Refresh quote before continuing to review.");
+      toast.show("Quote expired — request a new one", "error");
       return;
     }
 
@@ -174,6 +176,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
   return (
     <View style={styles.page}>
+      {toastElement}
       <Text style={styles.title}>Trade</Text>
       <Text style={styles.subtitle}>
         Trade execution flow is being finalized. Token context and amount capture are ready.
