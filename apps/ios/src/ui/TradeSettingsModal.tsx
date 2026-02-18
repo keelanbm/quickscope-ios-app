@@ -34,7 +34,11 @@ type TradeSettingsModalProps = {
   onClose: () => void;
 };
 
-const SLIPPAGE_PRESETS = [500, 1000, 1500, 2500]; // bps
+const SLIPPAGE_PRESETS = [500, 1000, 1500]; // bps (5%, 10%, 15%)
+const PRIORITY_PRESETS = [100_000, 1_000_000, 10_000_000]; // lamports → 0.0001, 0.001, 0.01 SOL
+const TIP_PRESETS = [100_000, 1_000_000, 10_000_000]; // lamports → 0.0001, 0.001, 0.01 SOL
+
+const lamportsToSol = (lamports: number) => (lamports / 1_000_000_000).toString();
 
 export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProps>(
   ({ settings, onSettingsChanged, onClose }, ref) => {
@@ -126,9 +130,40 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
       toast.success("Settings saved", `P${editingIndex + 1} profile updated`);
     }, [slippageText, priorityText, tipText, editingIndex, settings, onSettingsChanged, buyPresetTexts, sellPresetTexts]);
 
+    const [slippageCustomFocused, setSlippageCustomFocused] = useState(false);
+    const [priorityCustomFocused, setPriorityCustomFocused] = useState(false);
+    const [tipCustomFocused, setTipCustomFocused] = useState(false);
+
+    const isSlippagePreset = SLIPPAGE_PRESETS.includes(Math.round(parseFloat(slippageText) * 100));
+    const isPriorityPreset = PRIORITY_PRESETS.includes(
+      Math.round(parseFloat(priorityText) * 1_000_000_000)
+    );
+    const isTipPreset = TIP_PRESETS.includes(
+      Math.round(parseFloat(tipText) * 1_000_000_000)
+    );
+
     const handleSlippagePreset = useCallback(
       (bps: number) => {
         setSlippageText((bps / 100).toString());
+        setSlippageCustomFocused(false);
+        haptics.light();
+      },
+      []
+    );
+
+    const handlePriorityPreset = useCallback(
+      (lamports: number) => {
+        setPriorityText(lamportsToSol(lamports));
+        setPriorityCustomFocused(false);
+        haptics.light();
+      },
+      []
+    );
+
+    const handleTipPreset = useCallback(
+      (lamports: number) => {
+        setTipText(lamportsToSol(lamports));
+        setTipCustomFocused(false);
         haptics.light();
       },
       []
@@ -235,58 +270,128 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
           {/* Slippage */}
           <Text style={styles.label}>Slippage (%)</Text>
           <View style={styles.presetRow}>
-            {SLIPPAGE_PRESETS.map((bps) => (
-              <Pressable
-                key={bps}
-                onPress={() => handleSlippagePreset(bps)}
-                style={[
-                  styles.slippageChip,
-                  Math.round(parseFloat(slippageText) * 100) === bps &&
-                    styles.slippageChipActive,
-                ]}
-              >
-                <Text
+            {SLIPPAGE_PRESETS.map((bps) => {
+              const active = !slippageCustomFocused && Math.round(parseFloat(slippageText) * 100) === bps;
+              return (
+                <Pressable
+                  key={bps}
+                  onPress={() => handleSlippagePreset(bps)}
                   style={[
-                    styles.slippageChipText,
-                    Math.round(parseFloat(slippageText) * 100) === bps &&
-                      styles.slippageChipTextActive,
+                    styles.presetChip,
+                    active && styles.presetChipActive,
                   ]}
                 >
-                  {formatSlippage(bps)}
-                </Text>
-              </Pressable>
-            ))}
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      active && styles.presetChipTextActive,
+                    ]}
+                  >
+                    {formatSlippage(bps)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <View style={[
+              styles.customChip,
+              (slippageCustomFocused || !isSlippagePreset) && styles.customChipActive,
+            ]}>
+              <TextInput
+                style={styles.customChipInput}
+                value={isSlippagePreset && !slippageCustomFocused ? "" : slippageText}
+                onChangeText={setSlippageText}
+                onFocus={() => setSlippageCustomFocused(true)}
+                onBlur={() => setSlippageCustomFocused(false)}
+                keyboardType="decimal-pad"
+                placeholder="Custom"
+                placeholderTextColor={qsColors.textMuted}
+              />
+            </View>
           </View>
-          <TextInput
-            style={styles.input}
-            value={slippageText}
-            onChangeText={setSlippageText}
-            keyboardType="decimal-pad"
-            placeholder="15"
-            placeholderTextColor={qsColors.textMuted}
-          />
 
           {/* Priority Fee */}
           <Text style={styles.label}>Priority Fee (SOL)</Text>
-          <TextInput
-            style={styles.input}
-            value={priorityText}
-            onChangeText={setPriorityText}
-            keyboardType="decimal-pad"
-            placeholder="0.0001"
-            placeholderTextColor={qsColors.textMuted}
-          />
+          <View style={styles.presetRow}>
+            {PRIORITY_PRESETS.map((lamports) => {
+              const active = !priorityCustomFocused && Math.round(parseFloat(priorityText) * 1_000_000_000) === lamports;
+              return (
+                <Pressable
+                  key={lamports}
+                  onPress={() => handlePriorityPreset(lamports)}
+                  style={[
+                    styles.presetChip,
+                    active && styles.presetChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      active && styles.presetChipTextActive,
+                    ]}
+                  >
+                    {lamportsToSol(lamports)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <View style={[
+              styles.customChip,
+              (priorityCustomFocused || !isPriorityPreset) && styles.customChipActive,
+            ]}>
+              <TextInput
+                style={styles.customChipInput}
+                value={isPriorityPreset && !priorityCustomFocused ? "" : priorityText}
+                onChangeText={setPriorityText}
+                onFocus={() => setPriorityCustomFocused(true)}
+                onBlur={() => setPriorityCustomFocused(false)}
+                keyboardType="decimal-pad"
+                placeholder="Custom"
+                placeholderTextColor={qsColors.textMuted}
+              />
+            </View>
+          </View>
 
-          {/* Tip */}
+          {/* Jito Tip */}
           <Text style={styles.label}>Jito Tip (SOL)</Text>
-          <TextInput
-            style={styles.input}
-            value={tipText}
-            onChangeText={setTipText}
-            keyboardType="decimal-pad"
-            placeholder="0.0001"
-            placeholderTextColor={qsColors.textMuted}
-          />
+          <View style={styles.presetRow}>
+            {TIP_PRESETS.map((lamports) => {
+              const active = !tipCustomFocused && Math.round(parseFloat(tipText) * 1_000_000_000) === lamports;
+              return (
+                <Pressable
+                  key={lamports}
+                  onPress={() => handleTipPreset(lamports)}
+                  style={[
+                    styles.presetChip,
+                    active && styles.presetChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.presetChipText,
+                      active && styles.presetChipTextActive,
+                    ]}
+                  >
+                    {lamportsToSol(lamports)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <View style={[
+              styles.customChip,
+              (tipCustomFocused || !isTipPreset) && styles.customChipActive,
+            ]}>
+              <TextInput
+                style={styles.customChipInput}
+                value={isTipPreset && !tipCustomFocused ? "" : tipText}
+                onChangeText={setTipText}
+                onFocus={() => setTipCustomFocused(true)}
+                onBlur={() => setTipCustomFocused(false)}
+                keyboardType="decimal-pad"
+                placeholder="Custom"
+                placeholderTextColor={qsColors.textMuted}
+              />
+            </View>
+          </View>
 
           {/* ── Buy Presets ── */}
           <Text style={styles.sectionTitle}>Buy Presets (SOL)</Text>
@@ -428,36 +533,49 @@ const styles = StyleSheet.create({
     gap: qsSpacing.sm,
     marginBottom: qsSpacing.sm,
   },
-  slippageChip: {
-    paddingHorizontal: qsSpacing.md,
-    paddingVertical: qsSpacing.xs,
+  presetChip: {
+    flex: 1,
+    height: 36,
     borderRadius: qsRadius.sm,
     borderWidth: 1,
     borderColor: qsColors.layer3,
     backgroundColor: qsColors.layer2,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  slippageChipActive: {
+  presetChipActive: {
     backgroundColor: qsColors.brandDark,
     borderColor: qsColors.brand,
   },
-  slippageChipText: {
+  presetChipText: {
     fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.medium,
     color: qsColors.textMuted,
   },
-  slippageChipTextActive: {
+  presetChipTextActive: {
     color: qsColors.brand,
   },
-  input: {
-    backgroundColor: qsColors.layer2,
+  customChip: {
+    flex: 1,
+    height: 36,
+    borderRadius: qsRadius.sm,
     borderWidth: 1,
     borderColor: qsColors.layer3,
-    borderRadius: qsRadius.md,
-    paddingHorizontal: qsSpacing.md,
-    paddingVertical: qsSpacing.md,
-    fontSize: qsTypography.size.sm,
-    color: qsColors.textPrimary,
-    marginBottom: qsSpacing.sm,
+    backgroundColor: qsColors.layer2,
+    justifyContent: "center",
+  },
+  customChipActive: {
+    borderColor: qsColors.brand,
+    backgroundColor: qsColors.brandDark,
+  },
+  customChipInput: {
+    fontSize: qsTypography.size.xxs,
+    fontWeight: qsTypography.weight.medium,
+    color: qsColors.brand,
+    textAlign: "center",
+    paddingHorizontal: qsSpacing.xs,
+    paddingVertical: 0,
+    height: 34,
   },
 
   /* Section titles for preset editors */

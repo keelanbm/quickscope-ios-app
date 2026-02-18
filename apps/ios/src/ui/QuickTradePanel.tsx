@@ -172,8 +172,8 @@ export function QuickTradePanel({
         {(isBuy ? buyPresets : sellPresets).map((amount, index) => (
           <PresetButton
             key={`preset-${side}-${amount}-${index}`}
-            label={isBuy ? `◎${amount}` : `${amount}%`}
-            variant="neutral"
+            label={isBuy ? `◎ ${amount}` : `${amount}%`}
+            variant={isBuy ? "muted" : "neutral"}
             onPress={() => handlePresetPress(amount)}
             disabled={disabled}
           />

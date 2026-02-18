@@ -508,11 +508,6 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
               <Text style={styles.ageText}>
                 {formatAgeFromSeconds(item.mintedAtSeconds)}
               </Text>
-              {activeTab === "scan-feed" ? (
-                <Text numberOfLines={1} style={styles.footerMeta}>
-                  Scans {item.scanMentionsOneHour}
-                </Text>
-              ) : null}
               <View style={styles.linksRow}>
                 {item.twitterUrl ? (
                   <Pressable
@@ -790,13 +785,13 @@ const styles = StyleSheet.create({
   columnHeaders: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
     paddingVertical: 4,
+    paddingHorizontal: qsSpacing.lg,
     gap: 8,
   },
   colHeaderLeft: {
-    alignItems: "flex-end",
-    minWidth: 64,
+    marginLeft: 52, // 44px image + 8px gap
+    flex: 1,
   },
   colHeaderMetric: {
     alignItems: "flex-end",

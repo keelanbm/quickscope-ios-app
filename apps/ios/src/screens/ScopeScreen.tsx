@@ -492,13 +492,11 @@ const styles = StyleSheet.create({
 
   // ── Token rows — compact card style ──
   rowItem: {
-    marginHorizontal: qsSpacing.lg,
-    marginBottom: 6,
-    backgroundColor: qsColors.layer1,
-    borderRadius: qsRadius.md,
-    paddingHorizontal: qsSpacing.md,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingHorizontal: qsSpacing.lg,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: qsColors.borderDefault,
     gap: 6,
   },
 

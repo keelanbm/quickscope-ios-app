@@ -4,7 +4,7 @@ import { qsColors, qsRadius } from "@/src/theme/tokens";
 
 type PresetButtonProps = {
   label: string;
-  variant: "buy" | "sell" | "neutral";
+  variant: "buy" | "sell" | "neutral" | "muted";
   onPress: () => void;
   isActive?: boolean;
   disabled?: boolean;
@@ -27,13 +27,17 @@ export function PresetButton({
       ? qsColors.buyGreenBg
       : variant === "sell"
         ? qsColors.sellRedBg
-        : "rgba(255,255,255,0.1)";
+        : variant === "muted"
+          ? qsColors.layer5
+          : "rgba(255,255,255,0.1)";
 
   const border = variant === "buy"
     ? qsColors.buyGreen
     : variant === "sell"
       ? qsColors.sellRed
-      : "rgba(255,255,255,0.15)";
+      : variant === "muted"
+        ? qsColors.layer3
+        : "rgba(255,255,255,0.15)";
 
   const textColor = isActive
     ? qsColors.layer0

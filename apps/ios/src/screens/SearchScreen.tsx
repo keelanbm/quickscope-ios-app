@@ -820,13 +820,13 @@ const styles = StyleSheet.create({
   columnHeaders: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
     paddingVertical: 4,
+    paddingHorizontal: qsSpacing.lg,
     gap: 8,
   },
   colHeaderLeft: {
-    alignItems: "flex-end",
-    minWidth: 64,
+    marginLeft: 48, // 40px image + 8px gap
+    flex: 1,
   },
   colHeaderMetric: {
     alignItems: "flex-end",

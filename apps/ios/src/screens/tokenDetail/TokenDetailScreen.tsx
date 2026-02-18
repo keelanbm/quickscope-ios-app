@@ -20,12 +20,19 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Clipboard from "expo-clipboard";
 import BottomSheet from "@gorhom/bottom-sheet";
 import {
+  Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  interpolate,
+  Extrapolation,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { toast } from "@/src/lib/toast";
@@ -59,7 +66,7 @@ import {
   activeProfile,
 } from "@/src/features/trade/tradeSettings";
 import { haptics } from "@/src/lib/haptics";
-import { Zap } from "@/src/ui/icons";
+import { ArrowLeft, Zap } from "@/src/ui/icons";
 
 import { TokenDetailHeader } from "./TokenDetailHeader";
 import { TokenDetailMetrics } from "./TokenDetailMetrics";
@@ -71,6 +78,8 @@ import {
   formatCompactUsd,
   formatChartTimestamp,
   formatAgeFromSeconds,
+  formatPercent,
+  fallbackTokenImage,
 } from "./styles";
 
 type TokenDetailScreenProps = {
@@ -86,6 +95,22 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const positionRequestIdRef = useRef(0);
   const bottomSheetRef = useRef<BottomSheet>(null);
   const settingsSheetRef = useRef<BottomSheet>(null);
+
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const stickyHeaderStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [100, 140], [0, 1], Extrapolation.CLAMP),
+    transform: [
+      {
+        translateY: interpolate(scrollY.value, [100, 140], [-10, 0], Extrapolation.CLAMP),
+      },
+    ],
+  }));
 
   const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(chartTimeframes[2]);
   const [liveInfo, setLiveInfo] = useState<LiveTokenInfo | null>(null);
@@ -376,9 +401,39 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   return (
     <View style={[styles.page, { paddingTop: insets.top }]}>
-      <ScrollView
+      {/* Sticky condensed header */}
+      <Animated.View style={[styles.stickyHeader, stickyHeaderStyle]} pointerEvents="box-none">
+        <View style={styles.stickyHeaderInner}>
+          <Pressable
+            onPress={handleGoBack}
+            style={({ pressed }) => [styles.stickyBack, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <ArrowLeft size={18} color={qsColors.textSecondary} />
+          </Pressable>
+          <Image
+            source={{ uri: tokenMeta.imageUri || fallbackTokenImage }}
+            style={styles.stickyImage}
+          />
+          <Text style={styles.stickySymbol} numberOfLines={1}>{tokenMeta.symbol}</Text>
+          <Text style={styles.stickyMcap}>{formatCompactUsd(marketCapUsd)}</Text>
+          {oneHourChange !== undefined && (
+            <Text
+              style={[
+                styles.stickyChange,
+                oneHourChange >= 0 ? styles.stickyChangePositive : styles.stickyChangeNegative,
+              ]}
+            >
+              {formatPercent(oneHourChange)}
+            </Text>
+          )}
+        </View>
+      </Animated.View>
+
+      <Animated.ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         {/* ── Condensed Header ── */}
         <TokenDetailHeader
@@ -470,7 +525,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
         {/* Bottom spacer for QuickTradePanel */}
         <View style={{ height: 160 }} />
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* ── Persistent QuickTradePanel ── */}
       <View style={styles.tradePanelWrap}>
@@ -547,6 +602,56 @@ const styles = StyleSheet.create({
     color: qsColors.textTertiary,
     fontSize: qsTypography.size.sm,
     paddingHorizontal: qsSpacing.xl,
+  },
+
+  /* Sticky condensed header */
+  stickyHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: qsColors.layer0,
+    borderBottomWidth: 1,
+    borderBottomColor: qsColors.layer3,
+  },
+  stickyHeaderInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 44,
+    paddingHorizontal: qsSpacing.lg,
+    gap: qsSpacing.sm,
+  },
+  stickyBack: {
+    padding: 4,
+    marginRight: 4,
+  },
+  stickyImage: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: qsColors.layer2,
+  },
+  stickySymbol: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.bold,
+  },
+  stickyMcap: {
+    color: qsColors.textSecondary,
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.semi,
+    marginLeft: "auto",
+  },
+  stickyChange: {
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.semi,
+  },
+  stickyChangePositive: {
+    color: qsColors.buyGreen,
+  },
+  stickyChangeNegative: {
+    color: qsColors.sellRed,
   },
 
   /* Edge-to-edge chart */
