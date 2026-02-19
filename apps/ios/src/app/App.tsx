@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AddressType,
   darkTheme,
   PhantomProvider,
   type PhantomSDKConfig,
+  useAccounts,
 } from "@phantom/react-native-sdk";
 import {
   createNavigationContainerRef,
@@ -14,32 +15,38 @@ import {
 } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { loadEnv } from "@/src/config/env";
-import { AuthSessionProvider } from "@/src/features/auth/AuthSessionProvider";
+import { AuthSessionProvider, useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { WalletConnectProvider, useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
+import { handlePhantomAppRedirect } from "@/src/features/wallet/phantomApp";
 import { RpcClient } from "@/src/lib/api/rpcClient";
 import {
   parseQuickscopeDeepLink,
   type ParsedDeepLinkTarget,
 } from "@/src/navigation/deepLinks";
 import {
-  PortfolioRouteParams,
   RootStack,
   RootTabs,
   TelegramRouteParams,
-  TrackingRouteParams,
 } from "@/src/navigation/types";
 import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
+import { PortfolioScreen } from "@/src/screens/PortfolioScreen";
+import { ReviewTradeScreen } from "@/src/screens/ReviewTradeScreen";
 import { SearchScreen } from "@/src/screens/SearchScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
+import { TrackingScreen } from "@/src/screens/TrackingScreen";
 import { TokenDetailScreen } from "@/src/screens/TokenDetailScreen";
+import { TradeEntryScreen } from "@/src/screens/TradeEntryScreen";
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
+import { OverflowMenu } from "@/src/ui/OverflowMenu";
 
 const Tabs = createBottomTabNavigator<RootTabs>();
 const Stack = createNativeStackNavigator<RootStack>();
@@ -58,32 +65,6 @@ const navigationTheme: Theme = {
     primary: qsColors.accent,
   },
 };
-
-function getPortfolioContextLines(params?: PortfolioRouteParams): string[] | undefined {
-  if (!params?.source) {
-    return undefined;
-  }
-
-  const lines = ["Opened from a deep link."];
-  if (params.walletAddress) {
-    lines.push(`Wallet: ${params.walletAddress}`);
-  }
-
-  return lines;
-}
-
-function getTrackingContextLines(params?: TrackingRouteParams): string[] | undefined {
-  if (!params?.source) {
-    return undefined;
-  }
-
-  const lines = ["Opened from a deep link."];
-  if (params.walletAddress) {
-    lines.push(`Wallet: ${params.walletAddress}`);
-  }
-
-  return lines;
-}
 
 function getTelegramContextLines(params?: TelegramRouteParams): string[] | undefined {
   if (!params?.source) {
@@ -118,7 +99,7 @@ function navigateToTarget(
       navigationRef.navigate("MainTabs", { screen: "Scope", params: target.params });
       return;
     case "Trade":
-      navigationRef.navigate("MainTabs", { screen: "Trade", params: target.params });
+      navigationRef.navigate("TradeEntry", target.params);
       return;
     case "Portfolio":
       navigationRef.navigate("MainTabs", { screen: "Portfolio", params: target.params });
@@ -139,131 +120,217 @@ function navigateToTarget(
 }
 
 function MainTabsNavigator({ rpcClient, wsHost }: { rpcClient: RpcClient; wsHost: string }) {
+  const { logout, authenticateFromWallet, hasValidAccessToken, walletAddress } =
+    useAuthSession();
+  const { isConnected } = useAccounts();
+  const { open: openWalletConnect, reset: resetWalletConnect } = useWalletConnect();
+  const [isOverflowOpen, setIsOverflowOpen] = useState(false);
+  const headerButtonStyle = {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: qsColors.bgCardSoft,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    alignItems: "center",
+    justifyContent: "center",
+  } as const;
+
   return (
-    <Tabs.Navigator
-      screenOptions={({ navigation, route }) => ({
-        headerStyle: { backgroundColor: qsColors.bgCard },
-        headerTintColor: qsColors.textPrimary,
-        tabBarStyle: {
-          backgroundColor: qsColors.bgCard,
-          borderTopColor: qsColors.borderDefault,
-        },
-        tabBarLabelStyle: { fontSize: 11 },
-        headerTitle: ({ children }) => (
-          <Text style={{ color: qsColors.textPrimary, fontSize: 17, fontWeight: "600" }}>
-            {children}
-          </Text>
-        ),
-        headerLeft:
-          route.name === "Dev"
-            ? undefined
-            : () => (
-                <Pressable
-                  accessibilityLabel="Open Dev Console"
-                  onPress={() => navigation.navigate("Dev")}
-                  style={{
-                    marginLeft: 12,
-                    width: 30,
-                    height: 30,
-                    borderRadius: 15,
-                    backgroundColor: "#2a2f4a",
-                    borderWidth: 1,
-                    borderColor: qsColors.borderDefault,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Text style={{ color: qsColors.textPrimary, fontSize: 14, fontWeight: "700" }}>
-                    Q
-                  </Text>
-                </Pressable>
-              ),
-      })}
-    >
-      <Tabs.Screen name="Discovery" options={{ title: "Discover", tabBarLabel: "Discover" }}>
-        {({ route }) => (
-          <RouteErrorBoundary routeName="Discovery">
-            <DiscoveryScreen rpcClient={rpcClient} params={route.params} />
-          </RouteErrorBoundary>
-        )}
-      </Tabs.Screen>
-      <Tabs.Screen name="Scope" options={{ title: "Scope" }}>
-        {({ route }) => (
-          <RouteErrorBoundary routeName="Scope">
-            <ScopeScreen rpcClient={rpcClient} params={route.params} />
-          </RouteErrorBoundary>
-        )}
-      </Tabs.Screen>
-      <Tabs.Screen name="Trade" options={{ title: "Search", tabBarLabel: "Search" }}>
-        {({ route }) => (
-          <RouteErrorBoundary routeName="Trade">
-            <AuthRouteGate
-              featureName="Search"
-              subtitle="Connect to access token search and quick action workflows."
-            >
+    <>
+      <Tabs.Navigator
+        screenOptions={({ navigation, route }) => ({
+          headerStyle: { backgroundColor: qsColors.bgCard },
+          headerTintColor: qsColors.textPrimary,
+          headerTitleAlign: "center",
+          headerLeftContainerStyle: { paddingLeft: 12 },
+          headerRightContainerStyle: { paddingRight: 12 },
+          tabBarStyle: {
+            backgroundColor: qsColors.bgCard,
+            borderTopColor: qsColors.borderDefault,
+            borderTopWidth: 1,
+            paddingTop: 4,
+            paddingBottom: 8,
+            height: 58,
+          },
+          tabBarItemStyle: {
+            flex: 1,
+            width: "20%",
+            justifyContent: "center",
+            alignItems: "center",
+          },
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontWeight: "600",
+            marginBottom: 0,
+            lineHeight: 12,
+            textAlign: "center",
+          },
+          tabBarIcon: ({ color, size }) => {
+            const iconSize = size ?? 18;
+            const iconName = (() => {
+              switch (route.name) {
+                case "Discovery":
+                  return "compass";
+                case "Scope":
+                  return "target";
+                case "Trade":
+                  return "search";
+                case "Tracking":
+                  return "activity";
+                case "Portfolio":
+                  return "briefcase";
+                default:
+                  return "circle";
+              }
+            })();
+            return <Feather name={iconName} size={iconSize} color={color} />;
+          },
+          tabBarActiveTintColor: qsColors.textPrimary,
+          tabBarInactiveTintColor: qsColors.textSubtle,
+          headerTitle: ({ children }) => (
+            <Text style={{ color: qsColors.textPrimary, fontSize: 17, fontWeight: "600" }}>
+              {children}
+            </Text>
+          ),
+          headerLeft:
+            route.name === "Dev"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityLabel="Open Dev Console"
+                    onPress={() => navigation.navigate("Dev")}
+                    style={headerButtonStyle}
+                  >
+                    <Text
+                      style={{ color: qsColors.textPrimary, fontSize: 14, fontWeight: "700" }}
+                    >
+                      Q
+                    </Text>
+                  </Pressable>
+                ),
+          headerRight:
+            route.name === "Dev"
+              ? undefined
+              : () => (
+                  <Pressable
+                    accessibilityLabel="Open menu"
+                    onPress={() => setIsOverflowOpen(true)}
+                    style={headerButtonStyle}
+                  >
+                    <View style={{ width: 18, height: 12, justifyContent: "space-between" }}>
+                      <View
+                        style={{
+                          height: 2,
+                          borderRadius: 1,
+                          backgroundColor: qsColors.textSecondary,
+                        }}
+                      />
+                      <View
+                        style={{
+                          height: 2,
+                          borderRadius: 1,
+                          backgroundColor: qsColors.textSecondary,
+                        }}
+                      />
+                      <View
+                        style={{
+                          height: 2,
+                          borderRadius: 1,
+                          backgroundColor: qsColors.textSecondary,
+                        }}
+                      />
+                    </View>
+                  </Pressable>
+                ),
+        })}
+      >
+        <Tabs.Screen name="Discovery" options={{ title: "Discover", tabBarLabel: "Discover" }}>
+          {({ route }) => (
+            <RouteErrorBoundary routeName="Discovery">
+              <DiscoveryScreen rpcClient={rpcClient} params={route.params} />
+            </RouteErrorBoundary>
+          )}
+        </Tabs.Screen>
+        <Tabs.Screen name="Scope" options={{ title: "Scope" }}>
+          {({ route }) => (
+            <RouteErrorBoundary routeName="Scope">
+              <ScopeScreen rpcClient={rpcClient} params={route.params} />
+            </RouteErrorBoundary>
+          )}
+        </Tabs.Screen>
+        <Tabs.Screen name="Trade" options={{ title: "Search", tabBarLabel: "Search" }}>
+          {({ route }) => (
+            <RouteErrorBoundary routeName="Trade">
               <SearchScreen rpcClient={rpcClient} params={route.params} />
-            </AuthRouteGate>
-          </RouteErrorBoundary>
-        )}
-      </Tabs.Screen>
-      <Tabs.Screen name="Tracking" options={{ title: "Tracking" }}>
-        {({ route }) => (
-          <RouteErrorBoundary routeName="Tracking">
-            <AuthRouteGate
-              featureName="Tracking"
-              subtitle="Connect to manage tracked wallets and token alerts."
-            >
-              <MvpPlaceholderScreen
-                title="Tracking"
-                description="Wallet and token tracking workflows are planned for Week 3."
-                contextLines={getTrackingContextLines(route.params)}
-              />
-            </AuthRouteGate>
-          </RouteErrorBoundary>
-        )}
-      </Tabs.Screen>
-      <Tabs.Screen name="Portfolio" options={{ title: "Portfolio" }}>
-        {({ route }) => (
-          <RouteErrorBoundary routeName="Portfolio">
-            <AuthRouteGate
-              featureName="Portfolio"
-              subtitle="Connect to load balances, PnL, and position details."
-            >
-              <MvpPlaceholderScreen
-                title="Portfolio"
-                description="Portfolio and positions details are planned for Week 3 and Week 5."
-                contextLines={getPortfolioContextLines(route.params)}
-              />
-            </AuthRouteGate>
-          </RouteErrorBoundary>
-        )}
-      </Tabs.Screen>
-      <Tabs.Screen name="Telegram" options={{ title: "Telegram", ...hiddenTabOptions }}>
-        {({ route }) => (
-          <RouteErrorBoundary routeName="Telegram">
-            <AuthRouteGate
-              featureName="Telegram"
-              subtitle="Connect to link Telegram and share token updates."
-            >
-              <MvpPlaceholderScreen
-                title="Telegram"
-                description="Native Telegram link/share flows are targeted in Week 6."
-                contextLines={getTelegramContextLines(route.params)}
-              />
-            </AuthRouteGate>
-          </RouteErrorBoundary>
-        )}
-      </Tabs.Screen>
-      <Tabs.Screen
-        name="Dev"
-        options={{ title: "Dev Console", ...hiddenTabOptions }}
-        children={() => (
-          <RouteErrorBoundary routeName="Dev Console">
-            <SpikeConsoleScreen rpcClient={rpcClient} wsHost={wsHost} />
-          </RouteErrorBoundary>
-        )}
+            </RouteErrorBoundary>
+          )}
+        </Tabs.Screen>
+        <Tabs.Screen name="Tracking" options={{ title: "Tracking" }}>
+          {({ route }) => (
+            <RouteErrorBoundary routeName="Tracking">
+              <AuthRouteGate
+                featureName="Tracking"
+                subtitle="Connect to manage tracked wallets and token alerts."
+              >
+                <TrackingScreen rpcClient={rpcClient} params={route.params} />
+              </AuthRouteGate>
+            </RouteErrorBoundary>
+          )}
+        </Tabs.Screen>
+        <Tabs.Screen name="Portfolio" options={{ title: "Portfolio" }}>
+          {({ route }) => (
+            <RouteErrorBoundary routeName="Portfolio">
+              <AuthRouteGate
+                featureName="Portfolio"
+                subtitle="Connect to load balances, PnL, and position details."
+              >
+                <PortfolioScreen rpcClient={rpcClient} params={route.params} />
+              </AuthRouteGate>
+            </RouteErrorBoundary>
+          )}
+        </Tabs.Screen>
+        <Tabs.Screen name="Telegram" options={{ title: "Telegram", ...hiddenTabOptions }}>
+          {({ route }) => (
+            <RouteErrorBoundary routeName="Telegram">
+              <AuthRouteGate
+                featureName="Telegram"
+                subtitle="Connect to link Telegram and share token updates."
+              >
+                <MvpPlaceholderScreen
+                  title="Telegram"
+                  description="Native Telegram link/share flows are targeted in Week 6."
+                  contextLines={getTelegramContextLines(route.params)}
+                />
+              </AuthRouteGate>
+            </RouteErrorBoundary>
+          )}
+        </Tabs.Screen>
+        <Tabs.Screen
+          name="Dev"
+          options={{ title: "Dev Console", ...hiddenTabOptions }}
+          children={() => (
+            <RouteErrorBoundary routeName="Dev Console">
+              <SpikeConsoleScreen rpcClient={rpcClient} wsHost={wsHost} />
+            </RouteErrorBoundary>
+          )}
+        />
+      </Tabs.Navigator>
+      <OverflowMenu
+        visible={isOverflowOpen}
+        onClose={() => setIsOverflowOpen(false)}
+        onAuthenticate={authenticateFromWallet}
+        onOpenWalletModal={openWalletConnect}
+        isAuthenticated={hasValidAccessToken}
+        isWalletConnected={isConnected}
+        walletAddress={walletAddress}
+        onSignOut={async () => {
+          await logout();
+          resetWalletConnect();
+          setIsOverflowOpen(false);
+        }}
       />
-    </Tabs.Navigator>
+    </>
   );
 }
 
@@ -290,6 +357,10 @@ export default function App() {
 
   const navigateFromDeepLink = useCallback(
     (rawUrl: string) => {
+      if (handlePhantomAppRedirect(rawUrl)) {
+        return;
+      }
+
       const target = parseQuickscopeDeepLink(rawUrl);
       if (!navigationRef.isReady()) {
         pendingDeepLinkRef.current = target;
@@ -328,43 +399,77 @@ export default function App() {
       appIcon="https://app.quickscope.gg/favicon.ico"
     >
       <AuthSessionProvider rpcClient={rpcClient}>
-        <NavigationContainer
-          ref={navigationRef}
-          theme={navigationTheme}
-          onReady={() => {
-            const pendingDeepLink = pendingDeepLinkRef.current;
-            if (!pendingDeepLink) {
-              return;
-            }
+        <WalletConnectProvider>
+          <NavigationContainer
+            ref={navigationRef}
+            theme={navigationTheme}
+            onReady={() => {
+              const pendingDeepLink = pendingDeepLinkRef.current;
+              if (!pendingDeepLink) {
+                return;
+              }
 
-            pendingDeepLinkRef.current = null;
-            navigateToTarget(navigationRef, pendingDeepLink);
-          }}
-        >
-          <Stack.Navigator
-            initialRouteName="MainTabs"
-            screenOptions={{
-              headerStyle: { backgroundColor: qsColors.bgCard },
-              headerTintColor: qsColors.textPrimary,
-              contentStyle: { backgroundColor: qsColors.bgCanvas },
+              pendingDeepLinkRef.current = null;
+              navigateToTarget(navigationRef, pendingDeepLink);
             }}
           >
-            <Stack.Screen
-              name="MainTabs"
-              options={{ headerShown: false }}
-              children={() => <MainTabsNavigator rpcClient={rpcClient} wsHost={env.wsHost} />}
-            />
-            <Stack.Screen
-              name="TokenDetail"
-              options={{ title: "Token Detail", headerBackButtonDisplayMode: "minimal" }}
-              children={({ route }) => (
-                <RouteErrorBoundary routeName="Token Detail">
-                  <TokenDetailScreen params={route.params} />
-                </RouteErrorBoundary>
-              )}
-            />
-          </Stack.Navigator>
-        </NavigationContainer>
+            <Stack.Navigator
+              initialRouteName="MainTabs"
+              screenOptions={{
+                headerStyle: { backgroundColor: qsColors.bgCard },
+                headerTintColor: qsColors.textPrimary,
+                contentStyle: { backgroundColor: qsColors.bgCanvas },
+              }}
+            >
+              <Stack.Screen
+                name="MainTabs"
+                options={{ headerShown: false }}
+                children={() => <MainTabsNavigator rpcClient={rpcClient} wsHost={env.wsHost} />}
+              />
+              <Stack.Screen
+                name="TokenDetail"
+                options={{ title: "Token Detail", headerBackButtonDisplayMode: "minimal" }}
+                children={({ route }) => (
+                  <RouteErrorBoundary routeName="Token Detail">
+                    <TokenDetailScreen rpcClient={rpcClient} params={route.params} />
+                  </RouteErrorBoundary>
+                )}
+              />
+              <Stack.Screen
+                name="TradeEntry"
+                options={{ title: "Trade", headerBackButtonDisplayMode: "minimal" }}
+                children={({ route }) => (
+                  <RouteErrorBoundary routeName="Trade">
+                    <AuthRouteGate
+                      featureName="Trade"
+                      subtitle="Connect to request quotes and execute trades."
+                    >
+                      <TradeEntryScreen rpcClient={rpcClient} params={route.params} />
+                    </AuthRouteGate>
+                  </RouteErrorBoundary>
+                )}
+              />
+              <Stack.Screen
+                name="ReviewTrade"
+                options={{ title: "Review Trade", headerBackButtonDisplayMode: "minimal" }}
+                children={({ route }) => (
+                  <RouteErrorBoundary routeName="Review Trade">
+                    <AuthRouteGate
+                      featureName="Trade"
+                      subtitle="Connect to review and execute trades."
+                    >
+                      <ReviewTradeScreen
+                        rpcClient={rpcClient}
+                        executionEnabled={env.enableSwapExecution}
+                        params={route.params}
+                      />
+                    </AuthRouteGate>
+                  </RouteErrorBoundary>
+                )}
+              />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </WalletConnectProvider>
       </AuthSessionProvider>
     </PhantomProvider>
   );

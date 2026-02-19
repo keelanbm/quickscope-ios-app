@@ -51,7 +51,7 @@ export function RouteErrorBoundary(props: RouteErrorBoundaryProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
     justifyContent: "center",
     padding: qsSpacing.xl,
   },
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     padding: qsSpacing.lg,
     gap: qsSpacing.sm,
   },

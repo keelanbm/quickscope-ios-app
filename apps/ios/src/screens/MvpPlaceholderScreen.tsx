@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: qsSpacing.xl,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
     justifyContent: "center",
     gap: qsSpacing.sm,
   },

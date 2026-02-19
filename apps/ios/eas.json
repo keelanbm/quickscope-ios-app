@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_HOST": "https://api.quickscope.gg",
+        "EXPO_PUBLIC_WS_HOST": "wss://api.quickscope.gg",
+        "EXPO_PUBLIC_SOLANA_RPC_ENDPOINT": "https://attentive-muddy-hill.solana-mainnet.quiknode.pro/5a7216128203735da3e15af0d63bc96fcee73218",
+        "EXPO_PUBLIC_PHANTOM_APP_ID": "f5173baa-c0dc-4189-b9d9-4dc3592f85ca"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  }
+}

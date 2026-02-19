@@ -31,7 +31,7 @@ describe("parseQuickscopeDeepLink", () => {
 
   it("maps trade links with query params to Trade context", () => {
     const target = parseQuickscopeDeepLink(
-      "quickscope://trade?in=So11111111111111111111111111111111111111112&out=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=5"
+      "quickscope://trade?in=So11111111111111111111111111111111111111112&out=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&amount=5&inDecimals=9&outDecimals=6"
     );
 
     expect(target).toEqual({
@@ -39,7 +39,9 @@ describe("parseQuickscopeDeepLink", () => {
       params: {
         source: "deep-link",
         inputMint: "So11111111111111111111111111111111111111112",
+        inputMintDecimals: 9,
         outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        outputMintDecimals: 6,
         amount: "5",
       },
     });
@@ -55,6 +57,21 @@ describe("parseQuickscopeDeepLink", () => {
       params: {
         source: "deep-link",
         tokenAddress: "So11111111111111111111111111111111111111112",
+      },
+    });
+  });
+
+  it("keeps path trade token semantics when amount query is provided", () => {
+    const target = parseQuickscopeDeepLink(
+      "quickscope://trade/So11111111111111111111111111111111111111112?amount=0.5"
+    );
+
+    expect(target).toEqual({
+      screen: "Trade",
+      params: {
+        source: "deep-link",
+        tokenAddress: "So11111111111111111111111111111111111111112",
+        amount: "0.5",
       },
     });
   });
@@ -93,6 +110,14 @@ describe("parseQuickscopeDeepLink", () => {
     const target = parseQuickscopeDeepLink("quickscope://phantom-auth-callback?code=abc");
 
     expect(target).toEqual({ screen: null });
+  });
+
+  it("ignores Phantom app callback links", () => {
+    const connectTarget = parseQuickscopeDeepLink("quickscope://phantom-connect-callback?data=abc");
+    const signTarget = parseQuickscopeDeepLink("quickscope://phantom-sign-callback?data=abc");
+
+    expect(connectTarget).toEqual({ screen: null });
+    expect(signTarget).toEqual({ screen: null });
   });
 
   it("routes dev links to the hidden dev console route", () => {

@@ -21,17 +21,17 @@ export function SectionCard({ title, subtitle, children }: SectionCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    padding: qsSpacing.lg,
-    gap: qsSpacing.sm,
+    padding: qsSpacing.md,
+    gap: qsSpacing.xs,
   },
   title: {
     color: qsColors.textPrimary,
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
   },
   subtitle: {
     color: qsColors.textMuted,

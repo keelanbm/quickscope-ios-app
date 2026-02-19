@@ -1,6 +1,6 @@
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 
-export type ScopeTabId = "new-pairs" | "momentum" | "scan-surge";
+export type ScopeTabId = "new-pairs" | "momentum" | "graduated" | "scan-feed";
 
 type ScopeSort = {
   sortColumn: string;
@@ -20,6 +20,7 @@ type ScopeTokenRow = {
   one_hour_volume_sol: number;
   one_hour_change: number;
   telegram_mentions_1h: number;
+  decimals?: number;
 };
 
 type ScopeTableResponse = {
@@ -42,6 +43,7 @@ export type ScopeToken = {
   oneHourVolumeUsd: number;
   oneHourChangePercent: number;
   scanMentionsOneHour: number;
+  tokenDecimals?: number;
 };
 
 type ScopeResult = {
@@ -56,10 +58,14 @@ const tabSorts: Record<ScopeTabId, ScopeSort> = {
     sortOrderDescending: true,
   },
   momentum: {
-    sortColumn: "one_hour_tx_count",
+    sortColumn: "one_hour_change",
     sortOrderDescending: true,
   },
-  "scan-surge": {
+  graduated: {
+    sortColumn: "day_change",
+    sortOrderDescending: true,
+  },
+  "scan-feed": {
     sortColumn: "telegram_mentions_1h",
     sortOrderDescending: true,
   },
@@ -68,6 +74,15 @@ const tabSorts: Record<ScopeTabId, ScopeSort> = {
 function toNumber(value: unknown): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function toOptionalInteger(value: unknown): number | undefined {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    return undefined;
+  }
+
+  return numeric;
 }
 
 export async function fetchScopeTokens(
@@ -80,7 +95,7 @@ export async function fetchScopeTokens(
       filter: {
         sort_column: sort.sortColumn,
         sort_order: !sort.sortOrderDescending,
-        row_limit: 50,
+        row_limit: 20,
       },
     },
   ]);
@@ -90,19 +105,24 @@ export async function fetchScopeTokens(
   return {
     tab,
     fetchedAtMs: Date.now(),
-    rows: (response.table?.rows ?? []).map((row) => ({
-      mint: row.mint,
-      symbol: row.symbol,
-      name: row.name,
-      imageUri: row.image_uri,
-      platform: row.platform,
-      exchange: row.exchange,
-      mintedAtSeconds: toNumber(row.mint_ts),
-      marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
-      oneHourTxCount: toNumber(row.one_hour_tx_count),
-      oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
-      oneHourChangePercent: toNumber(row.one_hour_change) * 100,
-      scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
-    })),
+    rows: (response.table?.rows ?? []).map((row) => {
+      const tokenDecimals = toOptionalInteger(row.decimals);
+
+      return {
+        mint: row.mint,
+        symbol: row.symbol,
+        name: row.name,
+        imageUri: row.image_uri,
+        platform: row.platform,
+        exchange: row.exchange,
+        mintedAtSeconds: toNumber(row.mint_ts),
+        marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
+        oneHourTxCount: toNumber(row.one_hour_tx_count),
+        oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
+        oneHourChangePercent: toNumber(row.one_hour_change) * 100,
+        scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
+        ...(tokenDecimals !== undefined ? { tokenDecimals } : null),
+      };
+    }),
   };
 }

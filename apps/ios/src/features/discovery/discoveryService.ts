@@ -1,6 +1,6 @@
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 
-export type DiscoveryTabId = "trending" | "scan-feed" | "gainers";
+export type DiscoveryTabId = "trending" | "gainers";
 
 type DiscoverySort = {
   sortColumn: string;
@@ -23,6 +23,7 @@ type DiscoveryTokenRow = {
   one_hour_tx_count: number;
   one_hour_change: number;
   telegram_mentions_1h: number;
+  decimals?: number;
 };
 
 type DiscoveryTableResponse = {
@@ -48,6 +49,7 @@ export type DiscoveryToken = {
   oneHourTxCount: number;
   oneHourChangePercent: number;
   scanMentionsOneHour: number;
+  tokenDecimals?: number;
 };
 
 type DiscoveryResult = {
@@ -61,10 +63,6 @@ const tabSorts: Record<DiscoveryTabId, DiscoverySort> = {
     sortColumn: "one_hour_volume_sol",
     sortOrderDescending: true,
   },
-  "scan-feed": {
-    sortColumn: "telegram_mentions_1h",
-    sortOrderDescending: true,
-  },
   gainers: {
     sortColumn: "one_hour_change",
     sortOrderDescending: true,
@@ -74,6 +72,15 @@ const tabSorts: Record<DiscoveryTabId, DiscoverySort> = {
 function toNumber(value: unknown): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function toOptionalInteger(value: unknown): number | undefined {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    return undefined;
+  }
+
+  return numeric;
 }
 
 export async function fetchDiscoveryTokens(
@@ -86,17 +93,18 @@ export async function fetchDiscoveryTokens(
       filter: {
         sort_column: sort.sortColumn,
         sort_order: !sort.sortOrderDescending,
-        row_limit: 50,
+        row_limit: 20,
       },
     },
   ]);
 
   const solPriceUsd = toNumber(response.sol_price_usd);
+  const nowSeconds = Math.floor(Date.now() / 1000);
 
-  return {
-    tab,
-    fetchedAtMs: Date.now(),
-    rows: (response.table?.rows ?? []).map((row) => ({
+  let mappedRows = (response.table?.rows ?? []).map((row) => {
+    const tokenDecimals = toOptionalInteger(row.decimals);
+
+    return {
       mint: row.mint,
       symbol: row.symbol,
       name: row.name,
@@ -112,6 +120,21 @@ export async function fetchDiscoveryTokens(
       oneHourTxCount: toNumber(row.one_hour_tx_count),
       oneHourChangePercent: toNumber(row.one_hour_change) * 100,
       scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
-    })),
+      ...(tokenDecimals !== undefined ? { tokenDecimals } : null),
+    };
+  });
+
+  // "trending" tab acts as "New Pairs" — only show tokens minted in the last hour
+  if (tab === "trending") {
+    const oneHourAgo = nowSeconds - 3600;
+    mappedRows = mappedRows.filter(
+      (row) => row.mintedAtSeconds > 0 && row.mintedAtSeconds >= oneHourAgo
+    );
+  }
+
+  return {
+    tab,
+    fetchedAtMs: Date.now(),
+    rows: mappedRows,
   };
 }

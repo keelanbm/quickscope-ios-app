@@ -6,9 +6,10 @@ import {
   useModal,
   useSolana,
 } from "@phantom/react-native-sdk";
-import { Alert, Button, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Button, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
 import { requestAuthChallenge } from "@/src/features/auth/authService";
 import {
   ParityCheckResult,
@@ -16,6 +17,7 @@ import {
 } from "@/src/features/health/apiParityChecks";
 import { useSlotTradeUpdatesSpike } from "@/src/features/health/useSlotTradeUpdatesSpike";
 import { RpcClient } from "@/src/lib/api/rpcClient";
+import { toast } from "@/src/lib/toast";
 import { qsColors, qsSpacing } from "@/src/theme/tokens";
 import { SectionCard } from "@/src/ui/SectionCard";
 
@@ -54,10 +56,10 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
     sessionWalletAddress,
     hasValidAccessToken,
     hasValidRefreshToken,
-    authenticateFromWallet,
     refreshSession,
     clearSession,
   } = useAuthSession();
+  const { ensureAuthenticated } = useWalletConnect();
   const { state: wsState, connect: connectWs, disconnect: disconnectWs } =
     useSlotTradeUpdatesSpike(wsHost);
   const [challengePreview, setChallengePreview] = useState<string>("");
@@ -84,9 +86,9 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
     try {
       const challenge = await requestAuthChallenge(rpcClient, walletAddress);
       setChallengePreview(challenge.slice(0, 180));
-      Alert.alert("Challenge fetched", "Auth challenge request succeeded.");
+      toast.success("Challenge fetched", "Auth challenge request succeeded.");
     } catch (error) {
-      Alert.alert("Challenge failed", String(error));
+      toast.error("Challenge failed", String(error));
     }
   };
 
@@ -94,15 +96,15 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
     try {
       await disconnect();
       await clearSession();
-      Alert.alert("Disconnected", "Wallet session ended.");
+      toast.success("Disconnected", "Wallet session ended.");
     } catch (error) {
-      Alert.alert("Disconnect failed", String(error));
+      toast.error("Disconnect failed", String(error));
     }
   };
 
   const handleSignMessage = async () => {
     if (!isConnected || !isAvailable) {
-      Alert.alert("Wallet unavailable", "Connect a Solana wallet before signing.");
+      toast.warn("Wallet unavailable", "Connect a Solana wallet before signing.");
       return;
     }
 
@@ -113,9 +115,9 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
         .map((value) => value.toString(16).padStart(2, "0"))
         .join("");
 
-      Alert.alert("Message signed", `${signaturePreview}...`);
+      toast.success("Message signed", `${signaturePreview}...`);
     } catch (error) {
-      Alert.alert("Sign failed", String(error));
+      toast.error("Sign failed", String(error));
     }
   };
 
@@ -130,7 +132,7 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
   };
 
   const handleAuthenticateSession = async () => {
-    await authenticateFromWallet();
+    await ensureAuthenticated();
   };
 
   const handleRefreshSession = async () => {
@@ -139,7 +141,7 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
 
   const handleClearSession = async () => {
     await clearSession();
-    Alert.alert("Session cleared", "Stored backend session removed.");
+    toast.success("Session cleared", "Stored backend session removed.");
   };
 
   return (

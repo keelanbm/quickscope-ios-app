@@ -13,8 +13,33 @@ export type TradeRouteParams = {
   source?: DeepLinkMeta["source"];
   tokenAddress?: string;
   inputMint?: string;
+  inputMintDecimals?: number;
   outputMint?: string;
+  outputMintDecimals?: number;
   amount?: string;
+};
+
+export type TradeEntryRouteParams = TradeRouteParams;
+
+export type ReviewTradeRouteParams = {
+  source?: "trade-entry";
+  walletAddress: string;
+  inputMint: string;
+  outputMint: string;
+  amountUi: number;
+  amountAtomic: number;
+  inputTokenDecimals: number;
+  outputTokenDecimals?: number;
+  slippageBps: number;
+  estimatedOutAmountUi?: number;
+  minOutAmountUi?: number;
+  estimatedOutAmountAtomic?: number;
+  minOutAmountAtomic?: number;
+  priceImpactPercent?: number;
+  feeAmountSol?: number;
+  feeRateBps?: number;
+  routeHopCount?: number;
+  quoteRequestedAtMs: number;
 };
 
 export type ScopeRouteParams = DeepLinkMeta;
@@ -37,8 +62,9 @@ export type TelegramRouteParams = {
 };
 
 export type TokenDetailRouteParams = {
-  source?: DeepLinkMeta["source"] | "discovery-row" | "scope-row";
+  source?: DeepLinkMeta["source"] | "discovery-row" | "scope-row" | "portfolio-row";
   tokenAddress: string;
+  tokenDecimals?: number;
   symbol?: string;
   name?: string;
   imageUri?: string;
@@ -65,4 +91,8 @@ export type RootTabs = {
 export type RootStack = {
   MainTabs: NavigatorScreenParams<RootTabs>;
   TokenDetail: TokenDetailRouteParams;
+  TradeEntry: TradeEntryRouteParams | undefined;
+  ReviewTrade: ReviewTradeRouteParams;
+  Rewards: undefined;
+  Deposit: undefined;
 };

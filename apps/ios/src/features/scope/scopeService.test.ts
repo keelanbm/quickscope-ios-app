@@ -5,8 +5,9 @@ import { fetchScopeTokens } from "@/src/features/scope/scopeService";
 describe("fetchScopeTokens", () => {
   it.each([
     ["new-pairs", "mint_ts"],
-    ["momentum", "one_hour_tx_count"],
-    ["scan-surge", "telegram_mentions_1h"],
+    ["momentum", "one_hour_change"],
+    ["graduated", "day_change"],
+    ["scan-feed", "telegram_mentions_1h"],
   ] as const)("uses expected sort config for %s", async (tab, sortColumn) => {
     const call = jest.fn().mockResolvedValue({
       sol_price_usd: 100,
@@ -50,6 +51,7 @@ describe("fetchScopeTokens", () => {
             one_hour_volume_sol: 45.67,
             one_hour_change: 0.123,
             telegram_mentions_1h: 98,
+            decimals: 6,
           },
         ],
       },
@@ -71,6 +73,7 @@ describe("fetchScopeTokens", () => {
       oneHourVolumeUsd: 4567,
       oneHourChangePercent: 12.3,
       scanMentionsOneHour: 98,
+      tokenDecimals: 6,
     });
   });
 });

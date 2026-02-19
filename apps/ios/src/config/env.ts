@@ -3,6 +3,7 @@ export type AppEnv = {
   wsHost: string;
   solanaRpcEndpoint: string;
   phantomAppId: string;
+  enableSwapExecution: boolean;
   posthogKey?: string;
   posthogHost?: string;
 };
@@ -17,6 +18,15 @@ function getRequiredEnvValue(key: string, value: string | undefined): string {
 
 function stripTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function parseBooleanFlag(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
 }
 
 export function loadEnv(): AppEnv {
@@ -35,6 +45,7 @@ export function loadEnv(): AppEnv {
       "EXPO_PUBLIC_PHANTOM_APP_ID",
       process.env.EXPO_PUBLIC_PHANTOM_APP_ID
     ),
+    enableSwapExecution: parseBooleanFlag(process.env.EXPO_PUBLIC_ENABLE_SWAP_EXECUTION),
     posthogKey: process.env.EXPO_PUBLIC_POSTHOG_KEY?.trim(),
     posthogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST?.trim(),
   };
