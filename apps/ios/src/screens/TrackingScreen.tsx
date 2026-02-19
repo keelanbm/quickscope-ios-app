@@ -63,13 +63,13 @@ type TokenTrackingRow = {
 type TrackingSectionId = "tokens" | "wallets" | "telegram";
 type TelegramViewId = "messages" | "tokens";
 
-const trackingSections: Array<{ id: TrackingSectionId; label: string }> = [
+const trackingSections: { id: TrackingSectionId; label: string }[] = [
   { id: "tokens", label: "Token Watchlists" },
   { id: "wallets", label: "Wallet Tracking" },
   { id: "telegram", label: "Telegram Feed" },
 ];
 
-const telegramViews: Array<{ id: TelegramViewId; label: string }> = [
+const telegramViews: { id: TelegramViewId; label: string }[] = [
   { id: "messages", label: "Messages" },
   { id: "tokens", label: "Tokens" },
 ];

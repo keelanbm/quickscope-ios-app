@@ -53,7 +53,7 @@ export type TraderTokenPosition = {
 export type TraderPositions = {
   trader: string;
   sol_price_usd: number;
-  positions: Array<{
+  positions: {
     balance: number;
     bought_usd?: number;
     sold_usd?: number;
@@ -67,7 +67,7 @@ export type TraderPositions = {
       platform?: string;
       exchange?: string;
     };
-  }>;
+  }[];
 };
 
 export async function fetchTraderOverview(

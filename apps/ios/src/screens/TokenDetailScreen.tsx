@@ -76,7 +76,7 @@ type ChartInterval = (typeof chartIntervals)[number];
 
 type DetailSectionId = "activity" | "traders" | "holders" | "dev";
 
-const detailSections: Array<{ id: DetailSectionId; label: string }> = [
+const detailSections: { id: DetailSectionId; label: string }[] = [
   { id: "activity", label: "Activity" },
   { id: "traders", label: "Traders" },
   { id: "holders", label: "Holders" },
@@ -309,16 +309,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const [nowMs, setNowMs] = useState(() => Date.now());
   const chipHitSlop = { top: 6, bottom: 6, left: 6, right: 6 };
 
-  if (!params?.tokenAddress) {
-    return (
-      <View style={styles.page}>
-        <Text style={styles.title}>Token Detail</Text>
-        <Text style={styles.subtitle}>No token context was provided.</Text>
-      </View>
-    );
-  }
-
-  const tokenAddress = params.tokenAddress;
+  const tokenAddress = params?.tokenAddress ?? "";
 
   useEffect(() => {
     let isActive = true;
@@ -846,6 +837,15 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     { label: "TG", url: tokenMeta.telegramUrl },
     { label: "Web", url: tokenMeta.websiteUrl },
   ].filter((link) => Boolean(link.url));
+
+  if (!tokenAddress) {
+    return (
+      <View style={styles.page}>
+        <Text style={styles.title}>Token Detail</Text>
+        <Text style={styles.subtitle}>No token context was provided.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.page}>

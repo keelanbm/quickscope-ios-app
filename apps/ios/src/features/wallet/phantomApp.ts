@@ -46,7 +46,7 @@ function toCallbackRoute(parsedUrl: URL) {
 function decodeBase58(param: string, label: string): Uint8Array {
   try {
     return bs58.decode(param);
-  } catch (error) {
+  } catch (_error) {
     throw new Error(`Invalid ${label} in Phantom response.`);
   }
 }
@@ -68,7 +68,7 @@ function decodeJsonPayload(payload: Uint8Array) {
   try {
     const json = Buffer.from(payload).toString("utf8");
     return JSON.parse(json) as Record<string, unknown>;
-  } catch (error) {
+  } catch (_error) {
     throw new Error("Invalid Phantom payload format.");
   }
 }

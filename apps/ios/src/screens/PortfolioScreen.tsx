@@ -10,7 +10,6 @@ import {
   fetchTraderPositions,
   fetchTraderOverview,
   type AccountTokenHoldings,
-  type TraderPositions,
   type TraderOverview,
 } from "@/src/features/portfolio/portfolioService";
 import { fetchWalletActivity } from "@/src/features/tracking/trackingService";
@@ -45,7 +44,7 @@ type ActivityRow = {
 
 type PortfolioTabId = "positions" | "trades" | "activity";
 
-const portfolioTabs: Array<{ id: PortfolioTabId; label: string }> = [
+const portfolioTabs: { id: PortfolioTabId; label: string }[] = [
   { id: "positions", label: "Positions" },
   { id: "trades", label: "Trades" },
   { id: "activity", label: "Activity" },
@@ -297,7 +296,7 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
   const stats = useMemo(() => {
     const solPriceUsd = holdings?.sol_price_usd || overview?.sol_price_usd || 0;
     const solBalanceUsd = holdings?.sol_balance ? holdings.sol_balance * solPriceUsd : undefined;
-    const positionsValueUsd = holdings?.value_usd;
+    const _positionsValueUsd = holdings?.value_usd;
     const totalVolumeUsd =
       (overview?.cumulatives?.bought_usd_cumulative ?? 0) +
       (overview?.cumulatives?.sold_usd_cumulative ?? 0);

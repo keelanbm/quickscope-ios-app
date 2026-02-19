@@ -209,7 +209,7 @@ export async function fetchLiveTokenInfos(
 
   const map = response?.token_info_map ?? {};
   return Object.fromEntries(
-    Object.entries(map).filter(([, info]) => info !== null) as Array<[string, LiveTokenInfo]>
+    Object.entries(map).filter(([, info]) => info !== null) as [string, LiveTokenInfo][]
   );
 }
 
