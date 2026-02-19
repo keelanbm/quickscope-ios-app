@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
   metricsStrip: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: qsColors.layer2,
+    backgroundColor: qsColors.layer3,
     borderRadius: qsRadius.xs,
     paddingVertical: 4,
     paddingHorizontal: 8,

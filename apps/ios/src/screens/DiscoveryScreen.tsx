@@ -790,7 +790,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   colHeaderLeft: {
-    marginLeft: 52, // 44px image + 8px gap
     flex: 1,
   },
   colHeaderMetric: {

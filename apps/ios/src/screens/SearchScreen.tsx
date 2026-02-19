@@ -825,7 +825,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   colHeaderLeft: {
-    marginLeft: 48, // 40px image + 8px gap
     flex: 1,
   },
   colHeaderMetric: {

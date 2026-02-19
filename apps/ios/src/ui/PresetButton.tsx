@@ -28,7 +28,7 @@ export function PresetButton({
       : variant === "sell"
         ? qsColors.sellRedBg
         : variant === "muted"
-          ? qsColors.layer5
+          ? qsColors.layer2
           : "rgba(255,255,255,0.1)";
 
   const border = variant === "buy"
@@ -36,7 +36,7 @@ export function PresetButton({
     : variant === "sell"
       ? qsColors.sellRed
       : variant === "muted"
-        ? qsColors.layer3
+        ? qsColors.layer2
         : "rgba(255,255,255,0.15)";
 
   const textColor = isActive
