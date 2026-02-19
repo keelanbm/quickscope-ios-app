@@ -1,6 +1,6 @@
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 
-export type DiscoveryTabId = "trending" | "scan-feed" | "gainers";
+export type DiscoveryTabId = "trending" | "gainers";
 
 type DiscoverySort = {
   sortColumn: string;
@@ -61,10 +61,6 @@ type DiscoveryResult = {
 const tabSorts: Record<DiscoveryTabId, DiscoverySort> = {
   trending: {
     sortColumn: "one_hour_volume_sol",
-    sortOrderDescending: true,
-  },
-  "scan-feed": {
-    sortColumn: "telegram_mentions_1h",
     sortOrderDescending: true,
   },
   gainers: {

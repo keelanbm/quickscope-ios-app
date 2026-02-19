@@ -42,13 +42,18 @@ export type TokenCandlesResponse = {
   candles?: TokenCandle[];
 };
 
-export type TokenChartPoint = {
+export type TokenMarketCapPoint = {
   ts: number;
   value: number;
 };
 
-/** @deprecated Use TokenChartPoint instead */
-export type TokenMarketCapPoint = TokenChartPoint;
+export type TokenCandlePoint = {
+  ts: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+};
 
 function toNumber(value: unknown): number {
   const parsed = Number(value);
@@ -79,13 +84,7 @@ function deriveSupplyFromInfo(
   return undefined;
 }
 
-export type ChartSeriesResult = {
-  points: TokenChartPoint[];
-  /** "mcap" when supply is available, "price" as fallback */
-  mode: "mcap" | "price";
-};
-
-export function buildChartSeries({
+export function buildMarketCapSeries({
   candles,
   tokenInfo,
   candlesResponse,
@@ -93,15 +92,15 @@ export function buildChartSeries({
   candles: TokenCandle[];
   tokenInfo?: LiveTokenInfo | null;
   candlesResponse?: TokenCandlesResponse;
-}): ChartSeriesResult {
+}): TokenMarketCapPoint[] {
   const supplyInfo = deriveSupplyFromInfo(tokenInfo ?? undefined, candlesResponse);
+  if (!supplyInfo) {
+    return [];
+  }
 
-  const useMcap = !!supplyInfo;
-  const naturalSupply = useMcap
-    ? supplyInfo.supply / Math.pow(10, supplyInfo.decimals)
-    : 1;
+  const naturalSupply = supplyInfo.supply / Math.pow(10, supplyInfo.decimals);
 
-  const points = (candles ?? [])
+  return (candles ?? [])
     .map((candle) => {
       const closeQuote = toNumber(candle.close);
       const quoteUsd = toNumber(candle.quote_asset_price_usd);
@@ -109,22 +108,79 @@ export function buildChartSeries({
 
       return {
         ts: toNumber(candle.ts),
-        value: useMcap ? priceUsd * naturalSupply : priceUsd,
+        value: priceUsd * naturalSupply,
       };
     })
-    .filter((point) => point.ts > 0 && Number.isFinite(point.value) && point.value > 0)
+    .filter((point) => point.ts > 0 && Number.isFinite(point.value))
     .sort((a, b) => a.ts - b.ts);
-
-  return { points, mode: useMcap ? "mcap" : "price" };
 }
 
-/** @deprecated Use buildChartSeries instead */
-export function buildMarketCapSeries(args: {
+export function buildPriceSeries(candles: TokenCandle[]): TokenMarketCapPoint[] {
+  return (candles ?? [])
+    .map((candle) => {
+      const closeQuote = toNumber(candle.close);
+      const quoteUsd = toNumber(candle.quote_asset_price_usd);
+      const priceUsd = closeQuote * quoteUsd;
+
+      return {
+        ts: toNumber(candle.ts),
+        value: priceUsd,
+      };
+    })
+    .filter((point) => point.ts > 0 && Number.isFinite(point.value))
+    .sort((a, b) => a.ts - b.ts);
+}
+
+export function buildMarketCapCandles({
+  candles,
+  tokenInfo,
+  candlesResponse,
+}: {
   candles: TokenCandle[];
   tokenInfo?: LiveTokenInfo | null;
   candlesResponse?: TokenCandlesResponse;
-}): TokenChartPoint[] {
-  return buildChartSeries(args).points;
+}): TokenCandlePoint[] {
+  const supplyInfo = deriveSupplyFromInfo(tokenInfo ?? undefined, candlesResponse);
+  if (!supplyInfo) {
+    return [];
+  }
+
+  const naturalSupply = supplyInfo.supply / Math.pow(10, supplyInfo.decimals);
+
+  return (candles ?? [])
+    .map((candle) => {
+      const quoteUsd = toNumber(candle.quote_asset_price_usd);
+      const open = toNumber(candle.open) * quoteUsd * naturalSupply;
+      const high = toNumber(candle.high) * quoteUsd * naturalSupply;
+      const low = toNumber(candle.low) * quoteUsd * naturalSupply;
+      const close = toNumber(candle.close) * quoteUsd * naturalSupply;
+
+      return {
+        ts: toNumber(candle.ts),
+        open,
+        high,
+        low,
+        close,
+      };
+    })
+    .filter((point) => point.ts > 0 && Number.isFinite(point.close))
+    .sort((a, b) => a.ts - b.ts);
+}
+
+export function buildPriceCandles(candles: TokenCandle[]): TokenCandlePoint[] {
+  return (candles ?? [])
+    .map((candle) => {
+      const quoteUsd = toNumber(candle.quote_asset_price_usd);
+      return {
+        ts: toNumber(candle.ts),
+        open: toNumber(candle.open) * quoteUsd,
+        high: toNumber(candle.high) * quoteUsd,
+        low: toNumber(candle.low) * quoteUsd,
+        close: toNumber(candle.close) * quoteUsd,
+      };
+    })
+    .filter((point) => point.ts > 0 && Number.isFinite(point.close))
+    .sort((a, b) => a.ts - b.ts);
 }
 
 export async function fetchLiveTokenInfo(
@@ -135,7 +191,26 @@ export async function fetchLiveTokenInfo(
     return null;
   }
 
-  return rpcClient.call<LiveTokenInfo>("public/getLiveTokenInfo", [{ mint: tokenAddress }]);
+  return rpcClient.call<LiveTokenInfo>("public/getLiveTokenInfo", [tokenAddress]);
+}
+
+export async function fetchLiveTokenInfos(
+  rpcClient: RpcClient,
+  tokenAddresses: string[]
+): Promise<Record<string, LiveTokenInfo>> {
+  if (!tokenAddresses || tokenAddresses.length === 0) {
+    return {};
+  }
+
+  const response = await rpcClient.call<{ token_info_map: Record<string, LiveTokenInfo | null> }>(
+    "public/getLiveTokenInfos",
+    [tokenAddresses]
+  );
+
+  const map = response?.token_info_map ?? {};
+  return Object.fromEntries(
+    Object.entries(map).filter(([, info]) => info !== null) as Array<[string, LiveTokenInfo]>
+  );
 }
 
 export async function fetchTokenCandles(
@@ -154,5 +229,24 @@ export async function fetchTokenCandles(
     from,
     to,
     resolutionSeconds,
+  ]);
+}
+
+export async function fetchTokenCandlesReverse(
+  rpcClient: RpcClient,
+  params: {
+    tokenAddress: string;
+    before: number;
+    resolutionSeconds: number;
+    limit: number;
+  }
+): Promise<TokenCandlesResponse> {
+  const { tokenAddress, before, resolutionSeconds, limit } = params;
+
+  return rpcClient.call<TokenCandlesResponse>("public/getTokenCandlesReverse", [
+    tokenAddress,
+    before,
+    resolutionSeconds,
+    limit,
   ]);
 }

@@ -112,6 +112,14 @@ describe("parseQuickscopeDeepLink", () => {
     expect(target).toEqual({ screen: null });
   });
 
+  it("ignores Phantom app callback links", () => {
+    const connectTarget = parseQuickscopeDeepLink("quickscope://phantom-connect-callback?data=abc");
+    const signTarget = parseQuickscopeDeepLink("quickscope://phantom-sign-callback?data=abc");
+
+    expect(connectTarget).toEqual({ screen: null });
+    expect(signTarget).toEqual({ screen: null });
+  });
+
   it("routes dev links to the hidden dev console route", () => {
     const target = parseQuickscopeDeepLink("quickscope://dev");
 

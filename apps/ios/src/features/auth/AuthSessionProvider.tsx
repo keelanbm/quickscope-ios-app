@@ -5,10 +5,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
-import { useAccounts, useSolana } from "@phantom/react-native-sdk";
+import { useAccounts, useDisconnect, useSolana } from "@phantom/react-native-sdk";
 import bs58 from "bs58";
 import { AppState } from "react-native";
 
@@ -17,7 +18,9 @@ import {
   refreshAuthSession,
   requestAuthChallenge,
   submitAuthSolution,
+  revokeAuthSession,
 } from "@/src/features/auth/authService";
+import { ensurePrimaryAccount } from "@/src/features/account/accountService";
 import {
   clearStoredAuthSession,
   loadStoredAuthSession,
@@ -48,8 +51,13 @@ type AuthSessionContextValue = {
   hasValidAccessToken: boolean;
   hasValidRefreshToken: boolean;
   authenticateFromWallet: () => Promise<void>;
+  authenticateWithExternalSigner: (
+    walletAddress: string,
+    signMessage: (challenge: string) => Promise<string>
+  ) => Promise<void>;
   refreshSession: () => Promise<void>;
   clearSession: () => Promise<void>;
+  logout: () => Promise<void>;
 };
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
@@ -59,13 +67,16 @@ export function AuthSessionProvider({
   children,
 }: PropsWithChildren<{ rpcClient: RpcClient }>) {
   const { addresses } = useAccounts();
+  const { disconnect } = useDisconnect();
   const { solana, isAvailable } = useSolana();
   const [status, setStatus] = useState<AuthSessionStatus>("bootstrapping");
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [sessionWalletAddress, setSessionWalletAddress] = useState<string | undefined>();
   const [errorText, setErrorText] = useState<string | undefined>();
+  const hasEnsuredAccountRef = useRef(false);
 
-  const walletAddress = useMemo(() => getSolanaAddress(addresses), [addresses]);
+  const embeddedWalletAddress = useMemo(() => getSolanaAddress(addresses), [addresses]);
+  const walletAddress = embeddedWalletAddress ?? sessionWalletAddress;
 
   const accessTokenExpiresAt = parseExpirationToUnixMs(tokens?.access_token_expiration);
   const refreshTokenExpiresAt = parseExpirationToUnixMs(tokens?.refresh_token_expiration);
@@ -81,6 +92,18 @@ export function AuthSessionProvider({
     setStatus("unauthenticated");
   }, [rpcClient]);
 
+  const logout = useCallback(async () => {
+    try {
+      await revokeAuthSession(rpcClient);
+    } catch {}
+
+    try {
+      await disconnect();
+    } catch {}
+
+    await clearSession();
+  }, [clearSession, disconnect, rpcClient]);
+
   const persistSession = useCallback(async (nextTokens: AuthTokens, nextWalletAddress?: string) => {
     await persistAuthSession({
       tokens: nextTokens,
@@ -90,7 +113,19 @@ export function AuthSessionProvider({
     setSessionWalletAddress(nextWalletAddress);
     setErrorText(undefined);
     setStatus("authenticated");
-  }, []);
+
+    if (!hasEnsuredAccountRef.current) {
+      hasEnsuredAccountRef.current = true;
+      try {
+        await ensurePrimaryAccount(rpcClient);
+      } catch (error) {
+        hasEnsuredAccountRef.current = false;
+        setErrorText(
+          error instanceof Error ? error.message : "Failed to initialize account."
+        );
+      }
+    }
+  }, [rpcClient]);
 
   const markWalletMismatch = useCallback(
     async (currentWallet: string, expectedWallet: string) => {
@@ -115,8 +150,26 @@ export function AuthSessionProvider({
     }
   }, [clearSession, persistSession, rpcClient, sessionWalletAddress]);
 
+  const authenticateWithExternalSigner = useCallback(
+    async (walletToAuth: string, signMessage: (challenge: string) => Promise<string>) => {
+      setStatus("authenticating");
+      setErrorText(undefined);
+
+      try {
+        const challenge = await requestAuthChallenge(rpcClient, walletToAuth);
+        const solution = await signMessage(challenge);
+        const nextTokens = await submitAuthSolution(rpcClient, challenge, solution);
+        await persistSession(nextTokens, walletToAuth);
+      } catch (error) {
+        setStatus("error");
+        setErrorText(String(error));
+      }
+    },
+    [persistSession, rpcClient]
+  );
+
   const authenticateFromWallet = useCallback(async () => {
-    if (!walletAddress) {
+    if (!embeddedWalletAddress) {
       setStatus("error");
       setErrorText("No connected wallet address available.");
       return;
@@ -128,23 +181,14 @@ export function AuthSessionProvider({
       return;
     }
 
-    setStatus("authenticating");
-    setErrorText(undefined);
-
-    try {
-      const challenge = await requestAuthChallenge(rpcClient, walletAddress);
+    await authenticateWithExternalSigner(embeddedWalletAddress, async (challenge) => {
       const { signature } = await solana.signMessage(challenge);
-      const solution = bs58.encode(signature);
-      const nextTokens = await submitAuthSolution(rpcClient, challenge, solution);
-      await persistSession(nextTokens, walletAddress);
-    } catch (error) {
-      setStatus("error");
-      setErrorText(String(error));
-    }
-  }, [isAvailable, persistSession, rpcClient, solana, walletAddress]);
+      return bs58.encode(signature);
+    });
+  }, [authenticateWithExternalSigner, embeddedWalletAddress, isAvailable, solana]);
 
   useEffect(() => {
-    const currentWallet = walletAddress;
+    const currentWallet = embeddedWalletAddress;
     const expectedWallet = sessionWalletAddress;
 
     if (
@@ -221,6 +265,16 @@ export function AuthSessionProvider({
     return () => subscription.remove();
   }, [hasValidAccessToken, hasValidRefreshToken, refreshSession, status]);
 
+  useEffect(() => {
+    if (status !== "authenticated") {
+      return;
+    }
+
+    if (!hasValidAccessToken && hasValidRefreshToken) {
+      void refreshSession();
+    }
+  }, [hasValidAccessToken, hasValidRefreshToken, refreshSession, status]);
+
   const value = useMemo<AuthSessionContextValue>(
     () => ({
       status,
@@ -231,15 +285,19 @@ export function AuthSessionProvider({
       hasValidAccessToken,
       hasValidRefreshToken,
       authenticateFromWallet,
+      authenticateWithExternalSigner,
       refreshSession,
       clearSession,
+      logout,
     }),
     [
       authenticateFromWallet,
+      authenticateWithExternalSigner,
       clearSession,
       errorText,
       hasValidAccessToken,
       hasValidRefreshToken,
+      logout,
       refreshSession,
       sessionWalletAddress,
       status,

@@ -1,6 +1,6 @@
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 
-export type ScopeTabId = "new-pairs" | "momentum" | "scan-surge";
+export type ScopeTabId = "new-pairs" | "momentum" | "graduated" | "scan-feed";
 
 type ScopeSort = {
   sortColumn: string;
@@ -58,10 +58,14 @@ const tabSorts: Record<ScopeTabId, ScopeSort> = {
     sortOrderDescending: true,
   },
   momentum: {
-    sortColumn: "one_hour_tx_count",
+    sortColumn: "one_hour_change",
     sortOrderDescending: true,
   },
-  "scan-surge": {
+  graduated: {
+    sortColumn: "day_change",
+    sortOrderDescending: true,
+  },
+  "scan-feed": {
     sortColumn: "telegram_mentions_1h",
     sortOrderDescending: true,
   },

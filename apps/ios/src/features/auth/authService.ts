@@ -34,3 +34,6 @@ export function refreshAuthSession(rpcClient: RpcClient) {
   return rpcClient.call<AuthTokens>("auth/refresh", []);
 }
 
+export function revokeAuthSession(rpcClient: RpcClient, reason = "logout") {
+  return rpcClient.call<boolean>("auth/revoke", [reason]);
+}

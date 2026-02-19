@@ -5,8 +5,9 @@ import { fetchScopeTokens } from "@/src/features/scope/scopeService";
 describe("fetchScopeTokens", () => {
   it.each([
     ["new-pairs", "mint_ts"],
-    ["momentum", "one_hour_tx_count"],
-    ["scan-surge", "telegram_mentions_1h"],
+    ["momentum", "one_hour_change"],
+    ["graduated", "day_change"],
+    ["scan-feed", "telegram_mentions_1h"],
   ] as const)("uses expected sort config for %s", async (tab, sortColumn) => {
     const call = jest.fn().mockResolvedValue({
       sol_price_usd: 100,
