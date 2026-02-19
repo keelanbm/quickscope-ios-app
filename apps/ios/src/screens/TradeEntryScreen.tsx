@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
-import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
 import {
   getQuoteTtlSecondsRemaining,
   isQuoteStale,
@@ -14,10 +13,11 @@ import {
   requestSwapQuote,
   type QuoteResult,
 } from "@/src/features/trade/tradeQuoteService";
-import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { toast } from "@/src/lib/toast";
 import type { RootStack, TradeEntryRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { AlertCircle, Clock, Zap } from "@/src/ui/icons";
 
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -25,8 +25,6 @@ type TradeEntryScreenProps = {
   rpcClient: RpcClient;
   params?: TradeEntryRouteParams;
 };
-
-type OrderType = "market" | "instant";
 
 function formatAtomic(value: number | undefined): string {
   if (value === undefined) {
@@ -62,15 +60,11 @@ function parseAmount(value: string): number {
 
 export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const { walletAddress, hasValidAccessToken, status } = useAuthSession();
-  const { ensureAuthenticated } = useWalletConnect();
+  const { walletAddress, hasValidAccessToken, authenticateFromWallet, status } = useAuthSession();
   const [amount, setAmount] = useState(params?.amount ?? "");
-  const [orderType, setOrderType] = useState<OrderType>("market");
-  const [priceTarget, setPriceTarget] = useState("");
   const [quote, setQuote] = useState<QuoteResult | undefined>();
   const [quoteError, setQuoteError] = useState<string | undefined>();
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
-  const [isExecutingInstant, setIsExecutingInstant] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const inputMint = params?.inputMint ?? SOL_MINT;
@@ -110,12 +104,12 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
   const handleGetQuote = async () => {
     if (!walletAddress) {
-      Alert.alert("Wallet required", "Connect your wallet to request a quote.");
+      toast.warn("Wallet required", "Connect your wallet to request a quote.");
       return;
     }
 
     if (!outputMint) {
-      Alert.alert("Token required", "Select a token before requesting a quote.");
+      toast.warn("Token required", "Select a token before requesting a quote.");
       return;
     }
 
@@ -126,7 +120,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
     const amountUi = parseAmount(amount);
     if (!Number.isFinite(amountUi) || amountUi <= 0) {
-      Alert.alert("Invalid amount", "Enter an amount greater than 0.");
+      toast.warn("Invalid amount", "Enter an amount greater than 0.");
       return;
     }
 
@@ -161,7 +155,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       return;
     }
     if (quoteIsStale) {
-      Alert.alert("Quote expired", "Refresh quote before continuing to review.");
+      toast.warn("Quote expired", "Refresh quote before continuing to review.");
       return;
     }
 
@@ -187,80 +181,9 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
     });
   };
 
-  const handleInstantTrade = async () => {
-    if (!walletAddress) {
-      Alert.alert("Wallet required", "Connect your wallet to execute trades.");
-      return;
-    }
-
-    if (!outputMint) {
-      Alert.alert("Token required", "Select a token before trading.");
-      return;
-    }
-
-    if (!hasValidAccessToken) {
-      setQuoteError("Authenticate session before trading.");
-      return;
-    }
-
-    const amountUi = parseAmount(amount);
-    if (!Number.isFinite(amountUi) || amountUi <= 0) {
-      Alert.alert("Invalid amount", "Enter an amount greater than 0.");
-      return;
-    }
-
-    setIsExecutingInstant(true);
-    setQuoteError(undefined);
-
-    try {
-      const nextQuote = await requestSwapQuote(rpcClient, {
-        walletAddress,
-        inputMint,
-        outputMint,
-        amountUi,
-        inputTokenDecimals: inputMintDecimals,
-        outputTokenDecimals: outputMintDecimals,
-      });
-
-      await requestSwapExecution(rpcClient, {
-        walletAddress,
-        inputMint: nextQuote.inputMint,
-        outputMint,
-        amountAtomic: nextQuote.amountAtomic,
-        slippageBps: nextQuote.slippageBps,
-      });
-
-      Alert.alert("Trade submitted", "Instant trade submitted.");
-    } catch (error) {
-      Alert.alert("Trade failed", String(error));
-    } finally {
-      setIsExecutingInstant(false);
-    }
-  };
-
   return (
     <View style={styles.page}>
       <Text style={styles.title}>Trade</Text>
-      <Text style={styles.subtitle}>
-        Trade execution flow is being finalized. Token context and amount capture are ready.
-      </Text>
-
-      <View style={styles.orderTypeRow}>
-        {(["instant", "market"] as OrderType[]).map((type) => {
-          const isActive = orderType === type;
-          return (
-            <Pressable
-              key={type}
-              style={[styles.orderTypePill, isActive && styles.orderTypePillActive]}
-              onPress={() => setOrderType(type)}
-            >
-              <Text style={[styles.orderTypeText, isActive && styles.orderTypeTextActive]}>
-                {type === "instant" ? "Instant" : "Market"}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
 
       <View style={styles.contextCard}>
         {summaryLines.map((line) => (
@@ -277,25 +200,10 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
           onChangeText={setAmount}
           keyboardType="decimal-pad"
           placeholder="0.0"
-          placeholderTextColor={qsColors.textSubtle}
+          placeholderTextColor={qsColors.textTertiary}
           style={styles.amountInput}
         />
       </View>
-
-      {orderType === "market" ? (
-        <View style={styles.amountBlock}>
-          <Text style={styles.label}>Target price (optional)</Text>
-          <TextInput
-            value={priceTarget}
-            onChangeText={setPriceTarget}
-            keyboardType="decimal-pad"
-            placeholder="0.0"
-            placeholderTextColor={qsColors.textSubtle}
-            style={styles.amountInput}
-          />
-          <Text style={styles.helperText}>Presets will be wired to live price next.</Text>
-        </View>
-      ) : null}
 
       {!hasValidAccessToken ? (
         <View style={styles.authCard}>
@@ -304,7 +212,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
           <Pressable
             style={styles.authButton}
             onPress={() => {
-              void ensureAuthenticated();
+              void authenticateFromWallet();
             }}
             disabled={status === "authenticating"}
           >
@@ -315,12 +223,15 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
         </View>
       ) : null}
 
-      {orderType === "market" && quote ? (
+      {quote ? (
         <View style={styles.quoteCard}>
           <Text style={styles.quoteTitle}>Quote ready</Text>
-          <Text style={styles.quoteMeta}>
-            {quoteIsStale ? "Quote expired" : `Quote valid for ~${quoteTtlSeconds}s`}
-          </Text>
+          <View style={styles.ttlRow}>
+            <Clock size={14} color={quoteIsStale ? qsColors.danger : qsColors.textTertiary} />
+            <Text style={[styles.quoteMeta, quoteIsStale ? styles.quoteMetaDanger : null]}>
+              {quoteIsStale ? "Quote expired" : `Quote valid for ~${quoteTtlSeconds}s`}
+            </Text>
+          </View>
           <Text style={styles.contextText}>
             You pay: {formatTokenAmount(quote.amountUi, quote.inputTokenDecimals)} (
             {formatAtomic(quote.summary.amountInAtomic)} atomic)
@@ -354,30 +265,29 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 
       {quoteError ? (
         <View style={styles.errorCard}>
-          <Text style={styles.errorTitle}>Quote failed</Text>
+          <View style={styles.errorTitleRow}>
+            <AlertCircle size={14} color={qsColors.danger} />
+            <Text style={styles.errorTitle}>Quote failed</Text>
+          </View>
           <Text style={styles.errorText}>{quoteError}</Text>
         </View>
       ) : null}
 
       <View style={styles.actions}>
-        <Pressable
-          style={styles.primaryButton}
-          onPress={orderType === "instant" ? handleInstantTrade : handleGetQuote}
-          disabled={isLoadingQuote || isExecutingInstant}
-        >
-          <Text style={styles.primaryButtonText}>
-            {orderType === "instant"
-              ? isExecutingInstant
-                ? "Trading..."
-                : "Trade Instantly"
-              : isLoadingQuote
-                ? "Getting Quote..."
-                : "Get Quote"}
-          </Text>
+        <Pressable style={styles.primaryButton} onPress={handleGetQuote} disabled={isLoadingQuote}>
+          <View style={styles.buttonRow}>
+            <Zap size={16} color={qsColors.layer0} />
+            <Text style={styles.primaryButtonText}>
+              {isLoadingQuote ? "Getting Quote..." : "Get Quote"}
+            </Text>
+          </View>
         </Pressable>
-        {orderType === "market" && quote ? (
+        {quote ? (
           <Pressable style={styles.reviewButton} onPress={handleReviewTrade}>
-            <Text style={styles.reviewButtonText}>Review Trade</Text>
+            <View style={styles.buttonRow}>
+              <Zap size={16} color={qsColors.accent} />
+              <Text style={styles.reviewButtonText}>Review Trade</Text>
+            </View>
           </Pressable>
         ) : null}
         <Pressable
@@ -394,7 +304,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
     padding: qsSpacing.xl,
     gap: qsSpacing.md,
   },
@@ -403,40 +313,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
   },
-  subtitle: {
-    color: qsColors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  orderTypeRow: {
-    flexDirection: "row",
-    gap: qsSpacing.sm,
-  },
-  orderTypePill: {
-    borderRadius: qsRadius.lg,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  orderTypePillActive: {
-    borderColor: qsColors.accent,
-    backgroundColor: "rgba(78, 163, 255, 0.15)",
-  },
-  orderTypeText: {
-    color: qsColors.textSubtle,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  orderTypeTextActive: {
-    color: qsColors.textPrimary,
-  },
   contextCard: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     padding: qsSpacing.md,
     gap: 6,
   },
@@ -448,28 +329,24 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    color: qsColors.textSubtle,
+    color: qsColors.textTertiary,
     fontSize: 12,
   },
   amountInput: {
     borderWidth: 1,
-    borderColor: qsColors.borderDefault,
+    borderColor: qsColors.layer3,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer2,
     color: qsColors.textPrimary,
     fontSize: 16,
     paddingHorizontal: qsSpacing.md,
     paddingVertical: 10,
   },
-  helperText: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
-  },
   quoteCard: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer1,
     padding: qsSpacing.md,
     gap: 6,
   },
@@ -477,7 +354,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     padding: qsSpacing.md,
     gap: 8,
   },
@@ -490,7 +367,7 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.accent,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     paddingVertical: 8,
     alignItems: "center",
   },
@@ -504,9 +381,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  ttlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   quoteMeta: {
-    color: qsColors.textSubtle,
+    color: qsColors.textTertiary,
     fontSize: 11,
+  },
+  quoteMetaDanger: {
+    color: qsColors.danger,
   },
   staleWarning: {
     color: qsColors.danger,
@@ -518,9 +403,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.danger,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.dangerDark,
     padding: qsSpacing.md,
     gap: 4,
+  },
+  errorTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   errorTitle: {
     color: qsColors.danger,
@@ -536,6 +426,12 @@ const styles = StyleSheet.create({
     marginTop: "auto",
     gap: qsSpacing.sm,
   },
+  buttonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
   primaryButton: {
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.accent,
@@ -543,7 +439,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryButtonText: {
-    color: "#061326",
+    color: qsColors.layer0,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -551,7 +447,7 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     paddingVertical: 10,
     alignItems: "center",
   },
@@ -559,7 +455,7 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.accent,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     paddingVertical: 10,
     alignItems: "center",
   },

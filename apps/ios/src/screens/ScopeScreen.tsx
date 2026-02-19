@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import {
-  Alert,
   FlatList,
   type GestureResponderEvent,
   Image,
@@ -15,6 +14,8 @@ import {
   View,
 } from "react-native";
 
+import { haptics } from "@/src/lib/haptics";
+import { toast } from "@/src/lib/toast";
 import {
   fetchScopeTokens,
   type ScopeTabId,
@@ -22,7 +23,10 @@ import {
 } from "@/src/features/scope/scopeService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, RootTabs, ScopeRouteParams } from "@/src/navigation/types";
-import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
+import { Copy, Crosshair, Star, Zap } from "@/src/ui/icons";
+import { EmptyState } from "@/src/ui/EmptyState";
+import { SkeletonRow } from "@/src/ui/Skeleton";
 
 type ScopeScreenProps = {
   rpcClient: RpcClient;
@@ -37,64 +41,61 @@ type ScopeTab = {
 const tabs: ScopeTab[] = [
   { id: "new-pairs", label: "New Pairs" },
   { id: "momentum", label: "Momentum" },
-  { id: "graduated", label: "Graduated" },
-  { id: "scan-feed", label: "Scan Feed" },
+  { id: "scan-surge", label: "Scan Surge" },
 ];
 
 const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
 
+/* ─── Formatters ─── */
+
 function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "$0";
-  }
-
-  const absValue = Math.abs(value);
-  if (absValue >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  }
-  if (absValue >= 1_000_000) {
-    return `$${(value / 1_000_000).toFixed(2)}M`;
-  }
-  if (absValue >= 1_000) {
-    return `$${(value / 1_000).toFixed(1)}K`;
-  }
-  if (absValue >= 1) {
-    return `$${value.toFixed(2)}`;
-  }
-
+  if (!Number.isFinite(value) || value <= 0) return "$0";
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  if (value >= 1) return `$${value.toFixed(0)}`;
   return `$${value.toFixed(4)}`;
 }
 
 function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "0.0%";
-  }
-
+  if (!Number.isFinite(value)) return "0%";
   const prefix = value > 0 ? "+" : "";
   return `${prefix}${value.toFixed(1)}%`;
 }
 
-function formatAgeFromSeconds(unixSeconds: number): string {
-  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) {
-    return "n/a";
-  }
-
-  const elapsedSeconds = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`;
-  }
-  if (elapsedSeconds < 3600) {
-    return `${Math.floor(elapsedSeconds / 60)}m`;
-  }
-  if (elapsedSeconds < 86400) {
-    return `${Math.floor(elapsedSeconds / 3600)}h`;
-  }
-  if (elapsedSeconds < 604800) {
-    return `${Math.floor(elapsedSeconds / 86400)}d`;
-  }
-
-  return `${Math.floor(elapsedSeconds / 604800)}w`;
+function formatCompactNumber(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return String(Math.round(value));
 }
+
+function formatAge(unixSeconds: number): string {
+  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return "--";
+  const elapsed = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
+  if (elapsed < 60) return `${elapsed}s`;
+  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
+  if (elapsed < 86400) return `${Math.floor(elapsed / 3600)}h`;
+  if (elapsed < 604800) return `${Math.floor(elapsed / 86400)}d`;
+  return `${Math.floor(elapsed / 604800)}w`;
+}
+
+/** Short launchpad label */
+function launchpadLabel(platform?: string, exchange?: string): string | null {
+  const raw = (platform || exchange || "").toLowerCase();
+  if (!raw) return null;
+  if (raw.includes("pump")) return "PUMP";
+  if (raw.includes("believe")) return "BLV";
+  if (raw.includes("meteora")) return "MET";
+  if (raw.includes("raydium")) return "RAY";
+  if (raw.includes("orca")) return "ORCA";
+  if (raw.includes("bonk")) return "BONK";
+  if (raw.includes("moonshot")) return "MOON";
+  if (raw.includes("jupiter") || raw.includes("jup")) return "JUP";
+  return raw.slice(0, 4).toUpperCase();
+}
+
+/* ─── Component ─── */
 
 export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
@@ -107,7 +108,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | undefined>();
-  const [lastUpdatedMs, setLastUpdatedMs] = useState<number | undefined>();
+  const [starredMints, setStarredMints] = useState<Record<string, boolean>>({});
 
   const loadRows = useCallback(
     async (options?: { refreshing?: boolean }) => {
@@ -133,7 +134,6 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
         }
 
         setRows(result.rows);
-        setLastUpdatedMs(result.fetchedAtMs);
         setErrorText(undefined);
         if (__DEV__) {
           console.log("[perf] Scope fetch success", {
@@ -180,20 +180,6 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
     void loadRows();
   }, [loadRows]);
 
-  const rowCountText = useMemo(() => `${rows.length} tokens`, [rows.length]);
-  const updatedText = useMemo(() => {
-    if (!lastUpdatedMs) {
-      return "Not synced";
-    }
-
-    return `Updated ${new Date(lastUpdatedMs).toLocaleTimeString()}`;
-  }, [lastUpdatedMs]);
-
-  const handleCopyAddress = useCallback(async (mint: string) => {
-    await Clipboard.setStringAsync(mint);
-    Alert.alert("Address copied", mint);
-  }, []);
-
   const handleOpenTokenDetail = useCallback(
     (token: ScopeToken) => {
       rootNavigation?.navigate("TokenDetail", {
@@ -219,7 +205,28 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const stopRowPress = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
   }, []);
-  const chipHitSlop = { top: 6, bottom: 6, left: 6, right: 6 };
+
+  const toggleStar = useCallback((mint: string) => {
+    setStarredMints((current) => ({
+      ...current,
+      [mint]: !current[mint],
+    }));
+  }, []);
+
+  const handleCopyAddress = useCallback(async (mint: string) => {
+    await Clipboard.setStringAsync(mint);
+    haptics.success();
+    toast.success("Copied", mint);
+  }, []);
+
+  const handleQuickBuy = useCallback(
+    (event: GestureResponderEvent, token: ScopeToken) => {
+      stopRowPress(event);
+      // TODO: wire up quick buy sheet with pre-filled token
+      toast.info("Quick Buy", `Buy ${token.symbol} — coming soon`);
+    },
+    [stopRowPress]
+  );
 
   return (
     <FlatList
@@ -232,44 +239,16 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
           tintColor={qsColors.textMuted}
           refreshing={isRefreshing}
           onRefresh={() => {
+            haptics.light();
             void loadRows({ refreshing: true });
           }}
         />
       }
       ListHeaderComponent={
         <View style={styles.headerWrap}>
-          <View style={styles.tabsWrap}>
-            {tabs.map((tab) => {
-              const active = tab.id === activeTab;
-              return (
-                <Pressable
-                  key={tab.id}
-                  onPress={() => setActiveTab(tab.id)}
-                  style={[styles.tabButton, active ? styles.tabButtonActive : null]}
-                  hitSlop={chipHitSlop}
-                >
-                  <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            <Pressable style={styles.filterButton} hitSlop={chipHitSlop}>
-              <Text style={styles.filterButtonText}>Filter</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{rowCountText}</Text>
-            <Text style={styles.metaText}>{updatedText}</Text>
-          </View>
-
-          {__DEV__ && params?.source ? (
+          {params?.source ? (
             <View style={styles.deepLinkNote}>
               <Text style={styles.deepLinkTitle}>Opened from deep link</Text>
-              <Text style={styles.deepLinkBody}>
-                Scope feed launched from a quickscope://scope style route.
-              </Text>
             </View>
           ) : null}
 
@@ -288,104 +267,149 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
             </View>
           ) : null}
 
-          {isInitialLoading ? <Text style={styles.loadingText}>Loading scope feed...</Text> : null}
+          {isInitialLoading ? (
+            <View style={{ gap: 4 }}>
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+              <SkeletonRow />
+            </View>
+          ) : null}
 
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, styles.tableHeaderToken]}>Token</Text>
-            <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>MC</Text>
-            <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>Age</Text>
-            <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>1h Tx</Text>
-            <Text style={[styles.tableHeaderText, styles.tableHeaderMetric]}>1h %</Text>
-            <Text style={[styles.tableHeaderText, styles.tableHeaderActions]}>Act</Text>
+          {/* ── Tab pills ── */}
+          <View style={styles.tabsWrap}>
+            {tabs.map((tab) => {
+              const active = tab.id === activeTab;
+              return (
+                <Pressable
+                  key={tab.id}
+                  onPress={() => setActiveTab(tab.id)}
+                  style={[styles.tabButton, active ? styles.tabButtonActive : null]}
+                >
+                  <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       }
       renderItem={({ item }) => {
-        const platformLabel = (item.platform || item.exchange || "unknown").toUpperCase();
+        const isStarred = Boolean(starredMints[item.mint]);
+        const badge = launchpadLabel(item.platform, item.exchange);
+        const isPositive = item.oneHourChangePercent >= 0;
+        const age = formatAge(item.mintedAtSeconds);
 
         return (
           <Pressable style={styles.rowItem} onPress={() => handleOpenTokenDetail(item)}>
-            <View style={styles.rowMain}>
-              <View style={styles.tokenColumn}>
-                <Image
-                  source={{ uri: item.imageUri || fallbackTokenImage }}
-                  style={styles.tokenImage}
-                />
-                <View style={styles.tokenTextColumn}>
+            {/* ── Row 1: image + identity + change% + quick buy ── */}
+            <View style={styles.rowTop}>
+              {/* Small token image */}
+              <Image
+                source={{ uri: item.imageUri || fallbackTokenImage }}
+                style={styles.tokenImage}
+              />
+
+              {/* Symbol + badge + actions */}
+              <View style={styles.identityCol}>
+                <View style={styles.symbolRow}>
                   <Text numberOfLines={1} style={styles.tokenSymbol}>
-                    {item.symbol || "Unknown"}
+                    {item.symbol || "???"}
                   </Text>
-                  <Text numberOfLines={1} style={styles.tokenName}>
-                    {item.name || "Unnamed"}
-                  </Text>
-                  <Text style={styles.tagPill}>{platformLabel}</Text>
+                  {badge ? (
+                    <View style={styles.launchBadge}>
+                      <Text style={styles.launchBadgeText}>{badge}</Text>
+                    </View>
+                  ) : null}
+                  <Text style={styles.agePill}>{age}</Text>
+                  <Pressable
+                    onPress={(e) => {
+                      stopRowPress(e);
+                      void handleCopyAddress(item.mint);
+                    }}
+                    hitSlop={6}
+                  >
+                    <Copy size={11} color={qsColors.textTertiary} />
+                  </Pressable>
+                  <Pressable
+                    onPress={(e) => {
+                      stopRowPress(e);
+                      toggleStar(item.mint);
+                    }}
+                    hitSlop={6}
+                  >
+                    <Star
+                      size={12}
+                      color={isStarred ? qsColors.accent : qsColors.textTertiary}
+                      fill={isStarred ? qsColors.accent : "none"}
+                    />
+                  </Pressable>
                 </View>
-              </View>
-
-              <View style={styles.metricColumn}>
-                <Text numberOfLines={1} style={styles.metricValue}>
-                  {formatCompactUsd(item.marketCapUsd)}
+                <Text numberOfLines={1} style={styles.tokenName}>
+                  {item.name || "Unnamed"}
                 </Text>
               </View>
 
-              <View style={styles.metricColumn}>
-                <Text numberOfLines={1} style={styles.metricValue}>
-                  {formatAgeFromSeconds(item.mintedAtSeconds)}
-                </Text>
-              </View>
+              {/* 1h% change — large, color-coded */}
+              <Text
+                style={[
+                  styles.changePercent,
+                  { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
+                ]}
+              >
+                {formatPercent(item.oneHourChangePercent)}
+              </Text>
 
-              <View style={styles.metricColumn}>
-                <Text numberOfLines={1} style={styles.metricValue}>
-                  {item.oneHourTxCount.toLocaleString()}
-                </Text>
-              </View>
+              {/* Quick Buy button */}
+              <Pressable
+                style={styles.quickBuyButton}
+                onPress={(e) => handleQuickBuy(e, item)}
+              >
+                <Zap size={11} color={qsColors.layer0} />
+                <Text style={styles.quickBuyText}>0.1</Text>
+              </Pressable>
+            </View>
 
-              <View style={styles.metricColumn}>
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.metricChange,
-                    item.oneHourChangePercent >= 0
-                      ? styles.metricChangePositive
-                      : styles.metricChangeNegative,
-                  ]}
-                >
-                  {formatPercent(item.oneHourChangePercent)}
-                </Text>
+            {/* ── Row 2: Dense metric strip ── */}
+            <View style={styles.metricsStrip}>
+              <View style={styles.metricChip}>
+                <Text style={styles.metricLabel}>MC</Text>
+                <Text style={styles.metricVal}>{formatCompactUsd(item.marketCapUsd)}</Text>
               </View>
-
-              <View style={styles.actionsColumn}>
-                <Pressable
-                  onPress={(event) => {
-                    stopRowPress(event);
-                    void handleCopyAddress(item.mint);
-                  }}
-                  hitSlop={6}
-                >
-                  <Text style={styles.linkText}>Copy</Text>
-                </Pressable>
-                <Pressable
-                  onPress={(event) => {
-                    stopRowPress(event);
-                    handleOpenTokenDetail(item);
-                  }}
-                  hitSlop={6}
-                >
-                  <Text style={styles.tradeText}>Trade</Text>
-                </Pressable>
+              <View style={styles.metricDivider} />
+              <View style={styles.metricChip}>
+                <Text style={styles.metricLabel}>Vol</Text>
+                <Text style={styles.metricVal}>{formatCompactUsd(item.oneHourVolumeUsd)}</Text>
               </View>
+              <View style={styles.metricDivider} />
+              <View style={styles.metricChip}>
+                <Text style={styles.metricLabel}>TXs</Text>
+                <Text style={styles.metricVal}>{formatCompactNumber(item.oneHourTxCount)}</Text>
+              </View>
+              {item.scanMentionsOneHour > 0 ? (
+                <>
+                  <View style={styles.metricDivider} />
+                  <View style={styles.metricChip}>
+                    <Text style={styles.metricLabel}>Scans</Text>
+                    <Text style={styles.metricVal}>
+                      {formatCompactNumber(item.scanMentionsOneHour)}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
             </View>
           </Pressable>
         );
       }}
       ListEmptyComponent={
         !isInitialLoading && !errorText ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyTitle}>No scope results</Text>
-            <Text style={styles.emptyBody}>
-              Pull to refresh or switch tabs to load a different sort lens.
-            </Text>
-          </View>
+          <EmptyState
+            icon={Crosshair}
+            title="No scope results"
+            subtitle="Pull down to refresh or check back for new signals."
+          />
         ) : null
       }
     />
@@ -395,242 +419,198 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
   },
   content: {
-    paddingHorizontal: qsSpacing.lg,
-    paddingBottom: qsSpacing.xl,
+    paddingTop: qsSpacing.xs,
+    paddingBottom: 140,
   },
   headerWrap: {
-    paddingTop: qsSpacing.lg,
-    paddingBottom: qsSpacing.sm,
-    gap: qsSpacing.sm,
+    gap: qsSpacing.md,
+    marginBottom: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.lg,
   },
-  metaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  metaText: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
-  },
+
+  // ── Tabs ──
   tabsWrap: {
     flexDirection: "row",
-    gap: qsSpacing.xs,
+    gap: qsSpacing.sm,
     flexWrap: "wrap",
   },
   tabButton: {
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.lg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: qsColors.bgCardSoft,
+    borderRadius: qsRadius.pill,
+    backgroundColor: qsColors.layer2,
+    paddingVertical: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.lg,
   },
   tabButtonActive: {
-    backgroundColor: "#13253d",
-    borderColor: qsColors.accent,
+    backgroundColor: qsColors.accent,
   },
   tabButtonText: {
-    color: qsColors.textSecondary,
-    fontSize: 11,
-    fontWeight: "600",
+    color: qsColors.textTertiary,
+    fontWeight: qsTypography.weight.semi,
+    fontSize: 13,
   },
   tabButtonTextActive: {
-    color: qsColors.accent,
+    color: qsColors.textPrimary,
   },
-  filterButton: {
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.lg,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: qsColors.bgCardSoft,
-  },
-  filterButtonText: {
-    color: qsColors.textSecondary,
-    fontSize: 11,
-    fontWeight: "600",
-  },
+
+  // ── Deep link / error / loading ──
   deepLinkNote: {
-    borderWidth: 1,
-    borderColor: qsColors.accent,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
-    padding: qsSpacing.sm,
+    backgroundColor: qsColors.layer1,
+    padding: qsSpacing.md,
     gap: 4,
   },
   deepLinkTitle: {
-    color: qsColors.textPrimary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  deepLinkBody: {
-    color: qsColors.textSecondary,
+    color: qsColors.textMuted,
     fontSize: 12,
   },
   errorBox: {
-    borderWidth: 1,
-    borderColor: qsColors.danger,
     borderRadius: qsRadius.md,
-    padding: qsSpacing.sm,
-    backgroundColor: "#3a1e2a",
-    gap: 2,
+    backgroundColor: qsColors.dangerDark,
+    padding: qsSpacing.md,
+    gap: 4,
   },
   errorText: {
-    color: qsColors.danger,
+    color: qsColors.dangerLight,
     fontSize: 12,
   },
   retryButton: {
     marginTop: 4,
     alignSelf: "flex-start",
-    borderWidth: 1,
-    borderColor: "#834242",
     borderRadius: qsRadius.sm,
     paddingVertical: 5,
     paddingHorizontal: 10,
-    backgroundColor: "#3f2025",
+    backgroundColor: qsColors.dangerBg,
   },
   retryButtonText: {
-    color: "#ffcece",
+    color: qsColors.dangerLight,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: qsTypography.weight.bold,
   },
-  loadingText: {
-    color: qsColors.textMuted,
-    fontSize: 12,
-  },
-  tableHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.md,
-    paddingVertical: 6,
-    paddingHorizontal: qsSpacing.sm,
-    backgroundColor: qsColors.bgCardSoft,
-  },
-  tableHeaderText: {
-    color: qsColors.textSubtle,
-    fontSize: 9,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  tableHeaderToken: {
-    flex: 2.2,
-  },
-  tableHeaderMetric: {
-    flex: 1,
-    textAlign: "right",
-  },
-  tableHeaderActions: {
-    flex: 1.1,
-    textAlign: "right",
-  },
+
+  // ── Token rows — compact card style ──
   rowItem: {
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.md,
-    paddingVertical: 6,
-    paddingHorizontal: qsSpacing.sm,
-    marginTop: qsSpacing.xs,
-    backgroundColor: qsColors.bgCard,
+    paddingHorizontal: qsSpacing.lg,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: qsColors.borderDefault,
+    gap: 6,
   },
-  rowMain: {
+
+  // Row 1: image + identity + change + buy
+  rowTop: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  tokenColumn: {
-    flex: 2.2,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: qsSpacing.xs,
-    paddingRight: qsSpacing.xs,
+    gap: 8,
   },
   tokenImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: qsColors.bgCardSoft,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: qsColors.layer3,
   },
-  tokenTextColumn: {
+  identityCol: {
     flex: 1,
+    gap: 0,
+  },
+  symbolRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: qsTypography.weight.bold,
+    flexShrink: 1,
+  },
+  launchBadge: {
+    backgroundColor: qsColors.layer2,
+    borderRadius: qsRadius.xs,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  launchBadgeText: {
+    fontSize: 8,
+    fontWeight: qsTypography.weight.bold,
+    color: qsColors.textSecondary,
+    letterSpacing: 0.3,
+  },
+  agePill: {
+    color: qsColors.buyGreen,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.semi,
   },
   tokenName: {
-    color: qsColors.textMuted,
+    color: qsColors.textTertiary,
     fontSize: 10,
+    marginTop: 1,
   },
-  tagPill: {
-    marginTop: 2,
-    alignSelf: "flex-start",
-    color: qsColors.textSubtle,
-    backgroundColor: qsColors.bgCardSoft,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.lg,
-    paddingHorizontal: 6,
-    fontSize: 9,
-    overflow: "hidden",
-  },
-  metricColumn: {
-    flex: 1,
-    alignItems: "flex-end",
-    paddingRight: qsSpacing.xs,
-  },
-  metricValue: {
-    color: qsColors.textSecondary,
-    fontSize: 11,
-    fontVariant: ["tabular-nums"],
-  },
-  metricChange: {
-    fontSize: 11,
-    fontVariant: ["tabular-nums"],
-    fontWeight: "600",
-  },
-  metricChangePositive: {
-    color: qsColors.success,
-  },
-  metricChangeNegative: {
-    color: qsColors.danger,
-  },
-  actionsColumn: {
-    flex: 1.1,
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  linkText: {
-    color: qsColors.textMuted,
-    fontSize: 11,
-    textDecorationLine: "underline",
-  },
-  tradeText: {
-    color: qsColors.accent,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  emptyBox: {
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.md,
-    padding: qsSpacing.md,
-    marginTop: qsSpacing.sm,
-    backgroundColor: qsColors.bgCardSoft,
-    gap: 4,
-  },
-  emptyTitle: {
-    color: qsColors.textPrimary,
+
+  // 1h% change — prominent
+  changePercent: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
+    minWidth: 52,
+    textAlign: "right",
   },
-  emptyBody: {
-    color: qsColors.textMuted,
-    fontSize: 12,
+
+  // Quick buy
+  quickBuyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    height: 28,
+    paddingHorizontal: 8,
+    borderRadius: qsRadius.pill,
+    backgroundColor: qsColors.accent,
   },
+  quickBuyText: {
+    color: qsColors.layer0,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
+  },
+
+  // ── Row 2: Dense metric strip ──
+  metricsStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: qsColors.layer3,
+    borderRadius: qsRadius.xs,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  metricChip: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    justifyContent: "center",
+  },
+  metricLabel: {
+    color: qsColors.textSubtle,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.semi,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  metricVal: {
+    color: qsColors.textPrimary,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
+  },
+  metricDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: qsColors.layer3,
+    marginHorizontal: 4,
+  },
+
 });

@@ -6,15 +6,17 @@ import * as Clipboard from "expo-clipboard";
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
-import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
+import { haptics } from "@/src/lib/haptics";
 import {
   getQuoteTtlSecondsRemaining,
   isQuoteStale,
 } from "@/src/features/trade/quoteUtils";
 import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { toast } from "@/src/lib/toast";
 import type { ReviewTradeRouteParams, RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { AlertCircle, CircleCheck, Clock, Copy, ExternalLink, Zap } from "@/src/ui/icons";
 
 type ReviewTradeScreenProps = {
   rpcClient: RpcClient;
@@ -52,8 +54,7 @@ function formatTime(value: number): string {
 
 export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: ReviewTradeScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const { walletAddress, hasValidAccessToken, status } = useAuthSession();
-  const { ensureAuthenticated } = useWalletConnect();
+  const { walletAddress, hasValidAccessToken, authenticateFromWallet, status } = useAuthSession();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionError, setExecutionError] = useState<string | undefined>();
@@ -137,19 +138,19 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
       if (isFailure) {
         const body = result.errorPreview ?? "Swap execution failed.";
         setExecutionTone("error");
-        Alert.alert("Trade failed", body);
+        toast.error("Trade failed", body);
       } else if (isSuccess) {
         setExecutionTone("success");
-        Alert.alert("Trade success", "Trade executed successfully.");
+        toast.success("Trade success", "Trade executed successfully.");
       } else {
         setExecutionTone("info");
-        Alert.alert("Trade submitted", "Trade submitted. Status will update when finalized.");
+        toast.info("Trade submitted", "Trade submitted. Status will update when finalized.");
       }
     } catch (error) {
       const message = String(error);
       setExecutionError(message);
       setExecutionTone("error");
-      Alert.alert("Trade failed", message);
+      toast.error("Trade failed", message);
     } finally {
       setIsExecuting(false);
     }
@@ -161,7 +162,8 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
     }
 
     await Clipboard.setStringAsync(executionSignature);
-    Alert.alert("Signature copied", executionSignature);
+    haptics.success();
+    toast.success("Signature copied", executionSignature);
   };
 
   const handleOpenExplorer = async () => {
@@ -173,39 +175,38 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
     try {
       const canOpen = await Linking.canOpenURL(url);
       if (!canOpen) {
-        Alert.alert("Invalid link", "Unable to open explorer link.");
+        toast.error("Invalid link", "Unable to open explorer link.");
         return;
       }
 
       await Linking.openURL(url);
     } catch (error) {
-      Alert.alert("Open failed", String(error));
+      toast.error("Open failed", String(error));
     }
   };
 
   return (
     <View style={styles.page}>
-      <View style={styles.headerRow}>
-        <View
-          style={[
-            styles.modeBadge,
-            executionEnabled ? styles.modeBadgeEnabled : styles.modeBadgeDisabled,
-          ]}
-        >
-          <Text
+      {__DEV__ ? (
+        <View style={styles.headerRow}>
+          <View
             style={[
-              styles.modeBadgeText,
-              executionEnabled ? styles.modeBadgeTextEnabled : styles.modeBadgeTextDisabled,
+              styles.modeBadge,
+              executionEnabled ? styles.modeBadgeEnabled : styles.modeBadgeDisabled,
             ]}
           >
-            {executionEnabled ? "DEV: Execution ON" : "DEV: Execution OFF"}
-          </Text>
+            <Text
+              style={[
+                styles.modeBadgeText,
+                executionEnabled ? styles.modeBadgeTextEnabled : styles.modeBadgeTextDisabled,
+              ]}
+            >
+              {executionEnabled ? "DEV: Execution ON" : "DEV: Execution OFF"}
+            </Text>
+          </View>
         </View>
-      </View>
+      ) : null}
       <Text style={styles.title}>Review Trade</Text>
-      <Text style={styles.subtitle}>
-        Final execute wiring is next. This step confirms quote context before placing any trade.
-      </Text>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Route</Text>
@@ -216,9 +217,12 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Quote</Text>
-        <Text style={[styles.meta, quoteIsStale ? styles.metaDanger : null]}>
-          {quoteIsStale ? "Quote expired" : `Quote valid for ~${quoteTtlSeconds}s`}
-        </Text>
+        <View style={styles.ttlRow}>
+          <Clock size={14} color={quoteIsStale ? qsColors.danger : qsColors.textTertiary} />
+          <Text style={[styles.meta, quoteIsStale ? styles.metaDanger : null]}>
+            {quoteIsStale ? "Quote expired" : `Quote valid for ~${quoteTtlSeconds}s`}
+          </Text>
+        </View>
         <Text style={styles.line}>
           You pay: {formatAmount(params.amountUi, params.inputTokenDecimals)}
         </Text>
@@ -243,7 +247,17 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Execution status</Text>
-        <Text style={styles.line}>{executionBlockedReason ?? "Ready for execution."}</Text>
+        {executionBlockedReason ? (
+          <View style={styles.statusRow}>
+            <AlertCircle size={14} color={qsColors.warning} />
+            <Text style={styles.line}>{executionBlockedReason}</Text>
+          </View>
+        ) : (
+          <View style={styles.statusRow}>
+            <CircleCheck size={14} color={qsColors.success} />
+            <Text style={styles.line}>Ready for execution.</Text>
+          </View>
+        )}
         {executionCreationTime && executionTime ? (
           <Text
             style={[
@@ -279,16 +293,34 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
             Executed at {executionTime}
           </Text>
         ) : null}
+        {executionTone === "success" && executionSignature ? (
+          <View style={styles.successBanner}>
+            <CircleCheck size={16} color={qsColors.success} />
+            <Text style={styles.successText}>Trade executed successfully</Text>
+          </View>
+        ) : null}
+        {executionTone === "error" && !executionSignature ? (
+          <View style={styles.errorBanner}>
+            <AlertCircle size={16} color={qsColors.danger} />
+            <Text style={styles.errorBannerText}>Trade failed</Text>
+          </View>
+        ) : null}
         {executionSignature ? (
           <View style={styles.signatureRow}>
             <Text style={styles.signatureText}>
               Signature: {executionSignature.slice(0, 12)}...
             </Text>
             <Pressable style={styles.signatureButton} onPress={handleCopySignature}>
-              <Text style={styles.signatureButtonText}>Copy signature</Text>
+              <View style={styles.sigButtonRow}>
+                <Copy size={14} color={qsColors.textSecondary} />
+                <Text style={styles.signatureButtonText}>Copy</Text>
+              </View>
             </Pressable>
             <Pressable style={styles.signatureButton} onPress={handleOpenExplorer}>
-              <Text style={styles.signatureButtonText}>View on Solscan</Text>
+              <View style={styles.sigButtonRow}>
+                <ExternalLink size={14} color={qsColors.textSecondary} />
+                <Text style={styles.signatureButtonText}>Solscan</Text>
+              </View>
             </Pressable>
           </View>
         ) : null}
@@ -297,7 +329,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
           <Pressable
             style={styles.authButton}
             onPress={() => {
-              void ensureAuthenticated();
+              void authenticateFromWallet();
             }}
             disabled={status === "authenticating"}
           >
@@ -322,14 +354,20 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
           }}
           disabled={Boolean(executionBlockedReason) || isExecuting}
         >
-          <Text
-            style={[
-              styles.executeButtonText,
-              executionBlockedReason ? styles.executeButtonTextDisabled : null,
-            ]}
-          >
-            {isExecuting ? "Executing..." : "Execute Trade"}
-          </Text>
+          <View style={styles.buttonRow}>
+            <Zap
+              size={16}
+              color={executionBlockedReason ? qsColors.textTertiary : qsColors.layer0}
+            />
+            <Text
+              style={[
+                styles.executeButtonText,
+                executionBlockedReason ? styles.executeButtonTextDisabled : null,
+              ]}
+            >
+              {isExecuting ? "Executing..." : "Execute Trade"}
+            </Text>
+          </View>
         </Pressable>
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>Back to Trade</Text>
@@ -342,7 +380,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
     padding: qsSpacing.xl,
     gap: qsSpacing.md,
   },
@@ -358,11 +396,11 @@ const styles = StyleSheet.create({
   },
   modeBadgeEnabled: {
     borderColor: qsColors.success,
-    backgroundColor: "#103029",
+    backgroundColor: qsColors.successDark,
   },
   modeBadgeDisabled: {
     borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
   },
   modeBadgeText: {
     fontSize: 10,
@@ -373,23 +411,18 @@ const styles = StyleSheet.create({
     color: qsColors.success,
   },
   modeBadgeTextDisabled: {
-    color: qsColors.textSubtle,
+    color: qsColors.textTertiary,
   },
   title: {
     color: qsColors.textPrimary,
     fontSize: 28,
     fontWeight: "700",
   },
-  subtitle: {
-    color: qsColors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
   card: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer1,
     padding: qsSpacing.md,
     gap: 6,
   },
@@ -404,7 +437,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   meta: {
-    color: qsColors.textSubtle,
+    color: qsColors.textTertiary,
     fontSize: 11,
     marginTop: 2,
   },
@@ -413,6 +446,46 @@ const styles = StyleSheet.create({
   },
   metaDanger: {
     color: qsColors.danger,
+  },
+  ttlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  successBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: qsColors.successDark,
+    borderRadius: qsRadius.sm,
+    paddingHorizontal: qsSpacing.sm,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  successText: {
+    color: qsColors.success,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: qsColors.dangerDark,
+    borderRadius: qsRadius.sm,
+    paddingHorizontal: qsSpacing.sm,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  errorBannerText: {
+    color: qsColors.danger,
+    fontSize: 12,
+    fontWeight: "600",
   },
   errorText: {
     color: qsColors.danger,
@@ -423,7 +496,7 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.accent,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     paddingVertical: 8,
     alignItems: "center",
   },
@@ -446,9 +519,14 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer2,
     paddingVertical: 6,
     paddingHorizontal: 10,
+  },
+  sigButtonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   signatureButtonText: {
     color: qsColors.textSecondary,
@@ -458,6 +536,12 @@ const styles = StyleSheet.create({
   actions: {
     marginTop: "auto",
     gap: qsSpacing.sm,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
   },
   executeButton: {
     borderRadius: qsRadius.md,
@@ -469,18 +553,18 @@ const styles = StyleSheet.create({
     backgroundColor: qsColors.borderDefault,
   },
   executeButtonText: {
-    color: "#061326",
+    color: qsColors.layer0,
     fontSize: 14,
     fontWeight: "700",
   },
   executeButtonTextDisabled: {
-    color: qsColors.textSubtle,
+    color: qsColors.textTertiary,
   },
   backButton: {
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     paddingVertical: 10,
     alignItems: "center",
   },

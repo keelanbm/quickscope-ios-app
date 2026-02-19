@@ -8,6 +8,7 @@
     "scheme": "quickscope",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
+    "runtimeVersion": "0.1.0",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.quickscope.iosapp",
