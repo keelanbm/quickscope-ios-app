@@ -257,7 +257,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
             style={styles.searchInput}
           />
 
-          {params?.source ? (
+          {__DEV__ && params?.source ? (
             <View style={styles.deepLinkNote}>
               <Text style={styles.deepLinkTitle}>Opened from deep link</Text>
               {params.tokenAddress ? (
@@ -491,9 +491,9 @@ const styles = StyleSheet.create({
     paddingRight: qsSpacing.xs,
   },
   tokenImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: qsColors.bgCardSoft,
   },
   tokenTextColumn: {
@@ -501,12 +501,12 @@ const styles = StyleSheet.create({
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
   tokenName: {
     color: qsColors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   tagPill: {
     marginTop: 2,

@@ -4,6 +4,7 @@ export type WalletWatchlist = {
   list_id: number;
   name: string;
   description?: string;
+  isFavorites?: boolean;
 };
 
 export type TrackedWallet = {
@@ -11,6 +12,7 @@ export type TrackedWallet = {
   public_key: string;
   name: string;
   emoji?: string;
+  description?: string;
 };
 
 export type WalletWatchlistResponse = {
@@ -53,14 +55,57 @@ export type AllTransactionsTableResponse = {
 export async function fetchWalletWatchlists(
   rpcClient: RpcClient
 ): Promise<WalletWatchlist[]> {
-  return rpcClient.call<WalletWatchlist[]>("private/getAllWalletWatchlists", []);
+  const lists = await rpcClient.call<WalletWatchlist[]>("private/getAllWalletWatchlists", []);
+  return (lists ?? []).map((list) => ({
+    ...list,
+    isFavorites: list.name === "favorites",
+  }));
+}
+
+export async function createWalletWatchlist(
+  rpcClient: RpcClient,
+  name: string,
+  description = ""
+): Promise<number> {
+  const params = { name, description };
+  return rpcClient.call<number>("private/createWalletWatchlist", Object.values(params));
+}
+
+export async function addWalletToWatchlist(
+  rpcClient: RpcClient,
+  params: {
+    watchlistId: number;
+    publicKey: string;
+    name: string;
+    description?: string;
+    emoji: string;
+  }
+): Promise<boolean> {
+  const payload = {
+    watchlistId: params.watchlistId,
+    publicKey: params.publicKey,
+    name: params.name,
+    description: params.description ?? "",
+    emoji: params.emoji,
+  };
+  return rpcClient.call<boolean>("private/addToWalletWatchlist", Object.values(payload));
+}
+
+export async function removeWalletFromWatchlist(
+  rpcClient: RpcClient,
+  watchlistId: number,
+  publicKey: string
+): Promise<boolean> {
+  const params = { watchlistId, publicKey };
+  return rpcClient.call<boolean>("private/removeWalletFromWatchlist", Object.values(params));
 }
 
 export async function fetchWalletWatchlist(
   rpcClient: RpcClient,
   watchlistId: number
 ): Promise<WalletWatchlistResponse> {
-  return rpcClient.call<WalletWatchlistResponse>("private/getWalletWatchlist", [watchlistId]);
+  const params = { watchlistId };
+  return rpcClient.call<WalletWatchlistResponse>("private/getWalletWatchlist", Object.values(params));
 }
 
 export async function fetchWalletActivity(

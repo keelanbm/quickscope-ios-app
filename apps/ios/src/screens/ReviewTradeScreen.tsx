@@ -6,6 +6,7 @@ import * as Clipboard from "expo-clipboard";
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
 import {
   getQuoteTtlSecondsRemaining,
   isQuoteStale,
@@ -51,7 +52,8 @@ function formatTime(value: number): string {
 
 export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: ReviewTradeScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const { walletAddress, hasValidAccessToken, authenticateFromWallet, status } = useAuthSession();
+  const { walletAddress, hasValidAccessToken, status } = useAuthSession();
+  const { ensureAuthenticated } = useWalletConnect();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionError, setExecutionError] = useState<string | undefined>();
@@ -295,7 +297,7 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
           <Pressable
             style={styles.authButton}
             onPress={() => {
-              void authenticateFromWallet();
+              void ensureAuthenticated();
             }}
             disabled={status === "authenticating"}
           >

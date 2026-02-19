@@ -1,8 +1,9 @@
 import { PropsWithChildren } from "react";
 
-import { useAccounts, useModal } from "@phantom/react-native-sdk";
 import { Button, StyleSheet, Text, View } from "react-native";
 
+import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
 import { qsColors, qsSpacing } from "@/src/theme/tokens";
 import { SectionCard } from "@/src/ui/SectionCard";
 
@@ -16,10 +17,10 @@ export function AuthRouteGate({
   subtitle,
   children,
 }: AuthRouteGateProps) {
-  const { isConnected } = useAccounts();
-  const { open } = useModal();
+  const { hasValidAccessToken } = useAuthSession();
+  const { open } = useWalletConnect();
 
-  if (isConnected) {
+  if (hasValidAccessToken) {
     return <>{children}</>;
   }
 

@@ -37,7 +37,8 @@ type ScopeTab = {
 const tabs: ScopeTab[] = [
   { id: "new-pairs", label: "New Pairs" },
   { id: "momentum", label: "Momentum" },
-  { id: "scan-surge", label: "Scan Surge" },
+  { id: "graduated", label: "Graduated" },
+  { id: "scan-feed", label: "Scan Feed" },
 ];
 
 const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
@@ -93,18 +94,6 @@ function formatAgeFromSeconds(unixSeconds: number): string {
   }
 
   return `${Math.floor(elapsedSeconds / 604800)}w`;
-}
-
-function tabSubtitle(activeTab: ScopeTabId): string {
-  if (activeTab === "momentum") {
-    return "Sorted by 1h transaction count";
-  }
-
-  if (activeTab === "scan-surge") {
-    return "Sorted by 1h telegram mentions";
-  }
-
-  return "Sorted by newest pairs";
 }
 
 export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
@@ -230,6 +219,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const stopRowPress = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
   }, []);
+  const chipHitSlop = { top: 6, bottom: 6, left: 6, right: 6 };
 
   return (
     <FlatList
@@ -248,13 +238,6 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
       }
       ListHeaderComponent={
         <View style={styles.headerWrap}>
-          <Text style={styles.title}>Scope</Text>
-          <Text style={styles.subtitle}>{tabSubtitle(activeTab)}</Text>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{rowCountText}</Text>
-            <Text style={styles.metaText}>{updatedText}</Text>
-          </View>
-
           <View style={styles.tabsWrap}>
             {tabs.map((tab) => {
               const active = tab.id === activeTab;
@@ -263,6 +246,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                   key={tab.id}
                   onPress={() => setActiveTab(tab.id)}
                   style={[styles.tabButton, active ? styles.tabButtonActive : null]}
+                  hitSlop={chipHitSlop}
                 >
                   <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
                     {tab.label}
@@ -270,9 +254,17 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                 </Pressable>
               );
             })}
+            <Pressable style={styles.filterButton} hitSlop={chipHitSlop}>
+              <Text style={styles.filterButtonText}>Filter</Text>
+            </Pressable>
           </View>
 
-          {params?.source ? (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaText}>{rowCountText}</Text>
+            <Text style={styles.metaText}>{updatedText}</Text>
+          </View>
+
+          {__DEV__ && params?.source ? (
             <View style={styles.deepLinkNote}>
               <Text style={styles.deepLinkTitle}>Opened from deep link</Text>
               <Text style={styles.deepLinkBody}>
@@ -375,15 +367,11 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                 <Pressable
                   onPress={(event) => {
                     stopRowPress(event);
-                    navigation.navigate("Trade", {
-                      source: "deep-link",
-                      tokenAddress: item.mint,
-                      outputMintDecimals: item.tokenDecimals,
-                    });
+                    handleOpenTokenDetail(item);
                   }}
                   hitSlop={6}
                 >
-                  <Text style={styles.tradeText}>Search</Text>
+                  <Text style={styles.tradeText}>Trade</Text>
                 </Pressable>
               </View>
             </View>
@@ -418,15 +406,6 @@ const styles = StyleSheet.create({
     paddingBottom: qsSpacing.sm,
     gap: qsSpacing.sm,
   },
-  title: {
-    color: qsColors.textPrimary,
-    fontSize: 28,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: qsColors.textMuted,
-    fontSize: 13,
-  },
   metaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -445,8 +424,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.lg,
-    paddingHorizontal: qsSpacing.md,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     backgroundColor: qsColors.bgCardSoft,
   },
   tabButtonActive: {
@@ -455,11 +434,24 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
   },
   tabButtonTextActive: {
     color: qsColors.accent,
+  },
+  filterButton: {
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    borderRadius: qsRadius.lg,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: qsColors.bgCardSoft,
+  },
+  filterButtonText: {
+    color: qsColors.textSecondary,
+    fontSize: 11,
+    fontWeight: "600",
   },
   deepLinkNote: {
     borderWidth: 1,
@@ -521,7 +513,7 @@ const styles = StyleSheet.create({
   },
   tableHeaderText: {
     color: qsColors.textSubtle,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.4,
@@ -541,7 +533,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    paddingVertical: qsSpacing.xs,
+    paddingVertical: 6,
     paddingHorizontal: qsSpacing.sm,
     marginTop: qsSpacing.xs,
     backgroundColor: qsColors.bgCard,
@@ -568,12 +560,12 @@ const styles = StyleSheet.create({
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
   tokenName: {
     color: qsColors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   tagPill: {
     marginTop: 2,
@@ -594,11 +586,11 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
     fontVariant: ["tabular-nums"],
   },
   metricChange: {
-    fontSize: 12,
+    fontSize: 11,
     fontVariant: ["tabular-nums"],
     fontWeight: "600",
   },
@@ -620,7 +612,7 @@ const styles = StyleSheet.create({
   },
   tradeText: {
     color: qsColors.accent,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
   },
   emptyBox: {

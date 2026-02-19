@@ -11,7 +11,28 @@ export type TokenWatchlist = {
 export async function fetchTokenWatchlists(
   rpcClient: RpcClient
 ): Promise<TokenWatchlist[]> {
-  return rpcClient.call<TokenWatchlist[]>("private/getAllTokenWatchlists", []);
+  const lists = await rpcClient.call<TokenWatchlist[]>("private/getAllTokenWatchlists", []);
+  return (lists ?? []).map((list) => ({
+    ...list,
+    isFavorites: list.name === "favorites",
+  }));
+}
+
+export async function createTokenWatchlist(
+  rpcClient: RpcClient,
+  name: string,
+  description = ""
+): Promise<number> {
+  const params = { name, description };
+  return rpcClient.call<number>("private/createTokenWatchlist", Object.values(params));
+}
+
+export async function deleteTokenWatchlist(
+  rpcClient: RpcClient,
+  watchlistId: number
+): Promise<boolean> {
+  const params = { watchlistId };
+  return rpcClient.call<boolean>("private/deleteTokenWatchlist", Object.values(params));
 }
 
 export async function addTokenToWatchlist(
@@ -19,7 +40,8 @@ export async function addTokenToWatchlist(
   watchlistId: number,
   tokenAddress: string
 ): Promise<boolean> {
-  return rpcClient.call<boolean>("private/addToTokenWatchlist", [watchlistId, tokenAddress]);
+  const params = { watchlistId, token: tokenAddress };
+  return rpcClient.call<boolean>("private/addToTokenWatchlist", Object.values(params));
 }
 
 export async function removeTokenFromWatchlist(
@@ -27,5 +49,6 @@ export async function removeTokenFromWatchlist(
   watchlistId: number,
   tokenAddress: string
 ): Promise<boolean> {
-  return rpcClient.call<boolean>("private/removeTokenFromWatchlist", [watchlistId, tokenAddress]);
+  const params = { watchlistId, token: tokenAddress };
+  return rpcClient.call<boolean>("private/removeTokenFromWatchlist", Object.values(params));
 }

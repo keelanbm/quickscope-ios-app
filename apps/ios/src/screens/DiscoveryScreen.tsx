@@ -37,7 +37,6 @@ type DiscoveryTab = {
 
 const tabs: DiscoveryTab[] = [
   { id: "trending", label: "Trending" },
-  { id: "scan-feed", label: "Scan Feed" },
   { id: "gainers", label: "Gainers" },
 ];
 
@@ -94,18 +93,6 @@ function formatAgeFromSeconds(unixSeconds: number): string {
     return `${Math.floor(elapsedSeconds / 86400)}d`;
   }
   return `${Math.floor(elapsedSeconds / 604800)}w`;
-}
-
-function tabSubtitle(activeTab: DiscoveryTabId): string {
-  if (activeTab === "scan-feed") {
-    return "Sorted by 1h scan mentions";
-  }
-
-  if (activeTab === "gainers") {
-    return "Sorted by 1h percentage gain";
-  }
-
-  return "Sorted by 1h volume";
 }
 
 export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
@@ -254,6 +241,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   const stopRowPress = useCallback((event: GestureResponderEvent) => {
     event.stopPropagation();
   }, []);
+  const chipHitSlop = { top: 6, bottom: 6, left: 6, right: 6 };
 
   return (
     <FlatList
@@ -272,13 +260,6 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
       }
       ListHeaderComponent={
         <View style={styles.headerWrap}>
-          <Text style={styles.title}>Discovery</Text>
-          <Text style={styles.subtitle}>{tabSubtitle(activeTab)}</Text>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaText}>{rowCountText}</Text>
-            <Text style={styles.metaText}>{updatedText}</Text>
-          </View>
-
           <View style={styles.tabsWrap}>
             {tabs.map((tab) => {
               const active = tab.id === activeTab;
@@ -287,6 +268,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                   key={tab.id}
                   onPress={() => setActiveTab(tab.id)}
                   style={[styles.tabButton, active ? styles.tabButtonActive : null]}
+                  hitSlop={chipHitSlop}
                 >
                   <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
                     {tab.label}
@@ -294,9 +276,17 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                 </Pressable>
               );
             })}
+            <Pressable style={styles.filterButton} hitSlop={chipHitSlop}>
+              <Text style={styles.filterButtonText}>Filter</Text>
+            </Pressable>
           </View>
 
-          {selectedTokenAddress ? (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaText}>{rowCountText}</Text>
+            <Text style={styles.metaText}>{updatedText}</Text>
+          </View>
+
+          {__DEV__ && selectedTokenAddress ? (
             <View style={styles.deepLinkNote}>
               <Text style={styles.deepLinkTitle}>Opened from deep link</Text>
               <Text style={styles.deepLinkBody}>{selectedTokenAddress}</Text>
@@ -398,11 +388,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                   style={styles.tradeButton}
                   onPress={(event) => {
                     stopRowPress(event);
-                    rootNavigation?.navigate("TradeEntry", {
-                      source: "deep-link",
-                      tokenAddress: item.mint,
-                      outputMintDecimals: item.tokenDecimals,
-                    });
+                    handleOpenTokenDetail(item);
                   }}
                 >
                   <Text style={styles.tradeButtonText}>Trade</Text>
@@ -413,7 +399,6 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             <View style={styles.rowFooter}>
               <Text numberOfLines={1} style={styles.footerMeta}>
                 1h Vol {formatCompactUsd(item.oneHourVolumeUsd)} • Tx {item.oneHourTxCount}
-                {activeTab === "scan-feed" ? ` • Scans ${item.scanMentionsOneHour}` : ""}
               </Text>
               <View style={styles.linksRow}>
                 {item.twitterUrl ? (
@@ -481,22 +466,13 @@ const styles = StyleSheet.create({
     backgroundColor: qsColors.bgCanvas,
   },
   content: {
-    paddingHorizontal: qsSpacing.xl,
-    paddingTop: qsSpacing.xl,
-    paddingBottom: 140,
+    paddingHorizontal: qsSpacing.lg,
+    paddingTop: qsSpacing.lg,
+    paddingBottom: 120,
   },
   headerWrap: {
     gap: qsSpacing.sm,
     marginBottom: qsSpacing.xs,
-  },
-  title: {
-    color: qsColors.textPrimary,
-    fontSize: 30,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: qsColors.textMuted,
-    fontSize: 14,
   },
   metaRow: {
     flexDirection: "row",
@@ -504,20 +480,22 @@ const styles = StyleSheet.create({
   },
   metaText: {
     color: qsColors.textSubtle,
-    fontSize: 12,
+    fontSize: 11,
   },
   tabsWrap: {
     flexDirection: "row",
     gap: qsSpacing.sm,
     marginTop: qsSpacing.sm,
+    flexWrap: "wrap",
+    alignItems: "center",
   },
   tabButton: {
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     backgroundColor: qsColors.bgCard,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
   tabButtonActive: {
     backgroundColor: "#2a2f4a",
@@ -526,10 +504,23 @@ const styles = StyleSheet.create({
   tabButtonText: {
     color: qsColors.textMuted,
     fontWeight: "600",
-    fontSize: 13,
+    fontSize: 11,
   },
   tabButtonTextActive: {
     color: qsColors.textPrimary,
+  },
+  filterButton: {
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCardSoft,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  filterButtonText: {
+    color: qsColors.textSecondary,
+    fontSize: 11,
+    fontWeight: "600",
   },
   deepLinkNote: {
     borderRadius: qsRadius.md,
@@ -585,12 +576,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: qsColors.borderDefault,
     backgroundColor: qsColors.bgCardSoft,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: qsSpacing.sm,
   },
   tableHeaderText: {
     color: qsColors.textSubtle,
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "600",
     textTransform: "uppercase",
   },
@@ -609,8 +600,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: qsColors.borderDefault,
     paddingHorizontal: qsSpacing.sm,
-    paddingTop: qsSpacing.sm,
-    paddingBottom: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
     backgroundColor: qsColors.bgCanvas,
   },
   rowItemHighlighted: {
@@ -619,7 +610,7 @@ const styles = StyleSheet.create({
   rowMain: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 48,
+    minHeight: 44,
   },
   tokenColumn: {
     flex: 1,
@@ -628,9 +619,9 @@ const styles = StyleSheet.create({
     gap: qsSpacing.sm,
   },
   tokenImage: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: "#2c3347",
   },
   tokenTextColumn: {
@@ -639,12 +630,12 @@ const styles = StyleSheet.create({
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
   },
   tokenName: {
     color: qsColors.textMuted,
-    fontSize: 11,
+    fontSize: 10,
   },
   tagPill: {
     color: qsColors.textSubtle,
@@ -661,19 +652,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   metricColumn: {
-    width: 64,
+    width: 58,
     alignItems: "flex-end",
     justifyContent: "center",
     paddingLeft: 4,
   },
   metricValue: {
     color: qsColors.textSecondary,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "500",
+    fontVariant: ["tabular-nums"],
   },
   metricChange: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   metricChangePositive: {
     color: qsColors.success,
@@ -682,22 +675,22 @@ const styles = StyleSheet.create({
     color: qsColors.danger,
   },
   actionsColumn: {
-    width: 72,
+    width: 64,
     alignItems: "flex-end",
     gap: 6,
   },
   starText: {
     color: "#ffe08f",
-    fontSize: 18,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 16,
   },
   tradeButton: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     backgroundColor: "#27204a",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   tradeButtonText: {
     color: qsColors.textPrimary,

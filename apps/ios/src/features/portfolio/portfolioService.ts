@@ -50,6 +50,26 @@ export type TraderTokenPosition = {
   };
 };
 
+export type TraderPositions = {
+  trader: string;
+  sol_price_usd: number;
+  positions: Array<{
+    balance: number;
+    bought_usd?: number;
+    sold_usd?: number;
+    total_pnl_quote?: number;
+    total_pnl_change_proportion?: number;
+    token_info?: {
+      mint?: string;
+      name?: string;
+      symbol?: string;
+      image_uri?: string;
+      platform?: string;
+      exchange?: string;
+    };
+  }>;
+};
+
 export async function fetchTraderOverview(
   rpcClient: RpcClient,
   account: string
@@ -73,4 +93,17 @@ export async function fetchPositionPnl(
   mint: string
 ): Promise<TraderTokenPosition> {
   return rpcClient.call<TraderTokenPosition>("public/getPositionPnl", [account, mint]);
+}
+
+export async function fetchTraderPositions(
+  rpcClient: RpcClient,
+  account: string,
+  filter: {
+    include_zero_balances?: boolean;
+    limit?: number;
+    offset?: number;
+    sort_column?: string;
+  } = {}
+): Promise<TraderPositions> {
+  return rpcClient.call<TraderPositions>("public/getTraderPositions", [account, filter]);
 }

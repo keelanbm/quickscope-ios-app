@@ -9,6 +9,7 @@ import {
 import { Alert, Button, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
 import { requestAuthChallenge } from "@/src/features/auth/authService";
 import {
   ParityCheckResult,
@@ -54,10 +55,10 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
     sessionWalletAddress,
     hasValidAccessToken,
     hasValidRefreshToken,
-    authenticateFromWallet,
     refreshSession,
     clearSession,
   } = useAuthSession();
+  const { ensureAuthenticated } = useWalletConnect();
   const { state: wsState, connect: connectWs, disconnect: disconnectWs } =
     useSlotTradeUpdatesSpike(wsHost);
   const [challengePreview, setChallengePreview] = useState<string>("");
@@ -130,7 +131,7 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
   };
 
   const handleAuthenticateSession = async () => {
-    await authenticateFromWallet();
+    await ensureAuthenticated();
   };
 
   const handleRefreshSession = async () => {

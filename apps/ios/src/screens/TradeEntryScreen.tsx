@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
 import {
   getQuoteTtlSecondsRemaining,
   isQuoteStale,
@@ -13,6 +14,7 @@ import {
   requestSwapQuote,
   type QuoteResult,
 } from "@/src/features/trade/tradeQuoteService";
+import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, TradeEntryRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
@@ -23,6 +25,8 @@ type TradeEntryScreenProps = {
   rpcClient: RpcClient;
   params?: TradeEntryRouteParams;
 };
+
+type OrderType = "market" | "instant";
 
 function formatAtomic(value: number | undefined): string {
   if (value === undefined) {
@@ -58,11 +62,15 @@ function parseAmount(value: string): number {
 
 export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const { walletAddress, hasValidAccessToken, authenticateFromWallet, status } = useAuthSession();
+  const { walletAddress, hasValidAccessToken, status } = useAuthSession();
+  const { ensureAuthenticated } = useWalletConnect();
   const [amount, setAmount] = useState(params?.amount ?? "");
+  const [orderType, setOrderType] = useState<OrderType>("market");
+  const [priceTarget, setPriceTarget] = useState("");
   const [quote, setQuote] = useState<QuoteResult | undefined>();
   const [quoteError, setQuoteError] = useState<string | undefined>();
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+  const [isExecutingInstant, setIsExecutingInstant] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const inputMint = params?.inputMint ?? SOL_MINT;
@@ -179,12 +187,80 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
     });
   };
 
+  const handleInstantTrade = async () => {
+    if (!walletAddress) {
+      Alert.alert("Wallet required", "Connect your wallet to execute trades.");
+      return;
+    }
+
+    if (!outputMint) {
+      Alert.alert("Token required", "Select a token before trading.");
+      return;
+    }
+
+    if (!hasValidAccessToken) {
+      setQuoteError("Authenticate session before trading.");
+      return;
+    }
+
+    const amountUi = parseAmount(amount);
+    if (!Number.isFinite(amountUi) || amountUi <= 0) {
+      Alert.alert("Invalid amount", "Enter an amount greater than 0.");
+      return;
+    }
+
+    setIsExecutingInstant(true);
+    setQuoteError(undefined);
+
+    try {
+      const nextQuote = await requestSwapQuote(rpcClient, {
+        walletAddress,
+        inputMint,
+        outputMint,
+        amountUi,
+        inputTokenDecimals: inputMintDecimals,
+        outputTokenDecimals: outputMintDecimals,
+      });
+
+      await requestSwapExecution(rpcClient, {
+        walletAddress,
+        inputMint: nextQuote.inputMint,
+        outputMint,
+        amountAtomic: nextQuote.amountAtomic,
+        slippageBps: nextQuote.slippageBps,
+      });
+
+      Alert.alert("Trade submitted", "Instant trade submitted.");
+    } catch (error) {
+      Alert.alert("Trade failed", String(error));
+    } finally {
+      setIsExecutingInstant(false);
+    }
+  };
+
   return (
     <View style={styles.page}>
       <Text style={styles.title}>Trade</Text>
       <Text style={styles.subtitle}>
         Trade execution flow is being finalized. Token context and amount capture are ready.
       </Text>
+
+      <View style={styles.orderTypeRow}>
+        {(["instant", "market"] as OrderType[]).map((type) => {
+          const isActive = orderType === type;
+          return (
+            <Pressable
+              key={type}
+              style={[styles.orderTypePill, isActive && styles.orderTypePillActive]}
+              onPress={() => setOrderType(type)}
+            >
+              <Text style={[styles.orderTypeText, isActive && styles.orderTypeTextActive]}>
+                {type === "instant" ? "Instant" : "Market"}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       <View style={styles.contextCard}>
         {summaryLines.map((line) => (
@@ -206,6 +282,21 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
         />
       </View>
 
+      {orderType === "market" ? (
+        <View style={styles.amountBlock}>
+          <Text style={styles.label}>Target price (optional)</Text>
+          <TextInput
+            value={priceTarget}
+            onChangeText={setPriceTarget}
+            keyboardType="decimal-pad"
+            placeholder="0.0"
+            placeholderTextColor={qsColors.textSubtle}
+            style={styles.amountInput}
+          />
+          <Text style={styles.helperText}>Presets will be wired to live price next.</Text>
+        </View>
+      ) : null}
+
       {!hasValidAccessToken ? (
         <View style={styles.authCard}>
           <Text style={styles.authTitle}>Session required</Text>
@@ -213,7 +304,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
           <Pressable
             style={styles.authButton}
             onPress={() => {
-              void authenticateFromWallet();
+              void ensureAuthenticated();
             }}
             disabled={status === "authenticating"}
           >
@@ -224,7 +315,7 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
         </View>
       ) : null}
 
-      {quote ? (
+      {orderType === "market" && quote ? (
         <View style={styles.quoteCard}>
           <Text style={styles.quoteTitle}>Quote ready</Text>
           <Text style={styles.quoteMeta}>
@@ -269,12 +360,22 @@ export function TradeEntryScreen({ rpcClient, params }: TradeEntryScreenProps) {
       ) : null}
 
       <View style={styles.actions}>
-        <Pressable style={styles.primaryButton} onPress={handleGetQuote} disabled={isLoadingQuote}>
+        <Pressable
+          style={styles.primaryButton}
+          onPress={orderType === "instant" ? handleInstantTrade : handleGetQuote}
+          disabled={isLoadingQuote || isExecutingInstant}
+        >
           <Text style={styles.primaryButtonText}>
-            {isLoadingQuote ? "Getting Quote..." : "Get Quote"}
+            {orderType === "instant"
+              ? isExecutingInstant
+                ? "Trading..."
+                : "Trade Instantly"
+              : isLoadingQuote
+                ? "Getting Quote..."
+                : "Get Quote"}
           </Text>
         </Pressable>
-        {quote ? (
+        {orderType === "market" && quote ? (
           <Pressable style={styles.reviewButton} onPress={handleReviewTrade}>
             <Text style={styles.reviewButtonText}>Review Trade</Text>
           </Pressable>
@@ -307,6 +408,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  orderTypeRow: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+  },
+  orderTypePill: {
+    borderRadius: qsRadius.lg,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.bgCard,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  orderTypePillActive: {
+    borderColor: qsColors.accent,
+    backgroundColor: "rgba(78, 163, 255, 0.15)",
+  },
+  orderTypeText: {
+    color: qsColors.textSubtle,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  orderTypeTextActive: {
+    color: qsColors.textPrimary,
+  },
   contextCard: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
@@ -335,6 +460,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingHorizontal: qsSpacing.md,
     paddingVertical: 10,
+  },
+  helperText: {
+    color: qsColors.textSubtle,
+    fontSize: 11,
   },
   quoteCard: {
     borderWidth: 1,

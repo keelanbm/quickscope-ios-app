@@ -15,7 +15,7 @@ export class RpcClient {
     this.apiHost = env.apiHost;
   }
 
-  async call<T>(method: string, params: unknown[]): Promise<T> {
+  async call<T>(method: string, params: unknown[] | Record<string, unknown> = []): Promise<T> {
     const response = await fetch(`${this.apiHost}/${method}`, {
       method: "POST",
       credentials: "include",

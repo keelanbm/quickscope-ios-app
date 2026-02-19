@@ -46,6 +46,7 @@ Out of scope for v1:
 - `docs/spike-auth-api-parity-2026-02-04.md` - Initial Week 1 auth/API smoke-check report
 - `docs/spike-auth-api-parity-2026-02-04.results.json` - Raw output from automated API smoke checks
 - `docs/phantom-sdk-migration-plan.md` - Upgrade plan for Expo 53 + new Phantom SDK
+- `docs/design-principles.md` - Lightweight UI principles to keep screens consistent
 - `tasks/prd-ios-companion-app.md` - Current product requirements document
 
 ## Planned App Architecture (Summary)
