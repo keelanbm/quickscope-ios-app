@@ -121,27 +121,22 @@ export function TokenDetailHeader({
         </View>
       </View>
 
-      {/* Price row: MC + change */}
+      {/* Price row: MC + change  |  social icons right */}
       <View style={styles.priceRow}>
-        <Text style={styles.marketCap}>{formatCompactUsd(marketCapUsd)}</Text>
-        {oneHourChange !== undefined && (
-          <Text
-            style={[
-              styles.change,
-              oneHourChange >= 0 ? styles.changePositive : styles.changeNegative,
-            ]}
-          >
-            {formatPercent(oneHourChange)}
-          </Text>
-        )}
-      </View>
-
-      {/* Platform + social chips row */}
-      <View style={styles.metaRow}>
-        <View style={styles.metaLeft}>
-          <Text style={styles.platformPill}>{platformLabel}</Text>
-          {socialLinks.length > 0 && <SocialChips links={socialLinks} size="sm" />}
+        <View style={styles.priceLeft}>
+          <Text style={styles.marketCap}>{formatCompactUsd(marketCapUsd)}</Text>
+          {oneHourChange !== undefined && (
+            <Text
+              style={[
+                styles.change,
+                oneHourChange >= 0 ? styles.changePositive : styles.changeNegative,
+              ]}
+            >
+              {formatPercent(oneHourChange)}
+            </Text>
+          )}
         </View>
+        {socialLinks.length > 0 && <SocialChips links={socialLinks} size="sm" />}
       </View>
     </View>
   );
@@ -229,6 +224,11 @@ const styles = StyleSheet.create({
   /* Price row */
   priceRow: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  priceLeft: {
+    flexDirection: "row",
     alignItems: "baseline",
     gap: qsSpacing.sm,
   },
@@ -246,30 +246,5 @@ const styles = StyleSheet.create({
   },
   changeNegative: {
     color: qsColors.sellRed,
-  },
-
-  /* Meta row */
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingBottom: qsSpacing.xs,
-  },
-  metaLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: qsSpacing.sm,
-    flex: 1,
-  },
-  platformPill: {
-    color: qsColors.textTertiary,
-    backgroundColor: qsColors.layer2,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    borderRadius: qsRadius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    fontSize: 10,
-    fontWeight: qsTypography.weight.semi,
-    overflow: "hidden",
   },
 });

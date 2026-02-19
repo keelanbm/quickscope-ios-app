@@ -24,7 +24,7 @@ import {
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, RootTabs, ScopeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Copy, Crosshair, Star, Zap } from "@/src/ui/icons";
+import { ChevronDown, Copy, Crosshair, SlidersHorizontal, Star, Zap, SolanaIcon } from "@/src/ui/icons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
 
@@ -39,9 +39,10 @@ type ScopeTab = {
 };
 
 const tabs: ScopeTab[] = [
-  { id: "new-pairs", label: "New Pairs" },
-  { id: "momentum", label: "Momentum" },
-  { id: "scan-surge", label: "Scan Surge" },
+  { id: "new-pairs", label: "New" },
+  { id: "momentum", label: "Movers" },
+  { id: "graduated", label: "Graduated" },
+  { id: "scan-surge", label: "Scans" },
 ];
 
 const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
@@ -78,21 +79,6 @@ function formatAge(unixSeconds: number): string {
   if (elapsed < 86400) return `${Math.floor(elapsed / 3600)}h`;
   if (elapsed < 604800) return `${Math.floor(elapsed / 86400)}d`;
   return `${Math.floor(elapsed / 604800)}w`;
-}
-
-/** Short launchpad label */
-function launchpadLabel(platform?: string, exchange?: string): string | null {
-  const raw = (platform || exchange || "").toLowerCase();
-  if (!raw) return null;
-  if (raw.includes("pump")) return "PUMP";
-  if (raw.includes("believe")) return "BLV";
-  if (raw.includes("meteora")) return "MET";
-  if (raw.includes("raydium")) return "RAY";
-  if (raw.includes("orca")) return "ORCA";
-  if (raw.includes("bonk")) return "BONK";
-  if (raw.includes("moonshot")) return "MOON";
-  if (raw.includes("jupiter") || raw.includes("jup")) return "JUP";
-  return raw.slice(0, 4).toUpperCase();
 }
 
 /* ─── Component ─── */
@@ -277,14 +263,17 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
             </View>
           ) : null}
 
-          {/* ── Tab pills ── */}
+          {/* ── Underline tabs ── */}
           <View style={styles.tabsWrap}>
             {tabs.map((tab) => {
               const active = tab.id === activeTab;
               return (
                 <Pressable
                   key={tab.id}
-                  onPress={() => setActiveTab(tab.id)}
+                  onPress={() => {
+                    haptics.selection();
+                    setActiveTab(tab.id);
+                  }}
                   style={[styles.tabButton, active ? styles.tabButtonActive : null]}
                 >
                   <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
@@ -294,11 +283,25 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
               );
             })}
           </View>
+
+          {/* ── Filter row ── */}
+          <View style={styles.filterRow}>
+            <Pressable style={styles.launchpadDropdown}>
+              <Text style={styles.launchpadDropdownText}>All Launchpads</Text>
+              <ChevronDown size={14} color={qsColors.textSecondary} />
+            </Pressable>
+            <Pressable style={styles.solAmountButton}>
+              <SolanaIcon size={12} />
+              <Text style={styles.solAmountText}>0.1 SOL</Text>
+            </Pressable>
+            <Pressable style={styles.filterIconButton} hitSlop={8}>
+              <SlidersHorizontal size={18} color={qsColors.textSecondary} />
+            </Pressable>
+          </View>
         </View>
       }
       renderItem={({ item }) => {
         const isStarred = Boolean(starredMints[item.mint]);
-        const badge = launchpadLabel(item.platform, item.exchange);
         const isPositive = item.oneHourChangePercent >= 0;
         const age = formatAge(item.mintedAtSeconds);
 
@@ -312,17 +315,12 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
                 style={styles.tokenImage}
               />
 
-              {/* Symbol + badge + actions */}
+              {/* Symbol + age + actions */}
               <View style={styles.identityCol}>
                 <View style={styles.symbolRow}>
                   <Text numberOfLines={1} style={styles.tokenSymbol}>
                     {item.symbol || "???"}
                   </Text>
-                  {badge ? (
-                    <View style={styles.launchBadge}>
-                      <Text style={styles.launchBadgeText}>{badge}</Text>
-                    </View>
-                  ) : null}
                   <Text style={styles.agePill}>{age}</Text>
                   <Pressable
                     onPress={(e) => {
@@ -431,20 +429,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: qsSpacing.lg,
   },
 
-  // ── Tabs ──
+  // ── Underline tabs ──
   tabsWrap: {
     flexDirection: "row",
     gap: qsSpacing.sm,
-    flexWrap: "wrap",
+    borderBottomWidth: 1,
+    borderBottomColor: qsColors.borderDefault,
   },
   tabButton: {
-    borderRadius: qsRadius.pill,
-    backgroundColor: qsColors.layer2,
     paddingVertical: qsSpacing.sm,
-    paddingHorizontal: qsSpacing.lg,
+    paddingHorizontal: qsSpacing.xs,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
   tabButtonActive: {
-    backgroundColor: qsColors.accent,
+    borderBottomColor: qsColors.accent,
   },
   tabButtonText: {
     color: qsColors.textTertiary,
@@ -453,6 +452,51 @@ const styles = StyleSheet.create({
   },
   tabButtonTextActive: {
     color: qsColors.textPrimary,
+  },
+
+  // ── Filter row ──
+  filterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.sm,
+  },
+  launchpadDropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: qsColors.layer2,
+    borderRadius: qsRadius.sm,
+    paddingVertical: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.md,
+  },
+  launchpadDropdownText: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
+    fontWeight: qsTypography.weight.semi,
+  },
+  solAmountButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: qsRadius.sm,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    paddingVertical: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.md,
+  },
+  solAmountText: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
+    fontWeight: qsTypography.weight.semi,
+  },
+  filterIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: qsRadius.sm,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // ── Deep link / error / loading ──
@@ -527,20 +571,8 @@ const styles = StyleSheet.create({
     fontWeight: qsTypography.weight.bold,
     flexShrink: 1,
   },
-  launchBadge: {
-    backgroundColor: qsColors.layer2,
-    borderRadius: qsRadius.xs,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  launchBadgeText: {
-    fontSize: 8,
-    fontWeight: qsTypography.weight.bold,
-    color: qsColors.textSecondary,
-    letterSpacing: 0.3,
-  },
   agePill: {
-    color: qsColors.buyGreen,
+    color: qsColors.accent,
     fontSize: 10,
     fontWeight: qsTypography.weight.semi,
   },

@@ -338,15 +338,13 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
           {/* ── Top Movers (above tabs) ── */}
           {!isInitialLoading && topMovers.length > 0 ? (
             <View style={styles.topMoversSection}>
-              <Text style={styles.topMoversHeader}>Top Movers</Text>
+              <Text style={styles.topMoversHeader}>Scan Feed</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.topMoversScroll}
               >
                 {topMovers.map((token) => {
-                  const changeColor =
-                    token.oneHourChangePercent >= 0 ? qsColors.buyGreen : qsColors.sellRed;
                   return (
                     <Pressable
                       key={token.mint}
@@ -359,9 +357,6 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                       />
                       <Text style={styles.topMoverSymbol} numberOfLines={1}>
                         {token.symbol || "Unknown"}
-                      </Text>
-                      <Text style={[styles.topMoverChange, { color: changeColor }]}>
-                        {formatPercent(token.oneHourChangePercent)}
                       </Text>
                     </Pressable>
                   );
@@ -587,13 +582,13 @@ const styles = StyleSheet.create({
     gap: qsSpacing.sm,
   },
   tabButton: {
-    borderRadius: qsRadius.pill,
-    backgroundColor: qsColors.layer2,
     paddingVertical: qsSpacing.sm,
-    paddingHorizontal: qsSpacing.lg,
+    paddingHorizontal: qsSpacing.xs,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
   tabButtonActive: {
-    backgroundColor: qsColors.accent,
+    borderBottomColor: qsColors.accent,
   },
   tabButtonText: {
     color: qsColors.textTertiary,

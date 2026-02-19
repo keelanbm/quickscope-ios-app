@@ -43,10 +43,12 @@ import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens"
 import { fetchPositionPnl, type TraderTokenPosition } from "@/src/features/portfolio/portfolioService";
 import {
   buildChartSeries,
+  buildCandleChartSeries,
   fetchLiveTokenInfo,
   fetchTokenCandles,
   type LiveTokenInfo,
   type TokenChartPoint,
+  type TokenCandlePoint,
 } from "@/src/features/token/tokenService";
 import {
   addTokenToWatchlist,
@@ -70,7 +72,7 @@ import { ArrowLeft, Zap } from "@/src/ui/icons";
 
 import { TokenDetailHeader } from "./TokenDetailHeader";
 import { TokenDetailMetrics } from "./TokenDetailMetrics";
-import { TokenDetailHoldings } from "./TokenDetailHoldings";
+// TokenDetailHoldings removed — target UI doesn't show holdings bar
 import { TokenDetailTabs } from "./TokenDetailTabs";
 import {
   chartTimeframes,
@@ -115,7 +117,9 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(chartTimeframes[2]);
   const [liveInfo, setLiveInfo] = useState<LiveTokenInfo | null>(null);
   const [chartData, setChartData] = useState<TokenChartPoint[]>([]);
+  const [candleData, setCandleData] = useState<TokenCandlePoint[]>([]);
   const [chartMode, setChartMode] = useState<"mcap" | "price">("mcap");
+  const [chartType, setChartType] = useState<"line" | "candle">("candle");
   const [isChartLoading, setIsChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [positionInfo, setPositionInfo] = useState<TraderTokenPosition | null>(null);
@@ -159,13 +163,20 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
         setLiveInfo(tokenInfo ?? null);
 
+        const rawCandles = candlesResponse.candles ?? [];
         const result = buildChartSeries({
-          candles: candlesResponse.candles ?? [],
+          candles: rawCandles,
+          tokenInfo: tokenInfo ?? null,
+          candlesResponse,
+        });
+        const candleResult = buildCandleChartSeries({
+          candles: rawCandles,
           tokenInfo: tokenInfo ?? null,
           candlesResponse,
         });
 
         setChartData(result.points);
+        setCandleData(candleResult.candles);
         setChartMode(result.mode);
       } catch (error) {
         if (!isActive || requestId !== chartRequestIdRef.current) return;
@@ -456,15 +467,65 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           scanMentionsOneHour={params?.scanMentionsOneHour}
         />
 
+        {/* ── Timeframe pills + chart type toggle (above chart) ── */}
+        <View style={styles.timeframeRow}>
+          <View style={styles.timeframePills}>
+            {chartTimeframes.map((frame) => {
+              const isActive = frame.id === selectedTimeframe.id;
+              return (
+                <Pressable
+                  key={frame.id}
+                  onPress={() => setSelectedTimeframe(frame)}
+                  style={({ pressed }) => [
+                    styles.timeframePill,
+                    isActive && styles.timeframePillActive,
+                    { opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.timeframeText,
+                      isActive && styles.timeframeTextActive,
+                    ]}
+                  >
+                    {frame.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.chartTypeToggle}>
+            {(["line", "candle"] as const).map((type) => {
+              const isActive = chartType === type;
+              return (
+                <Pressable
+                  key={type}
+                  onPress={() => setChartType(type)}
+                  style={[
+                    styles.chartTypePill,
+                    isActive && styles.chartTypePillActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chartTypeText,
+                      isActive && styles.chartTypeTextActive,
+                    ]}
+                  >
+                    {type === "line" ? "Line" : "Candle"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         {/* ── Edge-to-edge Chart ── */}
         <View style={styles.chartSection}>
-          {chartData.length > 0 && (
-            <Text style={styles.chartModeLabel}>
-              {chartMode === "mcap" ? "Market Cap" : "Price (USD)"}
-            </Text>
-          )}
           <TokenChart
             data={chartData}
+            candleData={candleData}
+            chartType={chartType}
             height={280}
             isLoading={isChartLoading}
             formatValue={formatCompactUsd}
@@ -473,51 +534,12 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           {chartError ? <Text style={styles.errorHint}>Chart unavailable.</Text> : null}
         </View>
 
-        {/* ── Timeframe pills ── */}
-        <View style={styles.timeframeRow}>
-          {chartTimeframes.map((frame) => {
-            const isActive = frame.id === selectedTimeframe.id;
-            return (
-              <Pressable
-                key={frame.id}
-                onPress={() => setSelectedTimeframe(frame)}
-                style={({ pressed }) => [
-                  styles.timeframePill,
-                  isActive && styles.timeframePillActive,
-                  { opacity: pressed ? 0.7 : 1 },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.timeframeText,
-                    isActive && styles.timeframeTextActive,
-                  ]}
-                >
-                  {frame.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
         {/* ── Metric badges ── */}
         <TokenDetailMetrics
           oneHourVolumeUsd={params?.oneHourVolumeUsd}
           oneHourTxCount={params?.oneHourTxCount}
           scanMentionsOneHour={params?.scanMentionsOneHour}
-        />
-
-        {/* ── Holdings bar ── */}
-        <TokenDetailHoldings
-          hasWallet={!!walletAddress}
-          balance={positionInfo?.position?.balance}
-          totalPnl={positionInfo?.position?.total_pnl_quote}
-          pnlPercent={
-            positionInfo?.position?.total_pnl_change_proportion !== undefined
-              ? positionInfo.position.total_pnl_change_proportion * 100
-              : undefined
-          }
-          positionError={positionError}
+          holdersCount={liveInfo?.token_metadata?.holders}
         />
 
         {/* ── Tabs: Activity, Traders, Holders ── */}
@@ -657,22 +679,44 @@ const styles = StyleSheet.create({
   /* Edge-to-edge chart */
   chartSection: {
     marginHorizontal: 0,
-    marginBottom: qsSpacing.sm,
-  },
-  chartModeLabel: {
-    color: qsColors.textTertiary,
-    fontSize: 10,
-    fontWeight: qsTypography.weight.semi,
-    paddingHorizontal: qsSpacing.lg,
-    marginBottom: 4,
+    marginBottom: qsSpacing.lg,
   },
 
   /* Timeframe pills */
   timeframeRow: {
     flexDirection: "row",
-    gap: qsSpacing.sm,
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: qsSpacing.lg,
-    marginBottom: qsSpacing.lg,
+    marginTop: qsSpacing.md,
+    marginBottom: qsSpacing.xs,
+  },
+  timeframePills: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+  },
+  chartTypeToggle: {
+    flexDirection: "row",
+    backgroundColor: qsColors.layer1,
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    overflow: "hidden",
+  },
+  chartTypePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  chartTypePillActive: {
+    backgroundColor: qsColors.layer3,
+  },
+  chartTypeText: {
+    color: qsColors.textTertiary,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.semi,
+  },
+  chartTypeTextActive: {
+    color: qsColors.textPrimary,
   },
   timeframePill: {
     borderRadius: qsRadius.pill,

@@ -15,26 +15,33 @@ type TokenDetailMetricsProps = {
   oneHourVolumeUsd: number | undefined;
   oneHourTxCount: number | undefined;
   scanMentionsOneHour?: number;
+  holdersCount?: number;
 };
 
 export function TokenDetailMetrics({
   oneHourVolumeUsd,
   oneHourTxCount,
   scanMentionsOneHour,
+  holdersCount,
 }: TokenDetailMetricsProps) {
   return (
     <View style={styles.row}>
-      <MetricBadge label="Vol 1h" value={formatCompactUsd(oneHourVolumeUsd)} />
+      <MetricBadge label="Vol 1h" value={formatCompactUsd(oneHourVolumeUsd)} size="sm" />
       <MetricBadge
         label="TX 1h"
         value={oneHourTxCount?.toLocaleString() || "n/a"}
+        size="sm"
       />
-      {typeof scanMentionsOneHour === "number" && (
-        <MetricBadge
-          label="Scans 1h"
-          value={scanMentionsOneHour.toLocaleString()}
-        />
-      )}
+      <MetricBadge
+        label="Scans 1h"
+        value={typeof scanMentionsOneHour === "number" ? scanMentionsOneHour.toLocaleString() : "n/a"}
+        size="sm"
+      />
+      <MetricBadge
+        label="Holders"
+        value={typeof holdersCount === "number" ? holdersCount.toLocaleString() : "n/a"}
+        size="sm"
+      />
     </View>
   );
 }

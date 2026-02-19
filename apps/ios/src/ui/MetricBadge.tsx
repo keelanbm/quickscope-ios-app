@@ -19,10 +19,10 @@ const VALUE_COLORS: Record<MetricBadgeVariant, string> = {
   highlight: qsColors.metricHighlight,
 };
 
-const LABEL_SIZES: Record<MetricBadgeSize, number> = { sm: 11, md: 12, lg: 13 };
-const VALUE_SIZES: Record<MetricBadgeSize, number> = { sm: 14, md: 16, lg: 18 };
+const LABEL_SIZES: Record<MetricBadgeSize, number> = { sm: 9, md: 12, lg: 13 };
+const VALUE_SIZES: Record<MetricBadgeSize, number> = { sm: 12, md: 16, lg: 18 };
 const PADDINGS: Record<MetricBadgeSize, number> = {
-  sm: qsSpacing.sm,
+  sm: qsSpacing.xs,
   md: qsSpacing.md,
   lg: qsSpacing.lg,
 };
@@ -34,7 +34,7 @@ export function MetricBadge({
   size = "md",
 }: MetricBadgeProps) {
   return (
-    <View style={[styles.container, { padding: PADDINGS[size] }]}>
+    <View style={[styles.container, { padding: PADDINGS[size] }, size === "sm" && styles.containerSm]}>
       <Text style={[styles.label, { fontSize: LABEL_SIZES[size] }]}>{label}</Text>
       <Text
         style={[
@@ -56,6 +56,12 @@ const styles = StyleSheet.create({
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
     gap: 4,
+  },
+  containerSm: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: qsSpacing.sm,
+    paddingVertical: 6,
   },
   label: {
     color: qsColors.textTertiary,

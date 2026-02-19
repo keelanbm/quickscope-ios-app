@@ -43,6 +43,9 @@
         "projectId": "432c9fe0-204a-4b76-9e33-fde84aba4946"
       }
     },
-    "owner": "keelanbm"
+    "owner": "keelanbm",
+    "updates": {
+      "url": "https://u.expo.dev/432c9fe0-204a-4b76-9e33-fde84aba4946"
+    }
   }
 }

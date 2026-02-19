@@ -1,6 +1,6 @@
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 
-export type ScopeTabId = "new-pairs" | "momentum" | "scan-surge";
+export type ScopeTabId = "new-pairs" | "momentum" | "graduated" | "scan-surge";
 
 type ScopeSort = {
   sortColumn: string;
@@ -59,6 +59,10 @@ const tabSorts: Record<ScopeTabId, ScopeSort> = {
   },
   momentum: {
     sortColumn: "one_hour_tx_count",
+    sortOrderDescending: true,
+  },
+  graduated: {
+    sortColumn: "market_cap_sol",
     sortOrderDescending: true,
   },
   "scan-surge": {

@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptics } from "@/src/lib/haptics";
 import { qsColors, qsRadius, qsSpacing, qsShadows, qsTypography } from "@/src/theme/tokens";
 import { PresetButton } from "@/src/ui/PresetButton";
-import { Settings } from "@/src/ui/icons";
+import { Settings, SolanaIcon } from "@/src/ui/icons";
 
 type QuickTradePanelProps = {
   tokenSymbol: string;
@@ -172,7 +172,8 @@ export function QuickTradePanel({
         {(isBuy ? buyPresets : sellPresets).map((amount, index) => (
           <PresetButton
             key={`preset-${side}-${amount}-${index}`}
-            label={isBuy ? `◎ ${amount}` : `${amount}%`}
+            label={isBuy ? ` ${amount}` : `${amount}%`}
+            icon={isBuy ? <SolanaIcon size={12} /> : undefined}
             variant={isBuy ? "muted" : "neutral"}
             onPress={() => handlePresetPress(amount)}
             disabled={disabled}

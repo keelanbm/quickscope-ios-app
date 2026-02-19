@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
@@ -15,6 +15,7 @@ import {
 import { haptics } from "@/src/lib/haptics";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { TrackingFloatingNav, type TrackingTabId } from "@/src/ui/TrackingFloatingNav";
 import {
   fetchWalletActivity,
   fetchWalletWatchlist,
@@ -46,18 +47,13 @@ type TrackingScreenProps = {
   params?: TrackingRouteParams;
 };
 
-type TrackingTabId = "tokens" | "wallets" | "chats";
+// TrackingTabId imported from TrackingFloatingNav
 
-type TrackingTab = {
-  id: TrackingTabId;
-  label: string;
+const TAB_TITLES: Record<TrackingTabId, string> = {
+  wallets: "Wallets",
+  tokens: "Tokens",
+  chats: "Chats",
 };
-
-const TRACKING_TABS: TrackingTab[] = [
-  { id: "tokens", label: "Tokens" },
-  { id: "wallets", label: "Wallets" },
-  { id: "chats", label: "Chats" },
-];
 
 /* ─── Wallet activity types ─── */
 
@@ -161,7 +157,15 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   useAuthSession(); // ensures auth context is available
   const requestRef = useRef(0);
 
-  const [activeTab, setActiveTab] = useState<TrackingTabId>("tokens");
+  const [activeTab, setActiveTab] = useState<TrackingTabId>("wallets");
+  const [navExpanded, setNavExpanded] = useState(false);
+  const scrollOffsetRef = useRef(0);
+
+  // Dynamic header title based on active tab
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: TAB_TITLES[activeTab] });
+  }, [activeTab, navigation]);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -544,7 +548,24 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     listData = telegramEvents.map((e) => ({ type: "chat" as const, data: e }));
   }
 
+  const handleTabChange = (tab: TrackingTabId) => {
+    setActiveTab(tab);
+    // Collapse after a short delay so user sees the switch
+    setTimeout(() => setNavExpanded(false), 300);
+  };
+
+  const handleScroll = useCallback((event: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const y = event.nativeEvent.contentOffset.y;
+    scrollOffsetRef.current = y;
+
+    // Collapse popout if user scrolls while expanded
+    if (y > 20 && navExpanded) {
+      setNavExpanded(false);
+    }
+  }, [navExpanded]);
+
   return (
+    <View style={styles.page}>
     <FlatList
       data={listData}
       keyExtractor={(item, index) => {
@@ -553,7 +574,9 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         return String(item.data.id ?? index);
       }}
       contentContainerStyle={styles.content}
-      style={styles.page}
+      style={{ flex: 1 }}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
       refreshControl={
         <RefreshControl
           tintColor={qsColors.textMuted}
@@ -596,27 +619,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
               <SkeletonRow />
             </View>
           ) : null}
-
-          {/* ── Main tabs: Tokens | Wallets | Chats ── */}
-          <View style={styles.mainTabs}>
-            {TRACKING_TABS.map((tab) => {
-              const active = tab.id === activeTab;
-              return (
-                <Pressable
-                  key={tab.id}
-                  style={[styles.mainTab, active && styles.mainTabActive]}
-                  onPress={() => {
-                    haptics.selection();
-                    setActiveTab(tab.id);
-                  }}
-                >
-                  <Text style={[styles.mainTabText, active && styles.mainTabTextActive]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
 
           {/* ── Watchlist sub-pills ── */}
           {renderWatchlistPills()}
@@ -772,6 +774,13 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       }}
       ListEmptyComponent={renderEmptyState()}
     />
+    <TrackingFloatingNav
+      activeTab={activeTab}
+      onTabChange={handleTabChange}
+      expanded={navExpanded}
+      onToggle={() => setNavExpanded((prev) => !prev)}
+    />
+    </View>
   );
 }
 
@@ -790,30 +799,6 @@ const styles = StyleSheet.create({
     gap: qsSpacing.md,
     marginBottom: qsSpacing.sm,
     paddingHorizontal: qsSpacing.lg,
-  },
-
-  // ── Main tabs (Tokens | Wallets | Chats) ──
-  mainTabs: {
-    flexDirection: "row",
-    gap: qsSpacing.sm,
-  },
-  mainTab: {
-    flex: 1,
-    borderRadius: qsRadius.pill,
-    backgroundColor: qsColors.layer2,
-    paddingVertical: qsSpacing.sm,
-    alignItems: "center",
-  },
-  mainTabActive: {
-    backgroundColor: qsColors.accent,
-  },
-  mainTabText: {
-    color: qsColors.textTertiary,
-    fontWeight: qsTypography.weight.semi,
-    fontSize: 13,
-  },
-  mainTabTextActive: {
-    color: qsColors.textPrimary,
   },
 
   // ── Watchlist sub-pills ──

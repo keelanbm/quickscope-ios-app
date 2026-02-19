@@ -152,7 +152,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
 
     // Build buy preset buttons
     const buyPresetButtons = buyPresets.map((value, index) => ({
-      label: `◎${value}`,
+      label: ` ${value}`,
       value,
       index,
     }));

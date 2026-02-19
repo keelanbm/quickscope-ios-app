@@ -4,9 +4,9 @@
 
 export const chartTimeframes = [
   { id: "1m", label: "1m", rangeSeconds: 60 * 60, resolutionSeconds: 60 },
+  { id: "5m", label: "5m", rangeSeconds: 3 * 60 * 60, resolutionSeconds: 5 * 60 },
   { id: "15m", label: "15m", rangeSeconds: 6 * 60 * 60, resolutionSeconds: 15 * 60 },
   { id: "1h", label: "1h", rangeSeconds: 24 * 60 * 60, resolutionSeconds: 60 * 60 },
-  { id: "6h", label: "6h", rangeSeconds: 7 * 24 * 60 * 60, resolutionSeconds: 6 * 60 * 60 },
 ] as const;
 
 export type ChartTimeframe = (typeof chartTimeframes)[number];
@@ -45,7 +45,7 @@ export function formatChartTimestamp(timestampSeconds: number, timeframeId: stri
   const date = new Date(timestampSeconds * 1000);
   const hours = date.getHours();
   const minutes = date.getMinutes().toString().padStart(2, "0");
-  if (timeframeId === "1m" || timeframeId === "15m") {
+  if (timeframeId === "1m" || timeframeId === "5m" || timeframeId === "15m") {
     return `${hours}:${minutes}`;
   }
   if (timeframeId === "1h") {

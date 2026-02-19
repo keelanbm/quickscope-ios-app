@@ -10,6 +10,7 @@ export type TokenMetadata = {
   twitter?: string;
   telegram?: string;
   website?: string;
+  holders?: number;
 };
 
 export type LiveTokenInfo = {
@@ -32,6 +33,9 @@ export type LiveTokenInfo = {
 
 export type TokenCandle = {
   ts: number;
+  open?: string;
+  high?: string;
+  low?: string;
   close: string;
   quote_asset_price_usd: number;
 };
@@ -249,4 +253,47 @@ export async function fetchTokenCandlesReverse(
     resolutionSeconds,
     limit,
   ]);
+}
+
+/* ── Convenience wrapper used by TokenDetailScreen ── */
+
+export type TokenChartPoint = {
+  ts: number;
+  value: number;
+};
+
+export function buildChartSeries({
+  candles,
+  tokenInfo,
+  candlesResponse,
+}: {
+  candles: TokenCandle[];
+  tokenInfo?: LiveTokenInfo | null;
+  candlesResponse?: TokenCandlesResponse;
+}): { points: TokenChartPoint[]; mode: "mcap" | "price" } {
+  const mcap = buildMarketCapSeries({ candles, tokenInfo, candlesResponse });
+  if (mcap.length > 0) {
+    return { points: mcap, mode: "mcap" };
+  }
+
+  const price = buildPriceSeries(candles);
+  return { points: price, mode: "price" };
+}
+
+export function buildCandleChartSeries({
+  candles,
+  tokenInfo,
+  candlesResponse,
+}: {
+  candles: TokenCandle[];
+  tokenInfo?: LiveTokenInfo | null;
+  candlesResponse?: TokenCandlesResponse;
+}): { candles: TokenCandlePoint[]; mode: "mcap" | "price" } {
+  const mcap = buildMarketCapCandles({ candles, tokenInfo, candlesResponse });
+  if (mcap.length > 0) {
+    return { candles: mcap, mode: "mcap" };
+  }
+
+  const price = buildPriceCandles(candles);
+  return { candles: price, mode: "price" };
 }
