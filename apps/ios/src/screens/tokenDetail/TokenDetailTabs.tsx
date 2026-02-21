@@ -136,8 +136,12 @@ export function TokenDetailTabs({
           error={activityError}
         />
       )}
-      {activeTab === "traders" && <TradersTab />}
-      {activeTab === "holders" && <HoldersTab />}
+      {activeTab === "traders" && (
+        <TradersTab rpcClient={rpcClient} tokenAddress={tokenAddress} />
+      )}
+      {activeTab === "holders" && (
+        <HoldersTab rpcClient={rpcClient} tokenAddress={tokenAddress} />
+      )}
       {activeTab === "orders" && walletAddress && (
         <OrdersTab
           rpcClient={rpcClient}
