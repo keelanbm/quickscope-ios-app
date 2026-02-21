@@ -67,6 +67,10 @@ import {
   loadTradeSettings,
   activeProfile,
 } from "@/src/features/trade/tradeSettings";
+import {
+  createTriggerOrder,
+  type CreateTriggerOrderParams,
+} from "@/src/features/trade/triggerOrderService";
 import { haptics } from "@/src/lib/haptics";
 import { ArrowLeft, Zap } from "@/src/ui/icons";
 
@@ -131,6 +135,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const [isWatchlistUpdating, setIsWatchlistUpdating] = useState(false);
   const [tradeSettings, setTradeSettings] = useState<TradeSettings>(DEFAULT_SETTINGS);
   const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   const tokenAddress = params?.tokenAddress ?? "";
 
@@ -357,6 +362,11 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     bottomSheetRef.current?.snapToIndex(0);
   }, []);
 
+  const handleLimitPress = useCallback(() => {
+    // Open the bottom sheet (which has the limit mode toggle)
+    bottomSheetRef.current?.snapToIndex(1); // snap to larger size for limit form
+  }, []);
+
   const handleBottomSheetClose = useCallback(() => {
     bottomSheetRef.current?.close();
   }, []);
@@ -391,6 +401,32 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
       });
     },
     [navigation, tokenAddress, params?.tokenDecimals]
+  );
+
+  const handleLimitOrderRequest = useCallback(
+    async (orderParams: Omit<CreateTriggerOrderParams, "walletAddress">) => {
+      if (!walletAddress) {
+        toast.info("Connect wallet", "Connect your wallet to place limit orders.");
+        return;
+      }
+      setIsSubmittingOrder(true);
+      try {
+        await createTriggerOrder(rpcClient, {
+          ...orderParams,
+          walletAddress,
+        });
+        toast.success("Order placed", "Your trigger order has been created.");
+        bottomSheetRef.current?.close();
+      } catch (err) {
+        toast.error(
+          "Order failed",
+          err instanceof Error ? err.message : "Failed to create order."
+        );
+      } finally {
+        setIsSubmittingOrder(false);
+      }
+    },
+    [rpcClient, walletAddress]
   );
 
   const handleGoBack = useCallback(() => {
@@ -542,8 +578,12 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           holdersCount={liveInfo?.token_metadata?.holders}
         />
 
-        {/* ── Tabs: Activity, Traders, Holders ── */}
-        <TokenDetailTabs rpcClient={rpcClient} tokenAddress={tokenAddress} />
+        {/* ── Tabs: Activity, Traders, Holders, Orders ── */}
+        <TokenDetailTabs
+          rpcClient={rpcClient}
+          tokenAddress={tokenAddress}
+          walletAddress={walletAddress ?? undefined}
+        />
 
         {/* Bottom spacer for QuickTradePanel */}
         <View style={{ height: 160 }} />
@@ -564,6 +604,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           tokenBalance={positionInfo?.position?.balance}
           onPresetPress={handleQuickTrade}
           onExpandPress={handleExpandTrade}
+          onLimitPress={handleLimitPress}
           onSettingsPress={handleOpenSettings}
           onProfilePress={handleProfilePress}
           onSideChange={handleSideChange}
@@ -591,6 +632,11 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
         sellPresets={tradeSettings.sellPresets}
         slippageBps={currentProfile.slippageBps}
         priorityLamports={currentProfile.priorityLamports}
+        currentMarketCapUsd={marketCapUsd}
+        tokenSupply={liveInfo?.mint_info?.supply}
+        walletAddress={walletAddress ?? undefined}
+        onLimitOrderRequest={handleLimitOrderRequest}
+        isSubmittingOrder={isSubmittingOrder}
       />
 
       {/* ── Trade Settings Modal ── */}

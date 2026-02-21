@@ -1,11 +1,19 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { haptics } from "@/src/lib/haptics";
 import { qsColors, qsRadius, qsSpacing, qsShadows, qsTypography } from "@/src/theme/tokens";
 import { PresetButton } from "@/src/ui/PresetButton";
-import { Settings, SolanaIcon } from "@/src/ui/icons";
+import { ChevronDown, Settings, SolanaIcon, Zap } from "@/src/ui/icons";
+
+export type TradeMode = "market" | "limit" | "instant";
+
+const MODE_LABELS: Record<TradeMode, string> = {
+  market: "Market",
+  limit: "Limit",
+  instant: "Instant",
+};
 
 type QuickTradePanelProps = {
   tokenSymbol: string;
@@ -15,9 +23,12 @@ type QuickTradePanelProps = {
   tokenBalance?: number;
   onPresetPress: (params: { side: "buy" | "sell"; amount: number }) => void;
   onExpandPress: () => void;
+  /** Called when user taps Limit — opens bottom sheet in limit mode */
+  onLimitPress?: () => void;
   onSettingsPress?: () => void;
   onProfilePress?: (index: 0 | 1 | 2) => void;
   onSideChange?: (side: "buy" | "sell") => void;
+  onModeChange?: (mode: TradeMode) => void;
   disabled?: boolean;
   buyPresets?: number[];
   sellPresets?: number[];
@@ -56,9 +67,11 @@ export function QuickTradePanel({
   tokenBalance = 0,
   onPresetPress,
   onExpandPress,
+  onLimitPress,
   onSettingsPress,
   onProfilePress,
   onSideChange,
+  onModeChange,
   disabled = false,
   buyPresets = [0.25, 0.5, 1, 5],
   sellPresets = [25, 50, 75, 100],
@@ -67,6 +80,45 @@ export function QuickTradePanel({
 }: QuickTradePanelProps) {
   const insets = useSafeAreaInsets();
   const [side, setSide] = useState<"buy" | "sell">(activeSide);
+  const [tradeMode, setTradeMode] = useState<TradeMode>("market");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownOpacity = useRef(new Animated.Value(0)).current;
+
+  const toggleDropdown = useCallback(() => {
+    if (disabled) return;
+    haptics.light();
+    if (dropdownOpen) {
+      Animated.timing(dropdownOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }).start(() => setDropdownOpen(false));
+    } else {
+      setDropdownOpen(true);
+      Animated.timing(dropdownOpacity, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [disabled, dropdownOpen, dropdownOpacity]);
+
+  const handleModeSelect = useCallback((mode: TradeMode) => {
+    setTradeMode(mode);
+    haptics.selection();
+    onModeChange?.(mode);
+
+    // Close dropdown
+    Animated.timing(dropdownOpacity, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => setDropdownOpen(false));
+
+    if (mode === "limit") {
+      onLimitPress?.();
+    }
+  }, [dropdownOpacity, onModeChange, onLimitPress]);
 
   const isBuy = side === "buy";
   const currentBalance = isBuy ? walletBalance : tokenBalance;
@@ -99,7 +151,7 @@ export function QuickTradePanel({
         },
       ]}
     >
-      {/* Buy/Sell Toggle + Settings */}
+      {/* Buy/Sell Toggle + Mode Dropdown + Settings */}
       <View style={styles.topRow}>
         <View style={styles.sideToggle}>
           <Pressable
@@ -151,20 +203,67 @@ export function QuickTradePanel({
           </Pressable>
         </View>
 
-        {onSettingsPress && (
-          <Pressable
-            onPress={onSettingsPress}
-            disabled={disabled}
-            style={({ pressed }) => [
-              styles.settingsButton,
-              { opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
-            ]}
-            accessibilityLabel="Trade settings"
-            accessibilityRole="button"
-          >
-            <Settings size={20} color={qsColors.textSecondary} />
-          </Pressable>
-        )}
+        <View style={styles.rightControls}>
+          {/* Mode Dropdown Trigger */}
+          <View style={styles.dropdownAnchor}>
+            <Pressable
+              onPress={toggleDropdown}
+              disabled={disabled}
+              style={({ pressed }) => [
+                styles.modeTrigger,
+                { opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Order type: ${MODE_LABELS[tradeMode]}`}
+            >
+              {tradeMode === "instant" && (
+                <Zap size={12} color={qsColors.accent} />
+              )}
+              <Text style={styles.modeTriggerText}>
+                {MODE_LABELS[tradeMode]}
+              </Text>
+              <View style={dropdownOpen ? { transform: [{ rotate: "180deg" }] } : undefined}>
+                <ChevronDown size={14} color={qsColors.textTertiary} />
+              </View>
+            </Pressable>
+
+            {/* Dropdown Menu */}
+            {dropdownOpen && (
+              <Animated.View style={[styles.dropdownMenu, { opacity: dropdownOpacity }]}>
+                {(["market", "limit", "instant"] as const).map((mode) => {
+                  const isActive = tradeMode === mode;
+                  return (
+                    <Pressable
+                      key={mode}
+                      onPress={() => handleModeSelect(mode)}
+                      style={({ pressed }) => [
+                        styles.dropdownItem,
+                        isActive && styles.dropdownItemActive,
+                        { opacity: pressed ? 0.7 : 1 },
+                      ]}
+                    >
+                      {mode === "instant" && (
+                        <Zap size={12} color={isActive ? qsColors.accent : qsColors.textTertiary} />
+                      )}
+                      <Text
+                        style={[
+                          styles.dropdownItemText,
+                          isActive && styles.dropdownItemTextActive,
+                        ]}
+                      >
+                        {MODE_LABELS[mode]}
+                      </Text>
+                      {mode === "limit" && (
+                        <Text style={styles.dropdownHint}>Expand</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </Animated.View>
+            )}
+          </View>
+
+        </View>
       </View>
 
       {/* Preset Buttons */}
@@ -181,40 +280,57 @@ export function QuickTradePanel({
         ))}
       </View>
 
-      {/* Balance + Profile Pills */}
+      {/* Balance + Profile Pills + Settings */}
       <View style={styles.bottomRow}>
         <Text style={styles.balanceText}>
           Balance: {currentBalance.toFixed(2)} {balanceLabel}
         </Text>
 
-        {onProfilePress && (
-          <View style={styles.profilePills}>
-            {([0, 1, 2] as const).map((index) => (
-              <Pressable
-                key={`profile-${index}`}
-                onPress={() => handleProfilePress(index)}
-                disabled={disabled}
-                style={({ pressed }) => [
-                  styles.profilePill,
-                  activeProfileIndex === index && styles.profilePillActive,
-                  { opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={`Profile ${index + 1}`}
-                accessibilityState={{ selected: activeProfileIndex === index }}
-              >
-                <Text
-                  style={[
-                    styles.profilePillText,
-                    activeProfileIndex === index && styles.profilePillTextActive,
+        <View style={styles.bottomRight}>
+          {onProfilePress && (
+            <View style={styles.profilePills}>
+              {([0, 1, 2] as const).map((index) => (
+                <Pressable
+                  key={`profile-${index}`}
+                  onPress={() => handleProfilePress(index)}
+                  disabled={disabled}
+                  style={({ pressed }) => [
+                    styles.profilePill,
+                    activeProfileIndex === index && styles.profilePillActive,
+                    { opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
                   ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Profile ${index + 1}`}
+                  accessibilityState={{ selected: activeProfileIndex === index }}
                 >
-                  P{index + 1}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+                  <Text
+                    style={[
+                      styles.profilePillText,
+                      activeProfileIndex === index && styles.profilePillTextActive,
+                    ]}
+                  >
+                    P{index + 1}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {onSettingsPress && (
+            <Pressable
+              onPress={onSettingsPress}
+              disabled={disabled}
+              style={({ pressed }) => [
+                styles.settingsButton,
+                { opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
+              ]}
+              accessibilityLabel="Trade settings"
+              accessibilityRole="button"
+            >
+              <Settings size={18} color={qsColors.textSecondary} />
+            </Pressable>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -277,6 +393,70 @@ const styles = StyleSheet.create({
   sideToggleTextSell: {
     color: qsColors.sellRed,
   },
+
+  /* Right controls: mode dropdown + settings */
+  rightControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.sm,
+  },
+  dropdownAnchor: {
+    position: "relative",
+    zIndex: 10,
+  },
+  modeTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: qsSpacing.md,
+    paddingVertical: qsSpacing.xs,
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.layer2,
+  },
+  modeTriggerText: {
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textPrimary,
+  },
+  dropdownMenu: {
+    position: "absolute",
+    top: "100%",
+    right: 0,
+    marginTop: 4,
+    backgroundColor: qsColors.layer2,
+    borderRadius: qsRadius.md,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    minWidth: 140,
+    overflow: "hidden",
+    ...qsShadows.md,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: qsSpacing.md,
+    paddingVertical: qsSpacing.sm,
+  },
+  dropdownItemActive: {
+    backgroundColor: qsColors.layer3,
+  },
+  dropdownItemText: {
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textSecondary,
+  },
+  dropdownItemTextActive: {
+    color: qsColors.textPrimary,
+  },
+  dropdownHint: {
+    marginLeft: "auto",
+    fontSize: 10,
+    fontWeight: qsTypography.weight.medium,
+    color: qsColors.textSubtle,
+  },
   settingsButton: {
     padding: qsSpacing.xs,
   },
@@ -288,6 +468,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  bottomRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.sm,
   },
   balanceText: {
     fontSize: qsTypography.size.sm,

@@ -25,6 +25,8 @@ export type TradeSettings = {
   sellPresets: [number, number, number, number];
   /** When true, preset taps execute immediately (skip TradeEntry). */
   instantTrade: boolean;
+  /** Default expiration for limit orders (seconds). */
+  defaultExpirationSeconds: number;
 };
 
 // ── Defaults ─────────────────────────────────────
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: TradeSettings = {
   buyPresets: [0.25, 0.5, 1, 5],
   sellPresets: [0.25, 0.5, 0.75, 1],
   instantTrade: false,
+  defaultExpirationSeconds: 604_800, // 7 days
 };
 
 const STORAGE_KEY = "qs_trade_settings_v1";
