@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   AddressType,
@@ -15,7 +15,7 @@ import {
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as Linking from "expo-linking";
-import { Pressable, Text } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Toast from "react-native-toast-message";
 
@@ -35,21 +35,47 @@ import {
 } from "@/src/navigation/types";
 import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
-import { PortfolioScreen } from "@/src/screens/PortfolioScreen";
-import { DepositScreen } from "@/src/screens/DepositScreen";
-import { ReviewTradeScreen } from "@/src/screens/ReviewTradeScreen";
-import { RewardsScreen } from "@/src/screens/RewardsScreen";
-import { SearchScreen } from "@/src/screens/SearchScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
-import { SpikeConsoleScreen } from "@/src/screens/SpikeConsoleScreen";
-import { TrackingScreen } from "@/src/screens/TrackingScreen";
-import { TokenDetailScreen } from "@/src/screens/TokenDetailScreen";
-import { TradeEntryScreen } from "@/src/screens/TradeEntryScreen";
+import { SearchScreen } from "@/src/screens/SearchScreen";
+
+// Lazy-loaded screens (not needed at startup)
+const PortfolioScreen = React.lazy(() =>
+  import("@/src/screens/PortfolioScreen").then((m) => ({ default: m.PortfolioScreen }))
+);
+const DepositScreen = React.lazy(() =>
+  import("@/src/screens/DepositScreen").then((m) => ({ default: m.DepositScreen }))
+);
+const ReviewTradeScreen = React.lazy(() =>
+  import("@/src/screens/ReviewTradeScreen").then((m) => ({ default: m.ReviewTradeScreen }))
+);
+const RewardsScreen = React.lazy(() =>
+  import("@/src/screens/RewardsScreen").then((m) => ({ default: m.RewardsScreen }))
+);
+const SpikeConsoleScreen = React.lazy(() =>
+  import("@/src/screens/SpikeConsoleScreen").then((m) => ({ default: m.SpikeConsoleScreen }))
+);
+const TrackingScreen = React.lazy(() =>
+  import("@/src/screens/TrackingScreen").then((m) => ({ default: m.TrackingScreen }))
+);
+const TokenDetailScreen = React.lazy(() =>
+  import("@/src/screens/TokenDetailScreen").then((m) => ({ default: m.TokenDetailScreen }))
+);
+const TradeEntryScreen = React.lazy(() =>
+  import("@/src/screens/TradeEntryScreen").then((m) => ({ default: m.TradeEntryScreen }))
+);
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
 import { SlideOutDrawer } from "@/src/ui/SlideOutDrawer";
 import { QSLogoIcon, Compass, Crosshair, Search, Activity, Wallet, Menu } from "@/src/ui/icons";
+
+function LazyFallback() {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: qsColors.layer0 }}>
+      <ActivityIndicator color={qsColors.accent} />
+    </View>
+  );
+}
 
 const Tabs = createBottomTabNavigator<RootTabs>();
 const Stack = createNativeStackNavigator<RootStack>();
@@ -223,7 +249,9 @@ function MainTabsNavigator({
               featureName="Tracking"
               subtitle="Connect to manage tracked wallets and token alerts."
             >
-              <TrackingScreen rpcClient={rpcClient} params={route.params} />
+              <Suspense fallback={<LazyFallback />}>
+                <TrackingScreen rpcClient={rpcClient} params={route.params} />
+              </Suspense>
             </AuthRouteGate>
           </RouteErrorBoundary>
         )}
@@ -235,7 +263,9 @@ function MainTabsNavigator({
               featureName="Portfolio"
               subtitle="Connect to load balances, PnL, and position details."
             >
-              <PortfolioScreen rpcClient={rpcClient} params={route.params} />
+              <Suspense fallback={<LazyFallback />}>
+                <PortfolioScreen rpcClient={rpcClient} params={route.params} />
+              </Suspense>
             </AuthRouteGate>
           </RouteErrorBoundary>
         )}
@@ -261,7 +291,9 @@ function MainTabsNavigator({
         options={{ title: "Dev Console", ...hiddenTabOptions }}
         children={() => (
           <RouteErrorBoundary routeName="Dev Console">
-            <SpikeConsoleScreen rpcClient={rpcClient} wsHost={wsHost} />
+            <Suspense fallback={<LazyFallback />}>
+              <SpikeConsoleScreen rpcClient={rpcClient} wsHost={wsHost} />
+            </Suspense>
           </RouteErrorBoundary>
         )}
       />
@@ -375,7 +407,9 @@ export default function App() {
                 options={{ headerShown: false }}
                 children={({ route }) => (
                   <RouteErrorBoundary routeName="Token Detail">
-                    <TokenDetailScreen rpcClient={rpcClient} params={route.params} />
+                    <Suspense fallback={<LazyFallback />}>
+                      <TokenDetailScreen rpcClient={rpcClient} params={route.params} />
+                    </Suspense>
                   </RouteErrorBoundary>
                 )}
               />
@@ -388,7 +422,9 @@ export default function App() {
                       featureName="Trade"
                       subtitle="Connect to request quotes and execute trades."
                     >
-                      <TradeEntryScreen rpcClient={rpcClient} params={route.params} />
+                      <Suspense fallback={<LazyFallback />}>
+                        <TradeEntryScreen rpcClient={rpcClient} params={route.params} />
+                      </Suspense>
                     </AuthRouteGate>
                   </RouteErrorBoundary>
                 )}
@@ -402,11 +438,13 @@ export default function App() {
                       featureName="Trade"
                       subtitle="Connect to review and execute trades."
                     >
-                      <ReviewTradeScreen
-                        rpcClient={rpcClient}
-                        executionEnabled={env.enableSwapExecution}
-                        params={route.params}
-                      />
+                      <Suspense fallback={<LazyFallback />}>
+                        <ReviewTradeScreen
+                          rpcClient={rpcClient}
+                          executionEnabled={env.enableSwapExecution}
+                          params={route.params}
+                        />
+                      </Suspense>
                     </AuthRouteGate>
                   </RouteErrorBoundary>
                 )}
@@ -420,7 +458,9 @@ export default function App() {
                       featureName="Rewards"
                       subtitle="Connect to view earnings and claim rewards."
                     >
-                      <RewardsScreen rpcClient={rpcClient} />
+                      <Suspense fallback={<LazyFallback />}>
+                        <RewardsScreen rpcClient={rpcClient} />
+                      </Suspense>
                     </AuthRouteGate>
                   </RouteErrorBoundary>
                 )}
@@ -434,7 +474,9 @@ export default function App() {
                       featureName="Deposit"
                       subtitle="Connect to view your deposit address."
                     >
-                      <DepositScreen />
+                      <Suspense fallback={<LazyFallback />}>
+                        <DepositScreen />
+                      </Suspense>
                     </AuthRouteGate>
                   </RouteErrorBoundary>
                 )}

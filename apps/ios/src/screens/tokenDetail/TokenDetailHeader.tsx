@@ -9,13 +9,14 @@
  * [Platform pill] [Social chips]
  */
 import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 import { SocialChips, type SocialLink } from "@/src/ui/SocialChips";
 import { ArrowLeft, Copy, Star, Clock } from "@/src/ui/icons";
+import { TokenAvatar } from "@/src/ui/TokenAvatar";
 import { haptics } from "@/src/lib/haptics";
-import { fallbackTokenImage, formatCompactUsd, formatPercent } from "./styles";
+import { formatCompactUsd, formatPercent } from "./styles";
 
 type TokenDetailHeaderProps = {
   imageUri: string | undefined;
@@ -70,10 +71,7 @@ export function TokenDetailHeader({
 
       {/* Identity row: image + symbol + age + actions */}
       <View style={styles.identityRow}>
-        <Image
-          source={{ uri: imageUri || fallbackTokenImage }}
-          style={styles.tokenImage}
-        />
+        <TokenAvatar uri={imageUri} size={40} />
         <View style={styles.identityInfo}>
           {/* Top: Symbol + age + copy + star */}
           <View style={styles.symbolRow}>
@@ -159,12 +157,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: qsSpacing.md,
-  },
-  tokenImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: qsColors.layer2,
   },
   identityInfo: {
     flex: 1,

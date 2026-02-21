@@ -4,10 +4,10 @@ import { fetchScopeTokens } from "@/src/features/scope/scopeService";
 
 describe("fetchScopeTokens", () => {
   it.each([
-    ["new-pairs", "mint_ts"],
-    ["momentum", "one_hour_change"],
-    ["graduated", "day_change"],
-    ["scan-feed", "telegram_mentions_1h"],
+    ["new", "mint_ts"],
+    ["graduating", "market_cap_sol"],
+    ["graduated", "pair_creation_ts"],
+    ["scans", "telegram_mentions_1h"],
   ] as const)("uses expected sort config for %s", async (tab, sortColumn) => {
     const call = jest.fn().mockResolvedValue({
       sol_price_usd: 100,
@@ -21,13 +21,13 @@ describe("fetchScopeTokens", () => {
     const result = await fetchScopeTokens(rpcClient, tab);
 
     expect(call).toHaveBeenCalledWith("public/filterTokensTable", [
-      {
-        filter: {
+      expect.objectContaining({
+        filter: expect.objectContaining({
           sort_column: sortColumn,
           sort_order: false,
-          row_limit: 50,
-        },
-      },
+          row_limit: 20,
+        }),
+      }),
     ]);
     expect(result.tab).toBe(tab);
     expect(result.rows).toEqual([]);
@@ -58,7 +58,7 @@ describe("fetchScopeTokens", () => {
     });
 
     const rpcClient = { call } as unknown as RpcClient;
-    const result = await fetchScopeTokens(rpcClient, "momentum");
+    const result = await fetchScopeTokens(rpcClient, "graduating");
 
     expect(result.rows[0]).toEqual({
       mint: "So11111111111111111111111111111111111111112",

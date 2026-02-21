@@ -39,18 +39,8 @@ type WsSpikeState = {
 const subscriptionMethod = "public/slotTradeUpdates";
 const subscriptionRequestId = "ios-slot-trade-updates";
 
-function nowAsClockText(): string {
-  const now = new Date();
-  return now.toLocaleTimeString();
-}
-
-function parsePayloadPreview(value: unknown): string | undefined {
-  try {
-    return JSON.stringify(value).slice(0, 220);
-  } catch {
-    return undefined;
-  }
-}
+/** Throttle interval — flush buffered WS updates at 5hz (200ms) */
+const FLUSH_INTERVAL_MS = 200;
 
 export function useSlotTradeUpdatesSpike(wsHost: string) {
   const socketRef = useRef<WebSocket | null>(null);
@@ -60,8 +50,59 @@ export function useSlotTradeUpdatesSpike(wsHost: string) {
     eventCount: 0,
   });
 
+  // ── Throttle buffer refs ──
+  // Accumulate incoming data in refs; flush to state on a 200ms interval.
+  const bufferRef = useRef<{
+    count: number;
+    lastSolPrice?: number;
+    lastPayload?: unknown;
+  }>({ count: 0 });
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startFlushTimer = useCallback(() => {
+    if (flushTimerRef.current) return;
+    flushTimerRef.current = setInterval(() => {
+      const buf = bufferRef.current;
+      if (buf.count === 0) return;
+
+      const flushedCount = buf.count;
+      const flushedPrice = buf.lastSolPrice;
+      const flushedPayload = buf.lastPayload;
+      buf.count = 0;
+
+      setState((prev) => ({
+        ...prev,
+        status: "subscribed",
+        eventCount: prev.eventCount + flushedCount,
+        lastSolPrice:
+          typeof flushedPrice === "number" && Number.isFinite(flushedPrice)
+            ? flushedPrice
+            : prev.lastSolPrice,
+        lastEventAt: new Date().toLocaleTimeString(),
+        lastPayloadPreview: flushedPayload
+          ? (() => {
+              try {
+                return JSON.stringify(flushedPayload).slice(0, 220);
+              } catch {
+                return undefined;
+              }
+            })()
+          : prev.lastPayloadPreview,
+      }));
+    }, FLUSH_INTERVAL_MS);
+  }, []);
+
+  const stopFlushTimer = useCallback(() => {
+    if (flushTimerRef.current) {
+      clearInterval(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+  }, []);
+
   const disconnect = useCallback(() => {
     manualCloseRef.current = true;
+    stopFlushTimer();
+    bufferRef.current = { count: 0 };
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -73,7 +114,7 @@ export function useSlotTradeUpdatesSpike(wsHost: string) {
       status: "idle",
       subscriptionId: undefined,
     }));
-  }, []);
+  }, [stopFlushTimer]);
 
   const connect = useCallback(() => {
     const existingSocket = socketRef.current;
@@ -87,6 +128,7 @@ export function useSlotTradeUpdatesSpike(wsHost: string) {
     }
 
     manualCloseRef.current = false;
+    bufferRef.current = { count: 0 };
     setState((prev) => ({
       ...prev,
       status: "connecting",
@@ -136,12 +178,14 @@ export function useSlotTradeUpdatesSpike(wsHost: string) {
         return;
       }
 
+      // Subscription confirmation — apply immediately (not throttled)
       if (parsed.id === subscriptionRequestId && parsed.result) {
         setState((prev) => ({
           ...prev,
           status: "subscribed",
           subscriptionId: parsed.result,
         }));
+        startFlushTimer();
         return;
       }
 
@@ -149,23 +193,22 @@ export function useSlotTradeUpdatesSpike(wsHost: string) {
         return;
       }
 
+      // ── Buffer the update instead of calling setState per message ──
       const update = parsed.params?.result;
-      const nextSolPrice = update?.sol_price_usd ? Number(update.sol_price_usd) : undefined;
+      const nextSolPrice = update?.sol_price_usd
+        ? Number(update.sol_price_usd)
+        : undefined;
 
-      setState((prev) => ({
-        ...prev,
-        status: "subscribed",
-        eventCount: prev.eventCount + 1,
-        lastSolPrice:
-          typeof nextSolPrice === "number" && Number.isFinite(nextSolPrice)
-            ? nextSolPrice
-            : prev.lastSolPrice,
-        lastEventAt: nowAsClockText(),
-        lastPayloadPreview: parsePayloadPreview(update),
-      }));
+      const buf = bufferRef.current;
+      buf.count += 1;
+      if (typeof nextSolPrice === "number" && Number.isFinite(nextSolPrice)) {
+        buf.lastSolPrice = nextSolPrice;
+      }
+      buf.lastPayload = update;
     });
 
     socket.addEventListener("close", () => {
+      stopFlushTimer();
       if (!manualCloseRef.current) {
         setState((prev) => ({
           ...prev,
@@ -176,22 +219,24 @@ export function useSlotTradeUpdatesSpike(wsHost: string) {
     });
 
     socket.addEventListener("error", () => {
+      stopFlushTimer();
       setState((prev) => ({
         ...prev,
         status: "error",
         errorText: "WebSocket transport error",
       }));
     });
-  }, [wsHost]);
+  }, [wsHost, startFlushTimer, stopFlushTimer]);
 
   useEffect(() => {
     return () => {
       manualCloseRef.current = true;
+      stopFlushTimer();
       if (socketRef.current) {
         socketRef.current.close();
       }
     };
-  }, []);
+  }, [stopFlushTimer]);
 
   return {
     state,

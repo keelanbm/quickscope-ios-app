@@ -1,4 +1,3 @@
-import "react-native-get-random-values";
 import { Buffer } from "buffer";
 
 Buffer.prototype.subarray = function subarray(start?: number, end?: number) {

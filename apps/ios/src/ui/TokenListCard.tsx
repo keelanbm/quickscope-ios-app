@@ -1,11 +1,12 @@
 import { memo } from "react";
 
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 import { SocialChips, type SocialLink } from "@/src/ui/SocialChips";
 import { SparklineChart } from "@/src/ui/SparklineChart";
 import { Star, Zap } from "@/src/ui/icons";
+import { TokenAvatar } from "@/src/ui/TokenAvatar";
 
 type SparklinePoint = { ts: number; value: number };
 
@@ -113,13 +114,7 @@ function TokenListCardInner({
       <View style={styles.mainRow}>
         {/* Token Image */}
         <View style={styles.imageContainer}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.tokenImage} />
-          ) : (
-            <View style={styles.imageFallback}>
-              <Text style={styles.imageFallbackText}>{symbol[0] ?? "?"}</Text>
-            </View>
-          )}
+          <TokenAvatar uri={imageUri} size={36} />
         </View>
 
         {/* Token Info */}

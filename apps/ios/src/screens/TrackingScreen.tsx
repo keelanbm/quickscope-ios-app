@@ -4,7 +4,6 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import {
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -39,6 +38,7 @@ import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens"
 import { Activity, Eye, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
+import { TokenAvatar } from "@/src/ui/TokenAvatar";
 
 /* ─── Types ─── */
 
@@ -76,8 +76,6 @@ const ACTION_LABELS: Record<string, ActivityRow["action"]> = {
 };
 
 /* ─── Formatters ─── */
-
-const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
 
 function formatCompactUsd(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "$0";
@@ -641,10 +639,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
               onPress={() => handleOpenTokenDetail(token.mint, token.symbol)}
             >
               <View style={styles.rowMain}>
-                <Image
-                  source={{ uri: token.imageUri || fallbackTokenImage }}
-                  style={styles.tokenImage}
-                />
+                <TokenAvatar uri={token.imageUri} size={36} />
                 <View style={styles.nameColumn}>
                   <Text numberOfLines={1} style={styles.tokenSymbol}>
                     {token.symbol}
@@ -731,13 +726,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
             onPress={() => handleOpenTokenDetail(event.mint, event.symbol)}
           >
             <View style={styles.rowMain}>
-              {event.imageUri ? (
-                <Image source={{ uri: event.imageUri }} style={styles.tokenImage} />
-              ) : (
-                <View style={styles.tokenAvatar}>
-                  <Text style={styles.tokenAvatarText}>{event.symbol[0]}</Text>
-                </View>
-              )}
+              <TokenAvatar uri={event.imageUri} size={36} />
               <View style={styles.nameColumn}>
                 <Text numberOfLines={1} style={styles.tokenSymbol}>
                   {event.symbol}

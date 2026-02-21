@@ -3,6 +3,7 @@ module.exports = function (api) {
   return {
     presets: ["babel-preset-expo"],
     plugins: [
+      ["babel-plugin-react-compiler"],
       ["module:react-native-dotenv"],
       ["@babel/plugin-syntax-dynamic-import"],
       ["@babel/plugin-proposal-export-namespace-from"],
