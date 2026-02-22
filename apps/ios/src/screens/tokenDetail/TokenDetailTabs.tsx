@@ -1,5 +1,5 @@
 /**
- * Tab system below chart — Activity, Traders, Holders.
+ * Tab system below chart — Activity, Traders, Holders, Orders.
  *
  * Purple underline style matching PortfolioScreen pattern.
  */
@@ -13,21 +13,35 @@ import { haptics } from "@/src/lib/haptics";
 import { ActivityTab, type ActivityRow } from "./tabs/ActivityTab";
 import { TradersTab } from "./tabs/TradersTab";
 import { HoldersTab } from "./tabs/HoldersTab";
+import { OrdersTab } from "@/src/ui/OrdersTab";
 
-type TokenDetailTab = "activity" | "traders" | "holders";
+type TokenDetailTab = "activity" | "traders" | "holders" | "orders";
 
 const TOKEN_TABS: { id: TokenDetailTab; label: string }[] = [
   { id: "activity", label: "Activity" },
   { id: "traders", label: "Traders" },
   { id: "holders", label: "Holders" },
+  { id: "orders", label: "Orders" },
 ];
 
 type TokenDetailTabsProps = {
   rpcClient: RpcClient;
   tokenAddress: string;
+  /** Wallet address — required for Orders tab */
+  walletAddress?: string;
+  /** Resolve token symbol from mint */
+  getTokenSymbol?: (mint: string) => string | undefined;
+  /** Resolve token image URI from mint */
+  getTokenImageUri?: (mint: string) => string | undefined;
 };
 
-export function TokenDetailTabs({ rpcClient, tokenAddress }: TokenDetailTabsProps) {
+export function TokenDetailTabs({
+  rpcClient,
+  tokenAddress,
+  walletAddress,
+  getTokenSymbol,
+  getTokenImageUri,
+}: TokenDetailTabsProps) {
   const [activeTab, setActiveTab] = useState<TokenDetailTab>("activity");
   const [activityRows, setActivityRows] = useState<ActivityRow[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -124,6 +138,15 @@ export function TokenDetailTabs({ rpcClient, tokenAddress }: TokenDetailTabsProp
       )}
       {activeTab === "traders" && <TradersTab />}
       {activeTab === "holders" && <HoldersTab />}
+      {activeTab === "orders" && walletAddress && (
+        <OrdersTab
+          rpcClient={rpcClient}
+          walletAddress={walletAddress}
+          tokenAddress={tokenAddress}
+          getTokenSymbol={getTokenSymbol}
+          getTokenImageUri={getTokenImageUri}
+        />
+      )}
     </View>
   );
 }
