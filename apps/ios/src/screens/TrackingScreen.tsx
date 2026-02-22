@@ -388,20 +388,9 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
 
   /** Tab-specific column headers */
   function renderColumnHeaders() {
-    if (activeTab === "tokens" && watchlistTokens.length > 0) {
-      return (
-        <View style={styles.columnHeaders}>
-          <View style={styles.colHeaderLeft}>
-            <Text style={styles.colHeaderText}>Token</Text>
-          </View>
-          <View style={styles.colHeaderMetric}>
-            <Text style={styles.colHeaderText}>MC</Text>
-          </View>
-          <View style={styles.colHeaderMetric}>
-            <Text style={styles.colHeaderText}>1h%</Text>
-          </View>
-        </View>
-      );
+    if (activeTab === "tokens") {
+      // Simple watchlist rows — no column headers needed
+      return null;
     }
 
     if (activeTab === "wallets" && activity.length > 0) {
@@ -639,35 +628,27 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
               onPress={() => handleOpenTokenDetail(token.mint, token.symbol)}
             >
               <View style={styles.rowMain}>
-                <TokenAvatar uri={token.imageUri} size={36} />
+                <TokenAvatar uri={token.imageUri} size={44} />
                 <View style={styles.nameColumn}>
                   <Text numberOfLines={1} style={styles.tokenSymbol}>
                     {token.symbol}
                   </Text>
-                  <Text numberOfLines={1} style={styles.tokenName}>
-                    {token.name}
+                  <Text numberOfLines={1} style={styles.tokenMcLabel}>
+                    {formatCompactUsd(token.marketCapUsd)} MC
                   </Text>
                 </View>
-                <View style={styles.metricCol}>
-                  <Text numberOfLines={1} style={styles.metricValue}>
+                <View style={styles.priceColumn}>
+                  <Text numberOfLines={1} style={styles.priceValue}>
                     {formatCompactUsd(token.marketCapUsd)}
                   </Text>
-                  <Text numberOfLines={1} style={styles.metricSub}>
-                    {formatCompactUsd(token.oneHourVolumeUsd)} vol
-                  </Text>
-                </View>
-                <View style={styles.metricCol}>
                   <Text
                     numberOfLines={1}
                     style={[
-                      styles.changeValue,
+                      styles.changeInline,
                       { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
                     ]}
                   >
-                    {formatPercent(token.oneHourChangePercent)}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.metricSub}>
-                    {formatCompactNumber(token.holders)} hldr
+                    {isPositive ? "\u25B2" : "\u25BC"} {formatPercent(token.oneHourChangePercent)}
                   </Text>
                 </View>
               </View>
@@ -942,6 +923,28 @@ const styles = StyleSheet.create({
   tokenName: {
     color: qsColors.textTertiary,
     fontSize: 11,
+  },
+  tokenMcLabel: {
+    color: qsColors.textTertiary,
+    fontSize: 12,
+    fontVariant: ["tabular-nums"],
+  },
+
+  // Price column (token watchlist)
+  priceColumn: {
+    alignItems: "flex-end",
+    gap: 2,
+  },
+  priceValue: {
+    color: qsColors.textPrimary,
+    fontSize: 16,
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
+  },
+  changeInline: {
+    fontSize: 12,
+    fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
   },
 
   // Metric columns
