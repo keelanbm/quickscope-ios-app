@@ -2,8 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import * as Clipboard from "expo-clipboard";
 import {
   FlatList,
+  Linking,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -13,6 +15,7 @@ import {
 
 import { haptics } from "@/src/lib/haptics";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { toast } from "@/src/lib/toast";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import { TrackingFloatingNav, type TrackingTabId } from "@/src/ui/TrackingFloatingNav";
 import {
@@ -35,7 +38,8 @@ import {
 } from "@/src/features/watchlist/tokenWatchlistService";
 import type { RootStack, RootTabs, TrackingRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Activity, Eye, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
+import { Activity, Copy, Eye, Globe, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
+import { XIcon, TelegramIcon } from "@/src/ui/icons/BrandIcons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
@@ -622,6 +626,12 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         if (item.type === "token") {
           const token = item.data;
           const isPositive = token.oneHourChangePercent >= 0;
+          // Progressive: future API fields for social links
+          const ext = token as Record<string, unknown>;
+          const twitterUrl = ext.twitterUrl as string | undefined;
+          const telegramUrl = ext.telegramUrl as string | undefined;
+          const websiteUrl = ext.websiteUrl as string | undefined;
+          const hasSocials = Boolean(twitterUrl || telegramUrl || websiteUrl);
           return (
             <Pressable
               style={styles.rowItem}
@@ -630,17 +640,50 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
               <View style={styles.rowMain}>
                 <TokenAvatar uri={token.imageUri} size={44} />
                 <View style={styles.nameColumn}>
-                  <Text numberOfLines={1} style={styles.tokenSymbol}>
-                    {token.symbol}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.tokenMcLabel}>
-                    {formatCompactUsd(token.marketCapUsd)} MC
-                  </Text>
+                  {/* Symbol + copy CA */}
+                  <View style={styles.symbolRow}>
+                    <Text numberOfLines={1} style={styles.tokenSymbol}>
+                      {token.symbol}
+                    </Text>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={async (e) => {
+                        e.stopPropagation();
+                        await Clipboard.setStringAsync(token.mint);
+                        haptics.success();
+                        toast.success("Copied", token.mint);
+                      }}
+                    >
+                      <Copy size={12} color={qsColors.textSubtle} />
+                    </Pressable>
+                  </View>
+                  {/* Social links row */}
+                  <View style={styles.socialRow}>
+                    {twitterUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(twitterUrl)}>
+                        <XIcon size={12} color={qsColors.textTertiary} />
+                      </Pressable>
+                    ) : null}
+                    {telegramUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(telegramUrl)}>
+                        <TelegramIcon size={12} color={qsColors.textTertiary} />
+                      </Pressable>
+                    ) : null}
+                    {websiteUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(websiteUrl)}>
+                        <Globe size={12} color={qsColors.textTertiary} />
+                      </Pressable>
+                    ) : null}
+                    {!hasSocials ? (
+                      <Text style={styles.tokenName}>{token.name}</Text>
+                    ) : null}
+                  </View>
                 </View>
                 <View style={styles.priceColumn}>
                   <Text numberOfLines={1} style={styles.priceValue}>
                     {formatCompactUsd(token.marketCapUsd)}
                   </Text>
+                  <Text numberOfLines={1} style={styles.mcSublabel}>MC</Text>
                   <Text
                     numberOfLines={1}
                     style={[
@@ -924,22 +967,33 @@ const styles = StyleSheet.create({
     color: qsColors.textTertiary,
     fontSize: 11,
   },
-  tokenMcLabel: {
-    color: qsColors.textTertiary,
-    fontSize: 12,
-    fontVariant: ["tabular-nums"],
+  symbolRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  socialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 2,
   },
 
   // Price column (token watchlist)
   priceColumn: {
     alignItems: "flex-end",
-    gap: 2,
+    gap: 1,
   },
   priceValue: {
     color: qsColors.textPrimary,
     fontSize: 16,
     fontWeight: qsTypography.weight.bold,
     fontVariant: ["tabular-nums"],
+  },
+  mcSublabel: {
+    color: qsColors.textSubtle,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.medium,
   },
   changeInline: {
     fontSize: 12,
