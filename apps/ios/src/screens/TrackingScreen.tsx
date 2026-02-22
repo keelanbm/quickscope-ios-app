@@ -626,12 +626,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         if (item.type === "token") {
           const token = item.data;
           const isPositive = token.oneHourChangePercent >= 0;
-          // Progressive: future API fields for social links
-          const ext = token as Record<string, unknown>;
-          const twitterUrl = ext.twitterUrl as string | undefined;
-          const telegramUrl = ext.telegramUrl as string | undefined;
-          const websiteUrl = ext.websiteUrl as string | undefined;
-          const hasSocials = Boolean(twitterUrl || telegramUrl || websiteUrl);
           return (
             <Pressable
               style={styles.rowItem}
@@ -659,31 +653,33 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
                   </View>
                   {/* Social links row */}
                   <View style={styles.socialRow}>
-                    {twitterUrl ? (
-                      <Pressable hitSlop={6} onPress={() => Linking.openURL(twitterUrl)}>
+                    {token.twitterUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(token.twitterUrl!)}>
                         <XIcon size={12} color={qsColors.textTertiary} />
                       </Pressable>
                     ) : null}
-                    {telegramUrl ? (
-                      <Pressable hitSlop={6} onPress={() => Linking.openURL(telegramUrl)}>
+                    {token.telegramUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(token.telegramUrl!)}>
                         <TelegramIcon size={12} color={qsColors.textTertiary} />
                       </Pressable>
                     ) : null}
-                    {websiteUrl ? (
-                      <Pressable hitSlop={6} onPress={() => Linking.openURL(websiteUrl)}>
+                    {token.websiteUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(token.websiteUrl!)}>
                         <Globe size={12} color={qsColors.textTertiary} />
                       </Pressable>
                     ) : null}
-                    {!hasSocials ? (
+                    {!token.twitterUrl && !token.telegramUrl && !token.websiteUrl ? (
                       <Text style={styles.tokenName}>{token.name}</Text>
                     ) : null}
                   </View>
                 </View>
                 <View style={styles.priceColumn}>
-                  <Text numberOfLines={1} style={styles.priceValue}>
-                    {formatCompactUsd(token.marketCapUsd)}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.mcSublabel}>MC</Text>
+                  <View style={styles.mcRow}>
+                    <Text numberOfLines={1} style={styles.priceValue}>
+                      {formatCompactUsd(token.marketCapUsd)}
+                    </Text>
+                    <Text style={styles.mcSublabel}>MC</Text>
+                  </View>
                   <Text
                     numberOfLines={1}
                     style={[
@@ -982,7 +978,12 @@ const styles = StyleSheet.create({
   // Price column (token watchlist)
   priceColumn: {
     alignItems: "flex-end",
-    gap: 1,
+    gap: 2,
+  },
+  mcRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
   },
   priceValue: {
     color: qsColors.textPrimary,
