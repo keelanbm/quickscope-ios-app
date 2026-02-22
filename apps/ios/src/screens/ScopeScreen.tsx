@@ -428,8 +428,7 @@ const ScopeTokenRowItem = React.memo(
             onPress={(e) => onQuickBuy(e, item)}
           >
             <Zap size={10} color={qsColors.accent} />
-            <SolanaIcon size={10} />
-            <Text style={styles.quickBuyText}>.1</Text>
+            <Text style={styles.quickBuyText}>0.1</Text>
           </Pressable>
         </View>
       </Pressable>
@@ -1348,15 +1347,13 @@ const styles = StyleSheet.create({
     height: 28,
     paddingHorizontal: 10,
     borderRadius: qsRadius.pill,
-    backgroundColor: qsColors.layer3,
-    borderWidth: 1,
-    borderColor: qsColors.borderSubtle,
-  },
-  quickBuyButtonPressed: {
     backgroundColor: qsColors.layer4,
   },
+  quickBuyButtonPressed: {
+    backgroundColor: qsColors.layer5,
+  },
   quickBuyText: {
-    color: qsColors.textSecondary,
+    color: qsColors.textPrimary,
     fontSize: 11,
     fontWeight: qsTypography.weight.bold,
     fontVariant: ["tabular-nums"],
