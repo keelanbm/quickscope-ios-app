@@ -1,14 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  LayoutAnimation,
+  Platform,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+} from "react-native";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import * as Haptics from "expo-haptics";
 
 import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
+import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRows } from "@/src/ui/Skeleton";
+import { TokenAvatar } from "@/src/ui/TokenAvatar";
+import { ChevronDown, ChevronUp, Wallet as WalletIcon } from "@/src/ui/icons";
 
-import { formatCompactUsd, formatWalletAddress } from "@/src/lib/format";
+import { formatCompactUsd, formatPercent, formatWalletAddress } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
@@ -19,7 +33,10 @@ import {
 } from "@/src/features/portfolio/portfolioService";
 import type { PortfolioRouteParams, RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
-import { SectionCard } from "@/src/ui/SectionCard";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const PAGE_SIZE = 20;
 
@@ -28,10 +45,176 @@ type PortfolioScreenProps = {
   params?: PortfolioRouteParams;
 };
 
-export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
+// ── Helper: stat value formatting for signed USD ──
+
+function formatSignedUsd(value: number | undefined): string {
+  if (value === undefined || value === 0) return "--";
+  const abs = Math.abs(value);
+  const prefix = value < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${prefix}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${prefix}$${(abs / 1_000).toFixed(1)}K`;
+  if (abs >= 1) return `${prefix}$${abs.toFixed(2)}`;
+  return `${prefix}$${abs.toFixed(4)}`;
+}
+
+// ── MetricCell (expanded row grid) ──
+
+function MetricCell({
+  label,
+  value,
+  positive,
+  isHighlighted,
+}: {
+  label: string;
+  value: string;
+  positive?: boolean;
+  isHighlighted?: boolean;
+}) {
+  const valueColor = isHighlighted
+    ? positive
+      ? qsColors.success
+      : qsColors.danger
+    : qsColors.textSecondary;
+
+  return (
+    <View style={styles.metricCell}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={[styles.metricValue, { color: valueColor }]}>{value}</Text>
+    </View>
+  );
+}
+
+// ── PositionRowItem (expandable) ──
+
+function PositionRowItem({
+  position,
+  solPriceUsd,
+  navigation,
+  isExpanded,
+  onToggleExpand,
+}: {
+  position: Position;
+  solPriceUsd: number;
+  navigation: NativeStackNavigationProp<RootStack>;
+  isExpanded: boolean;
+  onToggleExpand: (mint: string) => void;
+}) {
+  const meta = position.token_info;
+  const symbol = meta?.symbol ?? "UNK";
+  const name = meta?.name ?? "Unknown";
+  const mint = meta?.mint ?? "";
+  const imageUri = meta?.image_uri;
+  const valueUsd = (position.position_value_quote ?? 0) * solPriceUsd;
+  const totalPnlUsd = (position.total_pnl_quote ?? 0) * solPriceUsd;
+  const pnlPercent = (position.total_pnl_change_proportion ?? 0) * 100;
+  const pnlPositive = totalPnlUsd >= 0;
+
+  const unrealizedUsd = (position.unrealized_pnl_quote ?? 0) * solPriceUsd;
+  const realizedUsd = (position.realized_pnl_quote ?? 0) * solPriceUsd;
+  const avgEntryUsd = (position.average_entry_price_quote ?? 0) * solPriceUsd;
+  const avgExitUsd = (position.average_exit_price_quote ?? 0) * solPriceUsd;
+  const boughtUsd = (position.bought_quote ?? 0) * solPriceUsd;
+  const soldUsd = (position.sold_quote ?? 0) * solPriceUsd;
+
+  const handlePress = useCallback(() => onToggleExpand(mint), [onToggleExpand, mint]);
+
+  return (
+    <AnimatedPressable style={styles.positionRow} onPress={handlePress}>
+      <View style={styles.positionSummary}>
+        <TokenAvatar uri={imageUri} size={36} />
+        <View style={styles.positionText}>
+          <Text style={styles.positionSymbol} numberOfLines={1}>{symbol}</Text>
+          <Text style={styles.positionName} numberOfLines={1}>{name}</Text>
+        </View>
+        <View style={styles.positionRight}>
+          <Text style={styles.positionValue}>{formatCompactUsd(valueUsd)}</Text>
+          <Text style={[styles.positionPnl, pnlPositive ? styles.pnlPositive : styles.pnlNegative]}>
+            {formatPercent(pnlPercent)}
+          </Text>
+        </View>
+        {isExpanded ? (
+          <ChevronUp size={16} color={qsColors.textTertiary} />
+        ) : (
+          <ChevronDown size={16} color={qsColors.textTertiary} />
+        )}
+      </View>
+
+      {isExpanded ? (
+        <View style={styles.expandedSection}>
+          <View style={styles.metricGrid}>
+            <MetricCell label="Unrealized PnL" value={formatSignedUsd(unrealizedUsd)} positive={unrealizedUsd >= 0} isHighlighted={unrealizedUsd !== 0} />
+            <MetricCell label="Realized PnL" value={formatSignedUsd(realizedUsd)} positive={realizedUsd >= 0} isHighlighted={realizedUsd !== 0} />
+            <MetricCell label="Avg Entry" value={formatCompactUsd(avgEntryUsd || undefined)} />
+            <MetricCell label="Avg Exit" value={formatCompactUsd(avgExitUsd || undefined)} />
+            <MetricCell label="Bought" value={formatCompactUsd(boughtUsd || undefined)} />
+            <MetricCell label="Sold" value={formatCompactUsd(soldUsd || undefined)} />
+          </View>
+          <AnimatedPressable
+            style={styles.tradeButton}
+            onPress={() =>
+              navigation.navigate("TokenDetail", {
+                source: "portfolio-row",
+                tokenAddress: mint,
+                symbol,
+                name,
+                imageUri: imageUri ?? undefined,
+                platform: meta?.platform ?? undefined,
+                exchange: meta?.exchange ?? undefined,
+              })
+            }
+          >
+            <Text style={styles.tradeButtonText}>Trade</Text>
+          </AnimatedPressable>
+        </View>
+      ) : null}
+    </AnimatedPressable>
+  );
+}
+
+// ── ListHeader (wallet card + stats grid) ──
+
+function ListHeader({
+  walletAddress,
+  stats,
+}: {
+  walletAddress: string | null;
+  stats: { label: string; value: string; color?: string }[];
+}) {
+  return (
+    <View style={styles.listHeader}>
+      <View style={styles.walletCard}>
+        <View style={styles.walletAvatar}>
+          <Text style={styles.walletAvatarText}>Q</Text>
+        </View>
+        <View style={styles.walletText}>
+          <Text style={styles.walletName}>Primary Wallet</Text>
+          <Text style={styles.walletAddress}>
+            {formatWalletAddress(walletAddress ?? undefined)}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.statsRow}>
+        {stats.map((stat) => (
+          <View key={stat.label} style={styles.statCard}>
+            <Text style={styles.statLabel}>{stat.label}</Text>
+            <Text style={[styles.statValue, stat.color ? { color: stat.color } : undefined]}>
+              {stat.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ── Main screen ──
+
+export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
   const { walletAddress } = useAuthSession();
   const requestRef = useRef(0);
+  const offsetRef2 = useRef(0);
   const [overview, setOverview] = useState<TraderOverview | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [solPriceUsd, setSolPriceUsd] = useState(0);
@@ -41,6 +224,7 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [expandedMint, setExpandedMint] = useState<string | null>(null);
 
   const loadData = useCallback(
     (options?: { refreshing?: boolean }) => {
@@ -73,6 +257,7 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
           setSolPriceUsd(positionsResponse.sol_price_usd);
           setSolBalance(positionsResponse.sol_balance);
           setPositions(positionsResponse.positions);
+          offsetRef2.current = positionsResponse.positions.length;
           setHasMore(positionsResponse.positions.length >= PAGE_SIZE);
         })
         .catch((error) => {
@@ -92,7 +277,11 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
     loadData();
   }, [loadData]);
 
-  const handleRefresh = () => loadData({ refreshing: true });
+  const handleRefresh = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setExpandedMint(null);
+    loadData({ refreshing: true });
+  }, [loadData]);
 
   const loadMore = useCallback(() => {
     if (!walletAddress || !hasMore || isLoadingMore || isLoading) return;
@@ -102,12 +291,13 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
 
     fetchTraderPositions(rpcClient, walletAddress, {
       limit: PAGE_SIZE,
-      offset: positions.length,
+      offset: offsetRef2.current,
       sort_column: "position_value_quote",
     })
       .then((response) => {
         if (requestId !== requestRef.current) return;
         setPositions((prev) => [...prev, ...response.positions]);
+        offsetRef2.current += response.positions.length;
         setHasMore(response.positions.length >= PAGE_SIZE);
       })
       .catch(() => {
@@ -117,7 +307,7 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
         if (requestId !== requestRef.current) return;
         setIsLoadingMore(false);
       });
-  }, [rpcClient, walletAddress, hasMore, isLoadingMore, isLoading, positions.length]);
+  }, [rpcClient, walletAddress, hasMore, isLoadingMore, isLoading]);
 
   const stats = useMemo(() => {
     const balanceUsd = solBalance ? solBalance * solPriceUsd : undefined;
@@ -127,15 +317,73 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
     return [
       { label: "Balance", value: formatCompactUsd(balanceUsd) },
       { label: "Positions", value: positions.length > 0 ? positions.length.toString() : "--" },
-      { label: "Total PnL", value: formatCompactUsd(totalPnl || undefined) },
-      { label: "Unrealized PnL", value: formatCompactUsd(unrealizedPnl || undefined) },
+      { label: "Total PnL", value: formatSignedUsd(totalPnl || undefined), color: totalPnl === 0 ? undefined : totalPnl > 0 ? qsColors.success : qsColors.danger },
+      { label: "Unrealized PnL", value: formatSignedUsd(unrealizedPnl || undefined), color: unrealizedPnl === 0 ? undefined : unrealizedPnl > 0 ? qsColors.success : qsColors.danger },
     ];
   }, [solBalance, solPriceUsd, positions]);
 
+  const handleToggleExpand = useCallback((mint: string) => {
+    Haptics.selectionAsync();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedMint((prev) => (prev === mint ? null : mint));
+  }, []);
+
+  const renderItem = useCallback(
+    ({ item }: { item: Position }) => (
+      <PositionRowItem
+        position={item}
+        solPriceUsd={solPriceUsd}
+        navigation={navigation}
+        isExpanded={expandedMint === (item.token_info?.mint ?? "")}
+        onToggleExpand={handleToggleExpand}
+      />
+    ),
+    [solPriceUsd, navigation, expandedMint, handleToggleExpand],
+  );
+
+  const listHeader = useMemo(
+    () => <ListHeader walletAddress={walletAddress ?? null} stats={stats} />,
+    [walletAddress, stats],
+  );
+
+  const listEmpty = useMemo(
+    () =>
+      isLoading ? (
+        <SkeletonRows count={6} />
+      ) : errorText ? (
+        <Text style={styles.errorText}>{errorText}</Text>
+      ) : (
+        <EmptyState
+          icon={WalletIcon}
+          title="No positions"
+          subtitle="Your active token positions will appear here."
+        />
+      ),
+    [isLoading, errorText],
+  );
+
+  const listFooter = useMemo(
+    () =>
+      isLoadingMore ? (
+        <View style={styles.footer}>
+          <ActivityIndicator color={qsColors.accent} />
+        </View>
+      ) : null,
+    [isLoadingMore],
+  );
+
   return (
-    <ScrollView
+    <FlatList
       style={styles.page}
       contentContainerStyle={styles.content}
+      data={isLoading ? [] : positions}
+      keyExtractor={(item, index) => item.token_info?.mint ?? `position-${index}`}
+      renderItem={renderItem}
+      ListHeaderComponent={listHeader}
+      ListEmptyComponent={listEmpty}
+      ListFooterComponent={listFooter}
+      onEndReached={loadMore}
+      onEndReachedThreshold={0.3}
       refreshControl={
         <RefreshControl
           tintColor={qsColors.textMuted}
@@ -143,109 +391,24 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
           onRefresh={handleRefresh}
         />
       }
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Portfolio</Text>
-        <Text style={styles.subtitle}>Snapshot of balances and active positions.</Text>
-      </View>
-
-      <View style={styles.walletCard}>
-        <View style={styles.walletAvatar}>
-          <Text style={styles.walletAvatarText}>Q</Text>
-        </View>
-        <View style={styles.walletText}>
-          <Text style={styles.walletName}>Primary Wallet</Text>
-          <Text style={styles.walletAddress}>
-            {formatWalletAddress(walletAddress ?? params?.walletAddress)}
-          </Text>
-        </View>
-        <AnimatedPressable style={styles.walletButton}>
-          <Text style={styles.walletButtonText}>Manage</Text>
-        </AnimatedPressable>
-      </View>
-
-      <View style={styles.statsRow}>
-        {stats.map((stat) => (
-          <View key={stat.label} style={styles.statCard}>
-            <Text style={styles.statLabel}>{stat.label}</Text>
-            <Text style={styles.statValue}>{stat.value}</Text>
-          </View>
-        ))}
-      </View>
-
-      <SectionCard title="Positions" subtitle="Top holdings by value">
-        {isLoading ? (
-          <SkeletonRows count={4} />
-        ) : errorText ? (
-          <Text style={styles.contextText}>{errorText}</Text>
-        ) : positions.length === 0 ? (
-          <Text style={styles.contextText}>No positions yet.</Text>
-        ) : (
-          positions.map((position) => (
-            <AnimatedPressable
-              key={position.id}
-              style={styles.positionRow}
-              onPress={() =>
-                navigation.navigate("TokenDetail", {
-                  source: "portfolio-row",
-                  tokenAddress: position.id,
-                  symbol: position.symbol,
-                  name: position.name,
-                })
-              }
-            >
-              <View style={styles.positionLeft}>
-                <View style={styles.positionAvatar}>
-                  <Text style={styles.positionAvatarText}>{position.symbol[0]}</Text>
-                </View>
-                <View style={styles.positionText}>
-                  <Text style={styles.positionSymbol}>{position.symbol}</Text>
-                  <Text style={styles.positionName}>{position.name}</Text>
-                </View>
-              </View>
-              <View style={styles.positionRight}>
-                <Text style={styles.positionValue}>{position.value}</Text>
-                <Text
-                  style={[
-                    styles.positionPnl,
-                    position.pnlPositive ? styles.pnlPositive : styles.pnlNegative,
-                  ]}
-                >
-                  {position.pnl}
-                </Text>
-              </View>
-            </AnimatedPressable>
-          ))
-        )}
-      </SectionCard>
-
-      {params?.source ? (
-        <Text style={styles.contextText}>Opened from a deep link.</Text>
-      ) : null}
-    </ScrollView>
+    />
   );
 }
+
+// ── Styles ──
 
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: qsColors.bgCanvas,
+    backgroundColor: qsColors.layer0,
   },
   content: {
-    padding: qsSpacing.xl,
+    padding: qsSpacing.lg,
+    gap: qsSpacing.xs,
+  },
+  listHeader: {
     gap: qsSpacing.md,
-  },
-  header: {
-    gap: 4,
-  },
-  title: {
-    color: qsColors.textPrimary,
-    fontSize: 28,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: qsColors.textMuted,
-    fontSize: 14,
+    marginBottom: qsSpacing.sm,
   },
   walletCard: {
     flexDirection: "row",
@@ -254,14 +417,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCard,
+    backgroundColor: qsColors.layer1,
     padding: qsSpacing.sm,
   },
   walletAvatar: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     alignItems: "center",
@@ -284,19 +447,6 @@ const styles = StyleSheet.create({
     color: qsColors.textSubtle,
     fontSize: 12,
   },
-  walletButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: qsRadius.sm,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.bgCardSoft,
-  },
-  walletButtonText: {
-    color: qsColors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
   statsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -307,7 +457,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     padding: qsSpacing.sm,
     gap: 4,
   },
@@ -319,39 +469,22 @@ const styles = StyleSheet.create({
     color: qsColors.textSecondary,
     fontSize: 16,
     fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   positionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.bgCardSoft,
+    backgroundColor: qsColors.layer2,
     padding: qsSpacing.sm,
-    gap: qsSpacing.sm,
   },
-  positionLeft: {
+  positionSummary: {
     flexDirection: "row",
     alignItems: "center",
     gap: qsSpacing.sm,
-    flex: 1,
-  },
-  positionAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: qsColors.bgCard,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  positionAvatarText: {
-    color: qsColors.textPrimary,
-    fontWeight: "700",
   },
   positionText: {
+    flex: 1,
     gap: 2,
   },
   positionSymbol: {
@@ -365,15 +498,18 @@ const styles = StyleSheet.create({
   },
   positionRight: {
     alignItems: "flex-end",
-    gap: 4,
+    gap: 2,
   },
   positionValue: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
   },
   positionPnl: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
   },
   pnlPositive: {
     color: qsColors.success,
@@ -381,8 +517,51 @@ const styles = StyleSheet.create({
   pnlNegative: {
     color: qsColors.danger,
   },
-  contextText: {
+  expandedSection: {
+    borderTopWidth: 1,
+    borderTopColor: qsColors.borderDefault,
+    paddingTop: qsSpacing.sm,
+    marginTop: qsSpacing.sm,
+    gap: qsSpacing.sm,
+  },
+  metricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: qsSpacing.sm,
+  },
+  metricCell: {
+    width: "30%",
+    gap: 2,
+  },
+  metricLabel: {
+    color: qsColors.textTertiary,
+    fontSize: 11,
+  },
+  metricValue: {
+    color: qsColors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
+  },
+  tradeButton: {
+    backgroundColor: qsColors.accent,
+    borderRadius: qsRadius.sm,
+    paddingVertical: qsSpacing.sm,
+    alignItems: "center",
+  },
+  tradeButtonText: {
+    color: qsColors.textPrimary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  footer: {
+    paddingVertical: qsSpacing.lg,
+    alignItems: "center",
+  },
+  errorText: {
     color: qsColors.textSubtle,
     fontSize: 12,
+    textAlign: "center",
+    padding: qsSpacing.lg,
   },
 });
