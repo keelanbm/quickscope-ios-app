@@ -32,7 +32,7 @@ import {
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, RootTabs, ScopeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { ChevronDown, Copy, Crosshair, SlidersHorizontal, Star, Zap, SolanaIcon, X, Check } from "@/src/ui/icons";
+import { ChevronDown, Copy, Crosshair, Globe, MessageCircle, SlidersHorizontal, Star, Zap, SolanaIcon, X, Check, XIcon, TelegramIcon } from "@/src/ui/icons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
@@ -184,6 +184,11 @@ function formatAge(unixSeconds: number): string {
   return `${Math.floor(elapsed / 604800)}w`;
 }
 
+function truncateAddress(mint: string): string {
+  if (!mint || mint.length < 10) return mint || "—";
+  return `${mint.slice(0, 4)}..${mint.slice(-4)}`;
+}
+
 function getPlatformAbbrev(platform?: string): string | null {
   if (!platform) return null;
   const lower = platform.toLowerCase();
@@ -196,7 +201,7 @@ function getPlatformAbbrev(platform?: string): string | null {
   return platform.slice(0, 2).toUpperCase();
 }
 
-/* ─── Memoized Token Row ─── */
+/* ─── Memoized Token Row (Axiom Surge–inspired 4-row card) ─── */
 
 type ScopeTokenRowItemProps = {
   item: ScopeToken;
@@ -220,6 +225,19 @@ const ScopeTokenRowItem = React.memo(
     const age = formatAge(item.mintedAtSeconds);
     const platformAbbrev = getPlatformAbbrev(item.platform);
     const highScans = item.scanMentionsOneHour > 10;
+    const priceValue = item.marketCapUsd; // proxy until priceUsd available
+
+    // Future fields — typed as optional on ScopeToken
+    const athUsd = (item as Record<string, unknown>).athUsd as number | undefined;
+    const athMultiplier = (item as Record<string, unknown>).athMultiplier as number | undefined;
+    const liquidityUsd = (item as Record<string, unknown>).liquidityUsd as number | undefined;
+    const holderCount = (item as Record<string, unknown>).holderCount as number | undefined;
+    const twitterUrl = (item as Record<string, unknown>).twitterUrl as string | undefined;
+    const telegramUrl = (item as Record<string, unknown>).telegramUrl as string | undefined;
+    const websiteUrl = (item as Record<string, unknown>).websiteUrl as string | undefined;
+    const topHolderPercent = (item as Record<string, unknown>).topHolderPercent as number | undefined;
+    const devSoldPercent = (item as Record<string, unknown>).devSoldPercent as number | undefined;
+    const bundlePercent = (item as Record<string, unknown>).bundlePercent as number | undefined;
 
     const stopRowPress = (event: GestureResponderEvent) => {
       event.stopPropagation();
@@ -230,11 +248,11 @@ const ScopeTokenRowItem = React.memo(
         style={({ pressed }) => [styles.rowItem, pressed && styles.rowItemPressed]}
         onPress={() => onPress(item)}
       >
-        {/* ── Row 1: image + identity + change% + quick buy ── */}
-        <View style={styles.rowTop}>
-          {/* Token image with platform badge */}
+        {/* ── Row 1: Avatar + Identity + Age ── */}
+        <View style={styles.row1}>
+          {/* Token avatar with platform badge */}
           <View style={styles.imageWrap}>
-            <TokenAvatar uri={item.imageUri} size={36} />
+            <TokenAvatar uri={item.imageUri} size={48} />
             {platformAbbrev ? (
               <View style={styles.platformBadge}>
                 <Text style={styles.platformBadgeText}>{platformAbbrev}</Text>
@@ -242,15 +260,15 @@ const ScopeTokenRowItem = React.memo(
             ) : null}
           </View>
 
-          {/* Symbol + age + actions */}
+          {/* Symbol + Name + Copy + Star */}
           <View style={styles.identityCol}>
             <View style={styles.symbolRow}>
               <Text numberOfLines={1} style={styles.tokenSymbol}>
                 {item.symbol || "???"}
               </Text>
-              <View style={styles.agePillWrap}>
-                <Text style={styles.agePillText}>{age}</Text>
-              </View>
+              <Text numberOfLines={1} style={styles.tokenName}>
+                {item.name || "Unnamed"}
+              </Text>
               <Pressable
                 onPress={(e) => {
                   stopRowPress(e);
@@ -258,7 +276,7 @@ const ScopeTokenRowItem = React.memo(
                 }}
                 hitSlop={6}
               >
-                <Copy size={11} color={qsColors.textTertiary} />
+                <Copy size={12} color={qsColors.textTertiary} />
               </Pressable>
               <Pressable
                 onPress={(e) => {
@@ -274,22 +292,134 @@ const ScopeTokenRowItem = React.memo(
                 />
               </Pressable>
             </View>
-            <Text numberOfLines={1} style={styles.tokenName}>
-              {item.name || "Unnamed"}
-            </Text>
           </View>
 
-          {/* 1h% change — large, color-coded */}
-          <Text
-            style={[
-              styles.changePercent,
-              { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
-            ]}
-          >
-            {formatPercent(item.oneHourChangePercent)}
-          </Text>
+          {/* Age — top right */}
+          <Text style={styles.ageText}>{age}</Text>
+        </View>
 
-          {/* Quick Buy button */}
+        {/* ── Row 2: Price Hero ── */}
+        <View style={styles.row2}>
+          <Text style={styles.mcLabel}>
+            MC{" "}
+            <Text style={styles.mcValue}>{formatCompactUsd(item.marketCapUsd)}</Text>
+          </Text>
+          <View style={styles.priceCluster}>
+            <View
+              style={[
+                styles.priceDot,
+                { backgroundColor: isPositive ? qsColors.buyGreen : qsColors.sellRed },
+              ]}
+            />
+            <Text style={styles.priceHero}>{formatCompactUsd(priceValue)}</Text>
+            <Text
+              style={[
+                styles.changePercent,
+                { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
+              ]}
+            >
+              {formatPercent(item.oneHourChangePercent)}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Row 3: Social & ATH ── */}
+        <View style={styles.row3}>
+          {/* Left: age pill + abbreviated address + social icons */}
+          <View style={styles.socialCluster}>
+            <Text style={styles.addressText}>{truncateAddress(item.mint)}</Text>
+            {twitterUrl ? (
+              <Pressable hitSlop={6} onPress={stopRowPress}>
+                <XIcon size={13} color={qsColors.textTertiary} />
+              </Pressable>
+            ) : null}
+            {telegramUrl ? (
+              <Pressable hitSlop={6} onPress={stopRowPress}>
+                <TelegramIcon size={13} color={qsColors.textTertiary} />
+              </Pressable>
+            ) : null}
+            {websiteUrl ? (
+              <Pressable hitSlop={6} onPress={stopRowPress}>
+                <Globe size={13} color={qsColors.textTertiary} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Right: ATH */}
+          <View style={styles.athCluster}>
+            <Text style={styles.athLabel}>ATH</Text>
+            <Text style={styles.athValue}>
+              {athUsd != null ? formatCompactUsd(athUsd) : "—"}
+            </Text>
+            {athMultiplier != null ? (
+              <Text style={styles.athMultiplier}>{athMultiplier.toFixed(2)}x</Text>
+            ) : null}
+          </View>
+        </View>
+
+        {/* ── Row 4: Dense Metrics + Chips + Quick Buy ── */}
+        <View style={styles.row4}>
+          {/* Metrics */}
+          <View style={styles.metricsCluster}>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>V</Text>
+              <Text style={styles.metricVal}>{formatCompactUsd(item.oneHourVolumeUsd)}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>L</Text>
+              <Text style={styles.metricVal}>
+                {liquidityUsd != null ? formatCompactUsd(liquidityUsd) : "—"}
+              </Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>👥</Text>
+              <Text style={styles.metricVal}>
+                {holderCount != null ? formatCompactNumber(holderCount) : "—"}
+              </Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>↕</Text>
+              <Text style={styles.metricVal}>{formatCompactNumber(item.oneHourTxCount)}</Text>
+            </View>
+            {item.scanMentionsOneHour > 0 ? (
+              <View style={styles.metricItem}>
+                <Text style={styles.metricLabel}>S</Text>
+                <Text style={[styles.metricVal, highScans && styles.metricValAccent]}>
+                  {formatCompactNumber(item.scanMentionsOneHour)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Percentage chips — only shown when data available */}
+          {(topHolderPercent != null || devSoldPercent != null || bundlePercent != null) ? (
+            <View style={styles.chipCluster}>
+              {topHolderPercent != null ? (
+                <View style={[styles.percentChip, topHolderPercent > 50 ? styles.chipRed : styles.chipGreen]}>
+                  <Text style={[styles.percentChipText, topHolderPercent > 50 ? styles.chipTextRed : styles.chipTextGreen]}>
+                    📈{topHolderPercent}%
+                  </Text>
+                </View>
+              ) : null}
+              {devSoldPercent != null ? (
+                <View style={[styles.percentChip, devSoldPercent > 50 ? styles.chipRed : styles.chipGreen]}>
+                  <Text style={[styles.percentChipText, devSoldPercent > 50 ? styles.chipTextRed : styles.chipTextGreen]}>
+                    📉{devSoldPercent}%
+                  </Text>
+                </View>
+              ) : null}
+              {bundlePercent != null ? (
+                <View style={[styles.percentChip, bundlePercent > 20 ? styles.chipRed : styles.chipGreen]}>
+                  <Text style={[styles.percentChipText, bundlePercent > 20 ? styles.chipTextRed : styles.chipTextGreen]}>
+                    🎯{bundlePercent}%
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Quick Buy pill — pushed right */}
+          <View style={{ flex: 1 }} />
           <Pressable
             style={({ pressed }) => [
               styles.quickBuyButton,
@@ -297,43 +427,9 @@ const ScopeTokenRowItem = React.memo(
             ]}
             onPress={(e) => onQuickBuy(e, item)}
           >
-            <SolanaIcon size={10} />
+            <Zap size={10} color={qsColors.accent} />
             <Text style={styles.quickBuyText}>0.1</Text>
           </Pressable>
-        </View>
-
-        {/* ── Row 2: Dense metric strip ── */}
-        <View style={styles.metricsStrip}>
-          <View style={styles.metricChip}>
-            <Text style={styles.metricLabel}>MC</Text>
-            <Text style={styles.metricVal}>{formatCompactUsd(item.marketCapUsd)}</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricChip}>
-            <Text style={styles.metricLabel}>VOL</Text>
-            <Text style={styles.metricVal}>{formatCompactUsd(item.oneHourVolumeUsd)}</Text>
-          </View>
-          <View style={styles.metricDivider} />
-          <View style={styles.metricChip}>
-            <Text style={styles.metricLabel}>TXS</Text>
-            <Text style={styles.metricVal}>{formatCompactNumber(item.oneHourTxCount)}</Text>
-          </View>
-          {item.scanMentionsOneHour > 0 ? (
-            <>
-              <View style={styles.metricDivider} />
-              <View style={styles.metricChip}>
-                <Text style={styles.metricLabel}>SCANS</Text>
-                <Text
-                  style={[
-                    styles.metricVal,
-                    highScans && styles.metricValAccent,
-                  ]}
-                >
-                  {formatCompactNumber(item.scanMentionsOneHour)}
-                </Text>
-              </View>
-            </>
-          ) : null}
         </View>
       </Pressable>
     );
@@ -1026,143 +1122,181 @@ const styles = StyleSheet.create({
     fontWeight: qsTypography.weight.bold,
   },
 
-  // ── Token rows — card style ──
+  // ── Token rows — 4-row card style (Axiom Surge layout) ──
   rowItem: {
     marginHorizontal: qsSpacing.lg,
     marginBottom: qsSpacing.sm,
-    paddingHorizontal: qsSpacing.md,
-    paddingTop: 10,
-    paddingBottom: 10,
+    padding: qsSpacing.md,
     backgroundColor: qsColors.layer1,
     borderRadius: qsRadius.lg,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    gap: 6,
+    gap: 8,
   },
   rowItemPressed: {
     backgroundColor: qsColors.layer2,
   },
 
-  // Row 1: image + identity + change + buy
-  rowTop: {
+  // ── Row 1: Avatar + Identity + Age ──
+  row1: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
-
-  // Token image with platform badge
   imageWrap: {
-    width: 36,
-    height: 36,
+    width: 48,
+    height: 48,
   },
   platformBadge: {
     position: "absolute",
     bottom: -2,
     right: -2,
-    minWidth: 16,
-    height: 14,
-    borderRadius: qsRadius.pill,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: qsColors.layer2,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
   },
   platformBadgeText: {
     fontSize: 7,
     fontWeight: qsTypography.weight.bold,
     color: qsColors.textSecondary,
   },
-
   identityCol: {
     flex: 1,
-    gap: 0,
+    justifyContent: "center",
   },
   symbolRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 5,
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: qsTypography.weight.bold,
     flexShrink: 1,
   },
-
-  // Age pill with background
-  agePillWrap: {
-    backgroundColor: qsColors.layer2,
-    borderRadius: qsRadius.pill,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+  tokenName: {
+    color: qsColors.textSecondary,
+    fontSize: 12,
+    flexShrink: 1,
   },
-  agePillText: {
+  ageText: {
     color: qsColors.accent,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: qsTypography.weight.semi,
   },
 
-  tokenName: {
-    color: qsColors.textTertiary,
-    fontSize: 10,
-    marginTop: 1,
-  },
-
-  // 1h% change — prominent
-  changePercent: {
-    fontSize: 14,
-    fontWeight: qsTypography.weight.bold,
-    fontVariant: ["tabular-nums"],
-    minWidth: 52,
-    textAlign: "right",
-  },
-
-  // Quick buy
-  quickBuyButton: {
+  // ── Row 2: Price Hero ──
+  row2: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-    height: 28,
-    paddingHorizontal: 10,
-    borderRadius: qsRadius.pill,
-    backgroundColor: qsColors.layer3,
-    borderWidth: 1,
-    borderColor: qsColors.borderSubtle,
+    justifyContent: "space-between",
+    paddingLeft: 58, // align with text after avatar (48 + 10 gap)
   },
-  quickBuyButtonPressed: {
-    backgroundColor: qsColors.layer4,
+  mcLabel: {
+    color: qsColors.textSubtle,
+    fontSize: 12,
+    fontWeight: qsTypography.weight.medium,
   },
-  quickBuyText: {
+  mcValue: {
+    color: qsColors.textSecondary,
+    fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
+  },
+  priceCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  priceDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  priceHero: {
+    color: qsColors.textPrimary,
+    fontSize: 16,
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
+  },
+  changePercent: {
+    fontSize: 13,
+    fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
+  },
+
+  // ── Row 3: Social & ATH ──
+  row3: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: 58,
+  },
+  socialCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  addressText: {
+    color: qsColors.textTertiary,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.medium,
+    fontVariant: ["tabular-nums"],
+  },
+  athCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  athLabel: {
+    color: qsColors.textSubtle,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.semi,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  athValue: {
     color: qsColors.textSecondary,
     fontSize: 11,
-    fontWeight: qsTypography.weight.bold,
+    fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
+  },
+  athMultiplier: {
+    color: qsColors.textTertiary,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.medium,
     fontVariant: ["tabular-nums"],
   },
 
-  // ── Row 2: Dense metric strip ──
-  metricsStrip: {
+  // ── Row 4: Dense Metrics + Chips + Quick Buy ──
+  row4: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
     borderTopWidth: 1,
     borderTopColor: qsColors.borderDefault,
-    paddingTop: 6,
+    paddingTop: 8,
     marginTop: 2,
   },
-  metricChip: {
-    flex: 1,
+  metricsCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    justifyContent: "center",
+    gap: 8,
+  },
+  metricItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
   },
   metricLabel: {
     color: qsColors.textSubtle,
     fontSize: 10,
     fontWeight: qsTypography.weight.semi,
-    textTransform: "uppercase",
     letterSpacing: 0.3,
   },
   metricVal: {
@@ -1174,11 +1308,55 @@ const styles = StyleSheet.create({
   metricValAccent: {
     color: qsColors.accent,
   },
-  metricDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: qsColors.borderSubtle,
-    marginHorizontal: 4,
+
+  // Percentage chips
+  chipCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  percentChip: {
+    borderRadius: qsRadius.pill,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  percentChipText: {
+    fontSize: 9,
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
+  },
+  chipGreen: {
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+  },
+  chipTextGreen: {
+    color: qsColors.buyGreen,
+  },
+  chipRed: {
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+  },
+  chipTextRed: {
+    color: qsColors.sellRed,
+  },
+
+  // Quick buy
+  quickBuyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: qsRadius.pill,
+    backgroundColor: qsColors.layer4,
+  },
+  quickBuyButtonPressed: {
+    backgroundColor: qsColors.layer5,
+  },
+  quickBuyText: {
+    color: qsColors.textPrimary,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
   },
 
   // ── Filter Bottom Sheet ──

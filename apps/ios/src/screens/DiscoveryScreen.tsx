@@ -6,7 +6,6 @@ import * as Clipboard from "expo-clipboard";
 import React from "react";
 import {
   FlatList,
-  type GestureResponderEvent,
   type ListRenderItemInfo,
   Linking,
   Pressable,
@@ -27,10 +26,11 @@ import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { toast } from "@/src/lib/toast";
 import type { DiscoveryRouteParams, RootStack, RootTabs } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Compass, Copy, Globe, Star, XIcon, TelegramIcon, SlidersHorizontal } from "@/src/ui/icons";
+import { Compass, SlidersHorizontal } from "@/src/ui/icons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
+import { TokenListCard } from "@/src/ui/TokenListCard";
 
 type DiscoveryScreenProps = {
   rpcClient: RpcClient;
@@ -49,70 +49,17 @@ const tabs: DiscoveryTab[] = [
 ];
 
 function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "$0";
-  }
-
-  const absValue = Math.abs(value);
-  if (absValue >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  }
-  if (absValue >= 1_000_000) {
-    return `$${(value / 1_000_000).toFixed(2)}M`;
-  }
-  if (absValue >= 1_000) {
-    return `$${(value / 1_000).toFixed(1)}K`;
-  }
-  if (absValue >= 1) {
-    return `$${value.toFixed(2)}`;
-  }
-
-  return `$${value.toFixed(4)}`;
+  if (!Number.isFinite(value) || value <= 0) return "$0";
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  return `$${value.toFixed(2)}`;
 }
 
 function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "0.0%";
-  }
-
+  if (!Number.isFinite(value)) return "0.0%";
   const prefix = value > 0 ? "+" : "";
   return `${prefix}${value.toFixed(1)}%`;
-}
-
-function formatCompactNumber(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "0";
-  }
-
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
-
-  return String(Math.round(value));
-}
-
-function formatAgeFromSeconds(unixSeconds: number): string {
-  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) {
-    return "n/a";
-  }
-
-  const elapsedSeconds = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s`;
-  }
-  if (elapsedSeconds < 3600) {
-    return `${Math.floor(elapsedSeconds / 60)}m`;
-  }
-  if (elapsedSeconds < 86400) {
-    return `${Math.floor(elapsedSeconds / 3600)}h`;
-  }
-  if (elapsedSeconds < 604800) {
-    return `${Math.floor(elapsedSeconds / 86400)}d`;
-  }
-  return `${Math.floor(elapsedSeconds / 604800)}w`;
 }
 
 /** Short label for the launchpad / exchange */
@@ -127,170 +74,8 @@ function launchpadLabel(platform?: string, exchange?: string): string | null {
   if (raw.includes("believe")) return "Blv";
   if (raw.includes("moonshot")) return "Moon";
   if (raw.includes("jupiter") || raw.includes("jup")) return "Jup";
-  // fallback: first 4 chars capitalized
   return raw.charAt(0).toUpperCase() + raw.slice(1, 4);
 }
-
-// ── Memoized row component ──
-
-type DiscoveryRowItemProps = {
-  item: DiscoveryToken;
-  activeTab: DiscoveryTabId;
-  isHighlighted: boolean;
-  isStarred: boolean;
-  onOpenTokenDetail: (token: DiscoveryToken) => void;
-  onCopyAddress: (mint: string) => void;
-  onToggleStar: (mint: string) => void;
-  onOpenExternal: (url: string) => void;
-};
-
-const DiscoveryRowItem = React.memo(
-  function DiscoveryRowItem({
-    item,
-    activeTab,
-    isHighlighted,
-    isStarred,
-    onOpenTokenDetail,
-    onCopyAddress,
-    onToggleStar,
-    onOpenExternal,
-  }: DiscoveryRowItemProps) {
-    const badge = launchpadLabel(item.platform, item.exchange);
-    const isPositive = item.oneHourChangePercent >= 0;
-
-    const stopRowPress = useCallback((event: GestureResponderEvent) => {
-      event.stopPropagation();
-    }, []);
-
-    return (
-      <Pressable
-        style={[styles.rowItem, isHighlighted ? styles.rowItemHighlighted : null]}
-        onPress={() => onOpenTokenDetail(item)}
-      >
-        <View style={styles.rowMain}>
-          <View style={styles.imageWrap}>
-            <TokenAvatar uri={item.imageUri} size={44} />
-            {badge ? (
-              <View style={styles.launchBadge}>
-                <Text style={styles.launchBadgeText}>{badge}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.nameColumn}>
-            <View style={styles.nameRow}>
-              <Text numberOfLines={1} style={styles.tokenSymbol}>
-                {item.symbol || "Unknown"}
-              </Text>
-              <Pressable
-                onPress={(event) => {
-                  stopRowPress(event);
-                  void onCopyAddress(item.mint);
-                }}
-                hitSlop={6}
-              >
-                <Copy size={12} color={qsColors.textTertiary} />
-              </Pressable>
-              <Pressable
-                onPress={(event) => {
-                  stopRowPress(event);
-                  onToggleStar(item.mint);
-                }}
-                hitSlop={6}
-              >
-                <Star
-                  size={13}
-                  color={isStarred ? qsColors.accent : qsColors.textTertiary}
-                  fill={isStarred ? qsColors.accent : "none"}
-                />
-              </Pressable>
-            </View>
-            <Text numberOfLines={1} style={styles.tokenName}>
-              {item.name || "Unnamed"}
-            </Text>
-          </View>
-
-          <View style={styles.metricCol}>
-            <Text numberOfLines={1} style={styles.metricValue}>
-              {formatCompactUsd(item.oneHourVolumeUsd)}
-            </Text>
-            <Text numberOfLines={1} style={styles.metricSub}>
-              {activeTab === "scan-feed"
-                ? `${formatCompactNumber(item.scanMentionsOneHour)} scans`
-                : `${formatCompactNumber(item.oneHourTxCount)} txs`}
-            </Text>
-          </View>
-
-          <View style={styles.metricCol}>
-            <Text numberOfLines={1} style={styles.metricValue}>
-              {formatCompactUsd(item.marketCapUsd)}
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.changeValue,
-                { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
-              ]}
-            >
-              {formatPercent(item.oneHourChangePercent)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.rowFooter}>
-          <Text style={styles.ageText}>
-            {formatAgeFromSeconds(item.mintedAtSeconds)}
-          </Text>
-          <View style={styles.linksRow}>
-            {item.twitterUrl ? (
-              <Pressable
-                style={styles.linkChip}
-                onPress={(event) => {
-                  stopRowPress(event);
-                  void onOpenExternal(item.twitterUrl!);
-                }}
-              >
-                <XIcon size={13} color={qsColors.textSecondary} />
-              </Pressable>
-            ) : null}
-            {item.telegramUrl ? (
-              <Pressable
-                style={styles.linkChip}
-                onPress={(event) => {
-                  stopRowPress(event);
-                  void onOpenExternal(item.telegramUrl!);
-                }}
-              >
-                <TelegramIcon size={13} color={qsColors.textSecondary} />
-              </Pressable>
-            ) : null}
-            {item.websiteUrl ? (
-              <Pressable
-                style={styles.linkChip}
-                onPress={(event) => {
-                  stopRowPress(event);
-                  void onOpenExternal(item.websiteUrl!);
-                }}
-              >
-                <Globe size={13} color={qsColors.textSecondary} />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      </Pressable>
-    );
-  },
-  (prev, next) =>
-    prev.item.mint === next.item.mint &&
-    prev.item.marketCapUsd === next.item.marketCapUsd &&
-    prev.item.oneHourChangePercent === next.item.oneHourChangePercent &&
-    prev.item.oneHourVolumeUsd === next.item.oneHourVolumeUsd &&
-    prev.item.oneHourTxCount === next.item.oneHourTxCount &&
-    prev.item.scanMentionsOneHour === next.item.scanMentionsOneHour &&
-    prev.activeTab === next.activeTab &&
-    prev.isHighlighted === next.isHighlighted &&
-    prev.isStarred === next.isStarred
-);
 
 export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabs>>();
@@ -384,7 +169,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
     return rows
       .slice()
       .sort((a, b) => b.oneHourChangePercent - a.oneHourChangePercent)
-      .slice(0, 5);
+      .slice(0, 8);
   }, [rows]);
 
   const toggleStar = useCallback((mint: string) => {
@@ -407,7 +192,6 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         toast.error("Invalid link", "Unable to open this URL.");
         return;
       }
-
       await Linking.openURL(url);
     } catch (error) {
       toast.error("Open failed", String(error));
@@ -438,22 +222,29 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
 
   const renderRow = useCallback(
     ({ item }: ListRenderItemInfo<DiscoveryToken>) => (
-      <DiscoveryRowItem
-        item={item}
-        activeTab={activeTab}
-        isHighlighted={selectedTokenAddress === item.mint}
+      <TokenListCard
+        symbol={item.symbol}
+        name={item.name}
+        imageUri={item.imageUri}
+        mint={item.mint}
+        marketCapUsd={item.marketCapUsd}
+        oneHourVolumeUsd={item.oneHourVolumeUsd}
+        oneHourTxCount={item.oneHourTxCount}
+        oneHourChangePercent={item.oneHourChangePercent}
+        platformLabel={launchpadLabel(item.platform, item.exchange) ?? undefined}
+        twitterUrl={item.twitterUrl}
+        telegramUrl={item.telegramUrl}
+        websiteUrl={item.websiteUrl}
+        onPress={() => handleOpenTokenDetail(item)}
+        onToggleStar={() => toggleStar(item.mint)}
         isStarred={Boolean(starredMints[item.mint])}
-        onOpenTokenDetail={handleOpenTokenDetail}
-        onCopyAddress={handleCopyAddress}
-        onToggleStar={toggleStar}
-        onOpenExternal={handleOpenExternal}
+        highlighted={selectedTokenAddress === item.mint}
       />
     ),
-    [activeTab, selectedTokenAddress, starredMints, handleOpenTokenDetail, handleCopyAddress, toggleStar, handleOpenExternal]
+    [selectedTokenAddress, starredMints, handleOpenTokenDetail, toggleStar]
   );
 
   const handleFilterPress = useCallback(() => {
-    // TODO: open filter sheet
     toast.info("Filters", "Filter preferences coming soon.");
   }, []);
 
@@ -507,16 +298,17 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             </View>
           ) : null}
 
-          {/* ── Top Movers (above tabs) ── */}
+          {/* ── Top Movers carousel ── */}
           {!isInitialLoading && topMovers.length > 0 ? (
             <View style={styles.topMoversSection}>
-              <Text style={styles.topMoversHeader}>Scan Feed</Text>
+              <Text style={styles.topMoversHeader}>Top Movers</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.topMoversScroll}
               >
                 {topMovers.map((token) => {
+                  const isPositive = token.oneHourChangePercent >= 0;
                   return (
                     <Pressable
                       key={token.mint}
@@ -525,7 +317,19 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                     >
                       <TokenAvatar uri={token.imageUri} size={32} />
                       <Text style={styles.topMoverSymbol} numberOfLines={1}>
-                        {token.symbol || "Unknown"}
+                        {token.symbol || "???"}
+                      </Text>
+                      <Text style={styles.topMoverMC} numberOfLines={1}>
+                        {formatCompactUsd(token.marketCapUsd)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.topMoverChange,
+                          { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {formatPercent(token.oneHourChangePercent)}
                       </Text>
                     </Pressable>
                   );
@@ -534,7 +338,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             </View>
           ) : null}
 
-          {/* ── Tab pills + filter icon (below Top Movers) ── */}
+          {/* ── Tab pills + filter icon ── */}
           <View style={styles.tabRow}>
             <View style={styles.tabsWrap}>
               {tabs.map((tab) => {
@@ -559,23 +363,6 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
               <SlidersHorizontal size={18} color={qsColors.textSecondary} />
             </Pressable>
           </View>
-
-          {/* ── Column headers ── */}
-          {!isInitialLoading && rows.length > 0 ? (
-            <View style={styles.columnHeaders}>
-              <View style={styles.colHeaderLeft}>
-                <Text style={styles.colHeaderText}>Token</Text>
-              </View>
-              <View style={styles.colHeaderMetric}>
-                <Text style={styles.colHeaderText}>
-                  {activeTab === "scan-feed" ? "Vol / Scans" : "Vol / TXs"}
-                </Text>
-              </View>
-              <View style={styles.colHeaderMetric}>
-                <Text style={styles.colHeaderText}>MC / 1h</Text>
-              </View>
-            </View>
-          ) : null}
         </View>
       }
       renderItem={renderRow}
@@ -699,162 +486,29 @@ const styles = StyleSheet.create({
     gap: qsSpacing.sm,
   },
   topMoverCard: {
-    width: 110,
+    width: 120,
     backgroundColor: qsColors.layer1,
     borderRadius: qsRadius.lg,
     paddingVertical: 12,
     paddingHorizontal: qsSpacing.sm,
     alignItems: "center",
-    gap: 6,
-  },
-  topMoverImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: qsColors.layer3,
+    gap: 4,
   },
   topMoverSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 12,
-    fontWeight: qsTypography.weight.semi,
+    fontSize: 13,
+    fontWeight: qsTypography.weight.bold,
+    marginTop: 4,
+  },
+  topMoverMC: {
+    color: qsColors.textSecondary,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.medium,
+    fontVariant: ["tabular-nums"],
   },
   topMoverChange: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: qsTypography.weight.bold,
-  },
-
-  // ── Token rows ──
-  rowItem: {
-    paddingHorizontal: qsSpacing.lg,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: qsColors.layer0,
-  },
-  rowItemHighlighted: {
-    backgroundColor: qsColors.layer1,
-  },
-  rowMain: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  // Image with launchpad badge overlay
-  imageWrap: {
-    width: 44,
-    height: 44,
-    position: "relative",
-  },
-  launchBadge: {
-    position: "absolute",
-    top: -3,
-    left: -5,
-    backgroundColor: qsColors.layer1,
-    borderRadius: qsRadius.xs,
-    paddingHorizontal: 3,
-    paddingVertical: 1,
-  },
-  launchBadgeText: {
-    fontSize: 8,
-    fontWeight: qsTypography.weight.bold,
-    color: qsColors.textSecondary,
-  },
-
-  // Name column
-  nameColumn: {
-    flex: 1,
-    gap: 1,
-  },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  tokenSymbol: {
-    color: qsColors.textPrimary,
-    fontSize: 14,
-    fontWeight: qsTypography.weight.bold,
-    flexShrink: 1,
-  },
-  tokenName: {
-    color: qsColors.textTertiary,
-    fontSize: 11,
-  },
-  ageText: {
-    color: qsColors.buyGreen,
-    fontSize: 10,
-    fontWeight: qsTypography.weight.semi,
-  },
-
-  // GMGN-style metric columns (Vol/TX and MC/1h%)
-  metricCol: {
-    alignItems: "flex-end",
-    gap: 2,
-    minWidth: 64,
-  },
-  metricValue: {
-    color: qsColors.textPrimary,
-    fontSize: 12,
-    fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
   },
-  metricSub: {
-    color: qsColors.textSecondary,
-    fontSize: 12,
-    fontWeight: qsTypography.weight.semi,
-    fontVariant: ["tabular-nums"],
-  },
-  changeValue: {
-    fontSize: 12,
-    fontWeight: qsTypography.weight.semi,
-    fontVariant: ["tabular-nums"],
-  },
-
-  // Column headers
-  columnHeaders: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: qsSpacing.lg,
-    gap: 8,
-  },
-  colHeaderLeft: {
-    flex: 1,
-  },
-  colHeaderMetric: {
-    alignItems: "flex-end",
-    minWidth: 64,
-  },
-  colHeaderText: {
-    color: qsColors.textSubtle,
-    fontSize: 10,
-    fontWeight: qsTypography.weight.semi,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  // Footer
-  rowFooter: {
-    marginTop: 4,
-    marginLeft: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  footerMeta: {
-    color: qsColors.textSubtle,
-    fontSize: 10,
-  },
-  linksRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  linkChip: {
-    borderRadius: 999,
-    backgroundColor: qsColors.layer2,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-
 });

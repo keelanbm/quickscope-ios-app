@@ -2,8 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
+import * as Clipboard from "expo-clipboard";
 import {
   FlatList,
+  Linking,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -13,6 +15,7 @@ import {
 
 import { haptics } from "@/src/lib/haptics";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { toast } from "@/src/lib/toast";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import { TrackingFloatingNav, type TrackingTabId } from "@/src/ui/TrackingFloatingNav";
 import {
@@ -35,7 +38,8 @@ import {
 } from "@/src/features/watchlist/tokenWatchlistService";
 import type { RootStack, RootTabs, TrackingRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Activity, Eye, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
+import { Activity, Copy, Eye, Globe, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
+import { XIcon, TelegramIcon } from "@/src/ui/icons/BrandIcons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
@@ -388,20 +392,9 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
 
   /** Tab-specific column headers */
   function renderColumnHeaders() {
-    if (activeTab === "tokens" && watchlistTokens.length > 0) {
-      return (
-        <View style={styles.columnHeaders}>
-          <View style={styles.colHeaderLeft}>
-            <Text style={styles.colHeaderText}>Token</Text>
-          </View>
-          <View style={styles.colHeaderMetric}>
-            <Text style={styles.colHeaderText}>MC</Text>
-          </View>
-          <View style={styles.colHeaderMetric}>
-            <Text style={styles.colHeaderText}>1h%</Text>
-          </View>
-        </View>
-      );
+    if (activeTab === "tokens") {
+      // Simple watchlist rows — no column headers needed
+      return null;
     }
 
     if (activeTab === "wallets" && activity.length > 0) {
@@ -639,35 +632,62 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
               onPress={() => handleOpenTokenDetail(token.mint, token.symbol)}
             >
               <View style={styles.rowMain}>
-                <TokenAvatar uri={token.imageUri} size={36} />
+                <TokenAvatar uri={token.imageUri} size={44} />
                 <View style={styles.nameColumn}>
-                  <Text numberOfLines={1} style={styles.tokenSymbol}>
-                    {token.symbol}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.tokenName}>
-                    {token.name}
-                  </Text>
+                  {/* Symbol + copy CA */}
+                  <View style={styles.symbolRow}>
+                    <Text numberOfLines={1} style={styles.tokenSymbol}>
+                      {token.symbol}
+                    </Text>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={async (e) => {
+                        e.stopPropagation();
+                        await Clipboard.setStringAsync(token.mint);
+                        haptics.success();
+                        toast.success("Copied", token.mint);
+                      }}
+                    >
+                      <Copy size={12} color={qsColors.textSubtle} />
+                    </Pressable>
+                  </View>
+                  {/* Social links row */}
+                  <View style={styles.socialRow}>
+                    {token.twitterUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(token.twitterUrl!)}>
+                        <XIcon size={12} color={qsColors.textTertiary} />
+                      </Pressable>
+                    ) : null}
+                    {token.telegramUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(token.telegramUrl!)}>
+                        <TelegramIcon size={12} color={qsColors.textTertiary} />
+                      </Pressable>
+                    ) : null}
+                    {token.websiteUrl ? (
+                      <Pressable hitSlop={6} onPress={() => Linking.openURL(token.websiteUrl!)}>
+                        <Globe size={12} color={qsColors.textTertiary} />
+                      </Pressable>
+                    ) : null}
+                    {!token.twitterUrl && !token.telegramUrl && !token.websiteUrl ? (
+                      <Text style={styles.tokenName}>{token.name}</Text>
+                    ) : null}
+                  </View>
                 </View>
-                <View style={styles.metricCol}>
-                  <Text numberOfLines={1} style={styles.metricValue}>
-                    {formatCompactUsd(token.marketCapUsd)}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.metricSub}>
-                    {formatCompactUsd(token.oneHourVolumeUsd)} vol
-                  </Text>
-                </View>
-                <View style={styles.metricCol}>
+                <View style={styles.priceColumn}>
+                  <View style={styles.mcRow}>
+                    <Text numberOfLines={1} style={styles.priceValue}>
+                      {formatCompactUsd(token.marketCapUsd)}
+                    </Text>
+                    <Text style={styles.mcSublabel}>MC</Text>
+                  </View>
                   <Text
                     numberOfLines={1}
                     style={[
-                      styles.changeValue,
+                      styles.changeInline,
                       { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
                     ]}
                   >
-                    {formatPercent(token.oneHourChangePercent)}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.metricSub}>
-                    {formatCompactNumber(token.holders)} hldr
+                    {isPositive ? "\u25B2" : "\u25BC"} {formatPercent(token.oneHourChangePercent)}
                   </Text>
                 </View>
               </View>
@@ -942,6 +962,44 @@ const styles = StyleSheet.create({
   tokenName: {
     color: qsColors.textTertiary,
     fontSize: 11,
+  },
+  symbolRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  socialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 2,
+  },
+
+  // Price column (token watchlist)
+  priceColumn: {
+    alignItems: "flex-end",
+    gap: 2,
+  },
+  mcRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
+  },
+  priceValue: {
+    color: qsColors.textPrimary,
+    fontSize: 16,
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
+  },
+  mcSublabel: {
+    color: qsColors.textSubtle,
+    fontSize: 10,
+    fontWeight: qsTypography.weight.medium,
+  },
+  changeInline: {
+    fontSize: 12,
+    fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
   },
 
   // Metric columns

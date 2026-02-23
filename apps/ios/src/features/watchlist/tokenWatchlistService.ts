@@ -16,6 +16,9 @@ export type WatchlistTokenRow = {
   image_uri?: string;
   platform?: string;
   exchange?: string;
+  twitter_url?: string;
+  telegram_url?: string;
+  website_url?: string;
   market_cap_sol: number;
   one_hour_volume_sol: number;
   one_hour_change: number;
@@ -36,6 +39,9 @@ export type EnrichedWatchlistToken = {
   symbol: string;
   name: string;
   imageUri?: string;
+  twitterUrl?: string;
+  telegramUrl?: string;
+  websiteUrl?: string;
   marketCapUsd: number;
   oneHourVolumeUsd: number;
   oneHourChangePercent: number;
@@ -103,6 +109,9 @@ export async function fetchWatchlistTokens(
     symbol: row.symbol || "???",
     name: row.name || "Unknown",
     imageUri: row.image_uri,
+    twitterUrl: row.twitter_url,
+    telegramUrl: row.telegram_url,
+    websiteUrl: row.website_url,
     marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
     oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
     oneHourChangePercent: toNumber(row.one_hour_change) * 100,
