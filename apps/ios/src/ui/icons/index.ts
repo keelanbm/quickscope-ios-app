@@ -69,6 +69,7 @@ export {
   LogOut,
   Gift,
   User,
+  Users,
   HelpCircle,
 } from "lucide-react-native";
 

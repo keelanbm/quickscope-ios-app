@@ -31,9 +31,7 @@ import {
 import {
   RootStack,
   RootTabs,
-  TelegramRouteParams,
 } from "@/src/navigation/types";
-import { MvpPlaceholderScreen } from "@/src/screens/MvpPlaceholderScreen";
 import { DiscoveryScreen } from "@/src/screens/DiscoveryScreen";
 import { ScopeScreen } from "@/src/screens/ScopeScreen";
 import { SearchScreen } from "@/src/screens/SearchScreen";
@@ -59,6 +57,9 @@ const TrackingScreen = React.lazy(() =>
 );
 const TokenDetailScreen = React.lazy(() =>
   import("@/src/screens/TokenDetailScreen").then((m) => ({ default: m.TokenDetailScreen }))
+);
+const TelegramScreen = React.lazy(() =>
+  import("@/src/screens/TelegramScreen").then((m) => ({ default: m.TelegramScreen }))
 );
 const TradeEntryScreen = React.lazy(() =>
   import("@/src/screens/TradeEntryScreen").then((m) => ({ default: m.TradeEntryScreen }))
@@ -95,25 +96,6 @@ const navigationTheme: Theme = {
     primary: qsColors.accent,
   },
 };
-
-function getTelegramContextLines(params?: TelegramRouteParams): string[] | undefined {
-  if (!params?.source) {
-    return undefined;
-  }
-
-  const lines = ["Opened from a deep link."];
-  if (params.action) {
-    lines.push(`Action: ${params.action}`);
-  }
-  if (params.tokenAddress) {
-    lines.push(`Token: ${params.tokenAddress}`);
-  }
-  if (params.chatId) {
-    lines.push(`Chat ID: ${params.chatId}`);
-  }
-
-  return lines;
-}
 
 function navigateToTarget(
   navigationRef: ReturnType<typeof createNavigationContainerRef<RootStack>>,
@@ -277,11 +259,9 @@ function MainTabsNavigator({
               featureName="Telegram"
               subtitle="Connect to link Telegram and share token updates."
             >
-              <MvpPlaceholderScreen
-                title="Telegram"
-                description="Native Telegram link/share flows are targeted in Week 6."
-                contextLines={getTelegramContextLines(route.params)}
-              />
+              <Suspense fallback={<LazyFallback />}>
+                <TelegramScreen rpcClient={rpcClient} params={route.params} />
+              </Suspense>
             </AuthRouteGate>
           </RouteErrorBoundary>
         )}
