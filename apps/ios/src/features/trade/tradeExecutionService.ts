@@ -19,6 +19,8 @@ export type SwapExecutionRequest = {
   outputMint: string;
   amountAtomic: number;
   slippageBps: number;
+  priorityFeeLamports: number;
+  jitoTipLamports: number;
 };
 
 export type SwapExecutionResult = {
@@ -43,8 +45,8 @@ export async function requestSwapExecution(
     input.amountAtomic,
     input.slippageBps,
     {
-      priority_fee_lamports: 0,
-      tip_amount_lamports: 0,
+      priority_fee_lamports: input.priorityFeeLamports,
+      tip_amount_lamports: input.jitoTipLamports,
     },
   ]);
 

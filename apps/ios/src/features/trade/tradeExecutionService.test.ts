@@ -20,6 +20,8 @@ describe("requestSwapExecution", () => {
       outputMint: "TokenMint123",
       amountAtomic: 250_000_000,
       slippageBps: 50,
+      priorityFeeLamports: 100_000,
+      jitoTipLamports: 50_000,
     });
 
     expect(call).toHaveBeenCalledWith("tx/swap", [
@@ -29,8 +31,8 @@ describe("requestSwapExecution", () => {
       250_000_000,
       50,
       {
-        priority_fee_lamports: 0,
-        tip_amount_lamports: 0,
+        priority_fee_lamports: 100_000,
+        tip_amount_lamports: 50_000,
       },
     ]);
     expect(result.status).toBe("pending");
@@ -54,6 +56,8 @@ describe("requestSwapExecution", () => {
       outputMint: "TokenMint123",
       amountAtomic: 250_000_000,
       slippageBps: 50,
+      priorityFeeLamports: 0,
+      jitoTipLamports: 0,
     });
 
     expect(result.status).toBe("failed");
