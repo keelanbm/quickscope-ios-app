@@ -687,7 +687,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
                       { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
                     ]}
                   >
-                    {isPositive ? "\u25B2" : "\u25BC"} {formatPercent(token.oneHourChangePercent)}
+                    {isPositive ? "▲" : "▼"} {formatPercent(token.oneHourChangePercent)}
                   </Text>
                 </View>
               </View>
