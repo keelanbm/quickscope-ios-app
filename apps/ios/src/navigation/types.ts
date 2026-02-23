@@ -61,6 +61,13 @@ export type TelegramRouteParams = {
   chatId?: string;
 };
 
+export type WalletDetailRouteParams = {
+  source?: "tracking-row" | "portfolio-row" | "deep-link";
+  walletAddress: string;
+  walletName?: string;
+  walletEmoji?: string;
+};
+
 export type TokenDetailRouteParams = {
   source?: DeepLinkMeta["source"] | "discovery-row" | "scope-row" | "portfolio-row";
   tokenAddress: string;
@@ -91,6 +98,7 @@ export type RootTabs = {
 export type RootStack = {
   MainTabs: NavigatorScreenParams<RootTabs>;
   TokenDetail: TokenDetailRouteParams;
+  WalletDetail: WalletDetailRouteParams;
   TradeEntry: TradeEntryRouteParams | undefined;
   ReviewTrade: ReviewTradeRouteParams;
   Rewards: undefined;

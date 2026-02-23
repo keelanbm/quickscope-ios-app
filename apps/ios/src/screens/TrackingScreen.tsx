@@ -69,6 +69,8 @@ type ActivityRow = {
   tokenAddress: string;
   imageUri?: string;
   walletLabel: string;
+  walletPublicKey: string;
+  walletEmoji?: string;
   action: "Buy" | "Sell" | "Add" | "Remove";
   amountSol: string;
   timeAgo: string;
@@ -121,9 +123,12 @@ function formatTimeAgo(unixSeconds: number): string {
   return `${Math.floor(delta / 86400)}d`;
 }
 
-function resolveWalletLabel(wallets: TrackedWallet[], maker: string): string {
+function resolveWalletInfo(wallets: TrackedWallet[], maker: string): { label: string; emoji?: string } {
   const wallet = wallets.find((entry) => entry.public_key === maker);
-  return wallet?.name || `${maker.slice(0, 4)}...${maker.slice(-4)}`;
+  return {
+    label: wallet?.name || `${maker.slice(0, 4)}...${maker.slice(-4)}`,
+    emoji: wallet?.emoji,
+  };
 }
 
 /* ─── Sub-components ─── */
@@ -278,7 +283,9 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
             tokenName: tokenInfo?.name ?? "Unknown token",
             tokenAddress: row.mint,
             imageUri: tokenInfo?.image_uri,
-            walletLabel: resolveWalletLabel(wallets, row.maker),
+            walletLabel: resolveWalletInfo(wallets, row.maker).label,
+            walletPublicKey: row.maker,
+            walletEmoji: resolveWalletInfo(wallets, row.maker).emoji,
             action: ACTION_LABELS[row.type] ?? ("Buy" as const),
             amountSol: formatAmount(row.amount_quote ?? 0),
             timeAgo: formatTimeAgo(row.ts),
@@ -343,6 +350,18 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         source: "deep-link",
         tokenAddress,
         symbol,
+      });
+    },
+    [rootNavigation]
+  );
+
+  const handleOpenWalletDetail = useCallback(
+    (walletAddress: string, walletName?: string, walletEmoji?: string) => {
+      rootNavigation?.navigate("WalletDetail", {
+        source: "tracking-row",
+        walletAddress,
+        walletName,
+        walletEmoji,
       });
     },
     [rootNavigation]
@@ -824,10 +843,22 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
                     {row.tokenSymbol}
                   </Text>
                   <View style={styles.walletMetaRow}>
-                    <Wallet size={10} color={qsColors.textSubtle} />
-                    <Text numberOfLines={1} style={styles.walletMetaText}>
-                      {row.walletLabel}
-                    </Text>
+                    <Pressable
+                      hitSlop={6}
+                      style={styles.walletMetaTap}
+                      onPress={() =>
+                        handleOpenWalletDetail(
+                          row.walletPublicKey,
+                          row.walletLabel,
+                          row.walletEmoji
+                        )
+                      }
+                    >
+                      <Wallet size={10} color={qsColors.accent} />
+                      <Text numberOfLines={1} style={styles.walletMetaTextTap}>
+                        {row.walletLabel}
+                      </Text>
+                    </Pressable>
                     <Text style={styles.walletMetaDot}>·</Text>
                     <Text style={styles.walletMetaText}>{row.timeAgo}</Text>
                   </View>
@@ -1216,6 +1247,16 @@ const styles = StyleSheet.create({
   },
   walletMetaText: {
     color: qsColors.textSubtle,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.medium,
+  },
+  walletMetaTap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  walletMetaTextTap: {
+    color: qsColors.accent,
     fontSize: 11,
     fontWeight: qsTypography.weight.medium,
   },

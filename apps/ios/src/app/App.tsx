@@ -60,6 +60,9 @@ const TrackingScreen = React.lazy(() =>
 const TokenDetailScreen = React.lazy(() =>
   import("@/src/screens/TokenDetailScreen").then((m) => ({ default: m.TokenDetailScreen }))
 );
+const WalletDetailScreen = React.lazy(() =>
+  import("@/src/screens/walletDetail/WalletDetailScreen").then((m) => ({ default: m.WalletDetailScreen }))
+);
 const TradeEntryScreen = React.lazy(() =>
   import("@/src/screens/TradeEntryScreen").then((m) => ({ default: m.TradeEntryScreen }))
 );
@@ -409,6 +412,17 @@ export default function App() {
                   <RouteErrorBoundary routeName="Token Detail">
                     <Suspense fallback={<LazyFallback />}>
                       <TokenDetailScreen rpcClient={rpcClient} params={route.params} />
+                    </Suspense>
+                  </RouteErrorBoundary>
+                )}
+              />
+              <Stack.Screen
+                name="WalletDetail"
+                options={{ headerShown: false }}
+                children={({ route }) => (
+                  <RouteErrorBoundary routeName="Wallet Detail">
+                    <Suspense fallback={<LazyFallback />}>
+                      <WalletDetailScreen rpcClient={rpcClient} params={route.params} />
                     </Suspense>
                   </RouteErrorBoundary>
                 )}
