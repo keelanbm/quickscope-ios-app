@@ -71,6 +71,8 @@ import {
   createTriggerOrder,
   type CreateTriggerOrderParams,
 } from "@/src/features/trade/triggerOrderService";
+import { requestSwapQuote } from "@/src/features/trade/tradeQuoteService";
+import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
 import { haptics } from "@/src/lib/haptics";
 import { ArrowLeft, Zap } from "@/src/ui/icons";
 
@@ -403,6 +405,36 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     [navigation, tokenAddress, params?.tokenDecimals]
   );
 
+  const handleMarketQuoteRequest = useCallback(
+    async (params2: { side: "buy" | "sell"; amountUi: number; inputMint: string; outputMint: string }) => {
+      const quote = await requestSwapQuote(rpcClient, {
+        walletAddress: walletAddress!,
+        inputMint: params2.inputMint,
+        outputMint: params2.outputMint,
+        amountUi: params2.amountUi,
+        slippageBps: currentProfile.slippageBps,
+      });
+      return quote;
+    },
+    [rpcClient, walletAddress, currentProfile.slippageBps]
+  );
+
+  const handleExecuteSwap = useCallback(
+    async (swapParams: { quoteResult: { inputMint: string; outputMint: string; amountAtomic: number; slippageBps: number }; side: "buy" | "sell" }) => {
+      const result = await requestSwapExecution(rpcClient, {
+        walletAddress: walletAddress!,
+        inputMint: swapParams.quoteResult.inputMint,
+        outputMint: swapParams.quoteResult.outputMint,
+        amountAtomic: swapParams.quoteResult.amountAtomic,
+        slippageBps: swapParams.quoteResult.slippageBps,
+        priorityFeeLamports: currentProfile.priorityLamports,
+        jitoTipLamports: currentProfile.tipLamports ?? 0,
+      });
+      return result;
+    },
+    [rpcClient, walletAddress, currentProfile]
+  );
+
   const handleLimitOrderRequest = useCallback(
     async (orderParams: Omit<CreateTriggerOrderParams, "walletAddress">) => {
       if (!walletAddress) {
@@ -637,6 +669,8 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
         walletAddress={walletAddress ?? undefined}
         onLimitOrderRequest={handleLimitOrderRequest}
         isSubmittingOrder={isSubmittingOrder}
+        onMarketQuoteRequest={handleMarketQuoteRequest}
+        onExecuteSwap={handleExecuteSwap}
       />
 
       {/* ── Trade Settings Modal ── */}

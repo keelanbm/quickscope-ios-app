@@ -261,15 +261,78 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     }, [amountNum, tradeMode, triggerMCNum, walletAddress]);
 
     // Handle main button press
-    const handleActionPress = useCallback(() => {
-      if (!canSubmit) return;
+    const handleActionPress = useCallback(async () => {
+      if (!canSubmit || execPhase !== "idle") return;
 
+      // Market / Instant mode — inline quote + execution flow
       if (tradeMode === "market" || tradeMode === "instant") {
-        onQuoteRequest({
-          side: activeTab,
-          amount: amountNum,
-          orderType: "market",
-        });
+        if (!onMarketQuoteRequest) {
+          // Fallback to legacy navigation-based flow
+          onQuoteRequest({ side: activeTab, amount: amountNum, orderType: "market" });
+          return;
+        }
+
+        const SOL_MINT = "So11111111111111111111111111111111111111112";
+        const inputMint = activeTab === "buy" ? SOL_MINT : tokenAddress;
+        const outputMint = activeTab === "buy" ? tokenAddress : SOL_MINT;
+
+        if (tradeMode === "instant" && onExecuteSwap) {
+          // Instant mode — skip quote confirmation, go straight to submit
+          setExecPhase("submitting");
+          if (ref && typeof ref !== "function" && ref.current) {
+            ref.current.snapToIndex(1);
+          }
+          haptics.medium();
+          try {
+            const quote = await onMarketQuoteRequest({
+              side: activeTab,
+              amountUi: amountNum,
+              inputMint,
+              outputMint,
+            });
+            if (!quote) throw new Error("Quote unavailable");
+            const result = await onExecuteSwap({ quoteResult: quote, side: activeTab });
+            if (result?.signature) {
+              setExecResult(result);
+              setExecPhase("success");
+              haptics.success();
+            } else {
+              setExecError(result?.errorPreview ?? "Swap failed");
+              setExecPhase("failed");
+              haptics.error();
+            }
+          } catch (err) {
+            setExecError(err instanceof Error ? err.message : "Swap failed");
+            setExecPhase("failed");
+            haptics.error();
+          }
+          return;
+        }
+
+        // Market mode — get quote first, then confirm
+        setExecPhase("quoting");
+        if (ref && typeof ref !== "function" && ref.current) {
+          ref.current.snapToIndex(1);
+        }
+        try {
+          const quote = await onMarketQuoteRequest({
+            side: activeTab,
+            amountUi: amountNum,
+            inputMint,
+            outputMint,
+          });
+          if (quote) {
+            setQuoteResult(quote);
+            setExecPhase("quoted");
+            haptics.light();
+          } else {
+            throw new Error("No quote returned");
+          }
+        } catch (err) {
+          setExecError(err instanceof Error ? err.message : "Quote failed");
+          setExecPhase("failed");
+          haptics.error();
+        }
         return;
       }
 
@@ -297,21 +360,54 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       });
     }, [
       canSubmit,
+      execPhase,
       tradeMode,
       activeTab,
       amountNum,
       onQuoteRequest,
+      onMarketQuoteRequest,
+      onExecuteSwap,
+      tokenAddress,
+      ref,
       showConfirmation,
       detectedOrderType,
       walletAddress,
       onLimitOrderRequest,
-      tokenAddress,
       tokenDecimals,
       triggerPriceUSD,
       expirationSeconds,
       slippageBps,
       priorityLamports,
     ]);
+
+    // Confirm and execute a quoted swap
+    const handleConfirmExecution = useCallback(async () => {
+      if (!quoteResult || isQuoteStale(quoteResult.requestedAtMs)) {
+        resetExecution();
+        return;
+      }
+      setExecPhase("submitting");
+      haptics.medium();
+      try {
+        const result = await onExecuteSwap?.({
+          quoteResult,
+          side: activeTab,
+        });
+        if (result?.signature) {
+          setExecResult(result ?? null);
+          setExecPhase("success");
+          haptics.success();
+        } else {
+          setExecError(result?.errorPreview ?? "Swap failed");
+          setExecPhase("failed");
+          haptics.error();
+        }
+      } catch (err) {
+        setExecError(err instanceof Error ? err.message : "Execution failed");
+        setExecPhase("failed");
+        haptics.error();
+      }
+    }, [quoteResult, activeTab, onExecuteSwap, resetExecution]);
 
     // Handle tab change
     const handleTabChange = useCallback((tab: "buy" | "sell") => {
