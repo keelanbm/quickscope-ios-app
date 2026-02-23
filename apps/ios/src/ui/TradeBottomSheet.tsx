@@ -35,6 +35,18 @@ import {
   type OrderType,
   type CreateTriggerOrderParams,
 } from "@/src/features/trade/triggerOrderService";
+import type { QuoteResult } from "@/src/features/trade/tradeQuoteService";
+import type { SwapExecutionResult } from "@/src/features/trade/tradeExecutionService";
+import { isQuoteStale, getQuoteTtlSecondsRemaining } from "@/src/features/trade/quoteUtils";
+
+type ExecutionPhase =
+  | "idle"
+  | "quoting"
+  | "quoted"
+  | "confirming"
+  | "submitting"
+  | "success"
+  | "failed";
 
 type TradeMode = "market" | "limit" | "instant";
 
@@ -78,6 +90,18 @@ type TradeBottomSheetProps = {
   walletAddress?: string;
   /** Whether a limit order is currently being submitted */
   isSubmittingOrder?: boolean;
+  /** Request a market quote inline (returns QuoteResult) */
+  onMarketQuoteRequest?: (params: {
+    side: "buy" | "sell";
+    amountUi: number;
+    inputMint: string;
+    outputMint: string;
+  }) => Promise<QuoteResult>;
+  /** Execute a swap from a confirmed quote */
+  onExecuteSwap?: (params: {
+    quoteResult: QuoteResult;
+    side: "buy" | "sell";
+  }) => Promise<SwapExecutionResult>;
 };
 
 export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
@@ -104,6 +128,8 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       priorityLamports = 100_000,
       walletAddress,
       isSubmittingOrder = false,
+      onMarketQuoteRequest,
+      onExecuteSwap,
     },
     ref
   ) => {
@@ -121,6 +147,13 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     const [expirationSeconds, setExpirationSeconds] = useState(DEFAULT_EXPIRATION_SECONDS);
     const [showConfirmation, setShowConfirmation] = useState(false);
 
+    // Execution state machine
+    const [execPhase, setExecPhase] = useState<ExecutionPhase>("idle");
+    const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
+    const [execResult, setExecResult] = useState<SwapExecutionResult | null>(null);
+    const [execError, setExecError] = useState<string | null>(null);
+    const [quoteTtl, setQuoteTtl] = useState<number>(30);
+
     // Sync with external activeSide prop
     useEffect(() => {
       if (activeSide && activeSide !== activeTab) {
@@ -128,11 +161,42 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       }
     }, [activeSide, activeTab]);
 
-    // Reset limit fields when switching modes or tabs
+    // Reset limit fields + execution state when switching modes or tabs
     useEffect(() => {
       setTriggerMC("");
       setShowConfirmation(false);
+      setExecPhase("idle");
+      setQuoteResult(null);
+      setExecResult(null);
+      setExecError(null);
+      setQuoteTtl(30);
     }, [tradeMode, activeTab]);
+
+    // Quote TTL countdown — ticks every second while quote is displayed
+    useEffect(() => {
+      if (execPhase !== "quoted" && execPhase !== "confirming") return;
+      if (!quoteResult) return;
+
+      const interval = setInterval(() => {
+        const remaining = getQuoteTtlSecondsRemaining(quoteResult.requestedAtMs);
+        setQuoteTtl(remaining);
+        if (remaining <= 0) {
+          setExecPhase("idle");
+          setQuoteResult(null);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }, [execPhase, quoteResult]);
+
+    // Reset execution state machine to idle
+    const resetExecution = useCallback(() => {
+      setExecPhase("idle");
+      setQuoteResult(null);
+      setExecResult(null);
+      setExecError(null);
+      setQuoteTtl(30);
+    }, []);
 
     // Backdrop component
     const renderBackdrop = useCallback(
