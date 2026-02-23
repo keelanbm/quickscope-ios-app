@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptics } from "@/src/lib/haptics";
 import { qsColors, qsRadius, qsSpacing, qsShadows, qsTypography } from "@/src/theme/tokens";
 import { PresetButton } from "@/src/ui/PresetButton";
+import { PriceDeviationSlider } from "@/src/ui/PriceDeviationSlider";
 import { ChevronDown, Settings, SolanaIcon, Zap } from "@/src/ui/icons";
 
 export type TradeMode = "market" | "limit" | "instant";
@@ -19,16 +20,16 @@ type QuickTradePanelProps = {
   tokenSymbol: string;
   tokenAddress: string;
   walletBalance?: number;
-  /** Token balance for sell mode */
   tokenBalance?: number;
+  currentMarketCapUsd?: number;
   onPresetPress: (params: { side: "buy" | "sell"; amount: number }) => void;
   onExpandPress: () => void;
-  /** Called when user taps Limit — opens bottom sheet in limit mode */
   onLimitPress?: () => void;
   onSettingsPress?: () => void;
   onProfilePress?: (index: 0 | 1 | 2) => void;
   onSideChange?: (side: "buy" | "sell") => void;
   onModeChange?: (mode: TradeMode) => void;
+  onLimitOrderChange?: (params: { triggerMC: number; deviationPercent: number }) => void;
   disabled?: boolean;
   buyPresets?: number[];
   sellPresets?: number[];
@@ -36,35 +37,12 @@ type QuickTradePanelProps = {
   activeProfileIndex?: 0 | 1 | 2;
 };
 
-/**
- * QuickTradePanel - Persistent collapsed trade panel at the bottom of token detail screen.
- *
- * Features:
- * - Buy/Sell toggle with color-coded UI
- * - Dynamic presets: SOL amounts for buy, percentages for sell
- * - Profile pills (P1, P2, P3) for quick profile switching
- * - Wallet/token balance display
- * - Settings gear icon
- *
- * Usage:
- * <QuickTradePanel
- *   tokenSymbol="SOL"
- *   tokenAddress="So11111..."
- *   walletBalance={2.45}
- *   tokenBalance={100}
- *   onPresetPress={({ side, amount }) => handlePreset(side, amount)}
- *   onExpandPress={() => navigation.navigate("TradeEntry")}
- *   onSettingsPress={() => navigation.navigate("Settings")}
- *   onProfilePress={(idx) => setActiveProfile(idx)}
- *   activeSide="buy"
- *   activeProfileIndex={0}
- * />
- */
 export function QuickTradePanel({
   tokenSymbol,
   tokenAddress,
   walletBalance = 0,
   tokenBalance = 0,
+  currentMarketCapUsd,
   onPresetPress,
   onExpandPress,
   onLimitPress,
@@ -72,6 +50,7 @@ export function QuickTradePanel({
   onProfilePress,
   onSideChange,
   onModeChange,
+  onLimitOrderChange,
   disabled = false,
   buyPresets = [0.25, 0.5, 1, 5],
   sellPresets = [25, 50, 75, 100],
@@ -83,6 +62,9 @@ export function QuickTradePanel({
   const [tradeMode, setTradeMode] = useState<TradeMode>("market");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownOpacity = useRef(new Animated.Value(0)).current;
+
+  // Limit mode state
+  const [deviationPercent, setDeviationPercent] = useState(0);
 
   const toggleDropdown = useCallback(() => {
     if (disabled) return;
@@ -107,6 +89,7 @@ export function QuickTradePanel({
     setTradeMode(mode);
     haptics.selection();
     onModeChange?.(mode);
+    setDeviationPercent(0);
 
     // Close dropdown
     Animated.timing(dropdownOpacity, {
@@ -123,12 +106,19 @@ export function QuickTradePanel({
   const isBuy = side === "buy";
   const currentBalance = isBuy ? walletBalance : tokenBalance;
   const balanceLabel = isBuy ? "SOL" : tokenSymbol;
+  const isLimitMode = tradeMode === "limit";
+
+  // Computed trigger MC
+  const triggerMC = currentMarketCapUsd
+    ? currentMarketCapUsd * (1 + deviationPercent / 100)
+    : 0;
 
   const handleSideToggle = (newSide: "buy" | "sell") => {
     if (newSide === side || disabled) return;
     haptics.selection();
     setSide(newSide);
     onSideChange?.(newSide);
+    setDeviationPercent(0);
   };
 
   const handleProfilePress = (index: 0 | 1 | 2) => {
@@ -142,6 +132,21 @@ export function QuickTradePanel({
     onPresetPress({ side, amount });
   };
 
+  const handleDeviationChange = useCallback((pct: number) => {
+    setDeviationPercent(pct);
+    if (currentMarketCapUsd) {
+      const newMC = currentMarketCapUsd * (1 + pct / 100);
+      onLimitOrderChange?.({ triggerMC: Math.max(0, Math.round(newMC)), deviationPercent: pct });
+    }
+  }, [currentMarketCapUsd, onLimitOrderChange]);
+
+  const formatMC = (mc: number): string => {
+    if (mc >= 1_000_000_000) return `$${(mc / 1_000_000_000).toFixed(2)}B`;
+    if (mc >= 1_000_000) return `$${(mc / 1_000_000).toFixed(2)}M`;
+    if (mc >= 1_000) return `$${(mc / 1_000).toFixed(1)}K`;
+    return `$${mc.toFixed(0)}`;
+  };
+
   return (
     <View
       style={[
@@ -151,7 +156,7 @@ export function QuickTradePanel({
         },
       ]}
     >
-      {/* Buy/Sell Toggle + Mode Dropdown + Settings */}
+      {/* Buy/Sell Toggle + Mode Dropdown */}
       <View style={styles.topRow}>
         <View style={styles.sideToggle}>
           <Pressable
@@ -253,16 +258,12 @@ export function QuickTradePanel({
                       >
                         {MODE_LABELS[mode]}
                       </Text>
-                      {mode === "limit" && (
-                        <Text style={styles.dropdownHint}>Expand</Text>
-                      )}
                     </Pressable>
                   );
                 })}
               </Animated.View>
             )}
           </View>
-
         </View>
       </View>
 
@@ -279,6 +280,26 @@ export function QuickTradePanel({
           />
         ))}
       </View>
+
+      {/* ── Limit Mode: MKT CAP + Slider (inline, panel grows) ── */}
+      {isLimitMode && currentMarketCapUsd != null && currentMarketCapUsd > 0 && (
+        <View style={styles.limitSection}>
+          {/* MKT CAP display row */}
+          <View style={styles.mktCapRow}>
+            <Text style={styles.mktCapLabel}>MKT CAP</Text>
+            <Text style={styles.mktCapValue}>{formatMC(triggerMC)}</Text>
+            <Text style={styles.mktCapUnit}>$</Text>
+          </View>
+
+          {/* Deviation slider */}
+          <PriceDeviationSlider
+            currentMC={currentMarketCapUsd}
+            deviationPercent={deviationPercent}
+            onDeviationChange={handleDeviationChange}
+            side={side}
+          />
+        </View>
+      )}
 
       {/* Balance + Profile Pills + Settings */}
       <View style={styles.bottomRow}>
@@ -350,6 +371,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    zIndex: 10,
   },
   sideToggle: {
     flexDirection: "row",
@@ -393,8 +415,6 @@ const styles = StyleSheet.create({
   sideToggleTextSell: {
     color: qsColors.sellRed,
   },
-
-  /* Right controls: mode dropdown + settings */
   rightControls: {
     flexDirection: "row",
     alignItems: "center",
@@ -431,7 +451,9 @@ const styles = StyleSheet.create({
     borderColor: qsColors.borderDefault,
     minWidth: 140,
     overflow: "hidden",
+    zIndex: 20,
     ...qsShadows.md,
+    elevation: 20,
   },
   dropdownItem: {
     flexDirection: "row",
@@ -451,12 +473,6 @@ const styles = StyleSheet.create({
   dropdownItemTextActive: {
     color: qsColors.textPrimary,
   },
-  dropdownHint: {
-    marginLeft: "auto",
-    fontSize: 10,
-    fontWeight: qsTypography.weight.medium,
-    color: qsColors.textSubtle,
-  },
   settingsButton: {
     padding: qsSpacing.xs,
   },
@@ -464,6 +480,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: qsSpacing.md,
   },
+
+  /* Limit mode section */
+  limitSection: {
+    gap: qsSpacing.sm,
+  },
+  mktCapRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: qsColors.layer2,
+    borderRadius: qsRadius.md,
+    paddingHorizontal: qsSpacing.md,
+    paddingVertical: qsSpacing.sm,
+    gap: qsSpacing.sm,
+  },
+  mktCapLabel: {
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textTertiary,
+  },
+  mktCapValue: {
+    flex: 1,
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.bold,
+    color: qsColors.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  mktCapUnit: {
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textTertiary,
+  },
+
   bottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",

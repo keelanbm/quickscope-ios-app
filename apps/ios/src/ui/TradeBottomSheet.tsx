@@ -27,7 +27,6 @@ import { ChevronDown, X, Settings, Zap } from "@/src/ui/icons";
 import { haptics } from "@/src/lib/haptics";
 import { formatSlippage } from "@/src/features/trade/tradeSettings";
 import {
-  EXPIRATION_PRESETS,
   DEFAULT_EXPIRATION_SECONDS,
   detectOrderType,
   calcTriggerPrice,
@@ -35,6 +34,21 @@ import {
   type OrderType,
   type CreateTriggerOrderParams,
 } from "@/src/features/trade/triggerOrderService";
+import type { QuoteResult } from "@/src/features/trade/tradeQuoteService";
+import type { SwapExecutionResult } from "@/src/features/trade/tradeExecutionService";
+import { isQuoteStale, getQuoteTtlSecondsRemaining } from "@/src/features/trade/quoteUtils";
+import { toast } from "@/src/lib/toast";
+import { SOL_MINT } from "@/src/lib/constants";
+import { PriceDeviationSlider } from "@/src/ui/PriceDeviationSlider";
+
+type ExecutionPhase =
+  | "idle"
+  | "quoting"
+  | "quoted"
+  | "confirming"
+  | "submitting"
+  | "success"
+  | "failed";
 
 type TradeMode = "market" | "limit" | "instant";
 
@@ -78,6 +92,18 @@ type TradeBottomSheetProps = {
   walletAddress?: string;
   /** Whether a limit order is currently being submitted */
   isSubmittingOrder?: boolean;
+  /** Request a market quote inline (returns QuoteResult) */
+  onMarketQuoteRequest?: (params: {
+    side: "buy" | "sell";
+    amountUi: number;
+    inputMint: string;
+    outputMint: string;
+  }) => Promise<QuoteResult>;
+  /** Execute a swap from a confirmed quote */
+  onExecuteSwap?: (params: {
+    quoteResult: QuoteResult;
+    side: "buy" | "sell";
+  }) => Promise<SwapExecutionResult>;
 };
 
 export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
@@ -104,6 +130,8 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       priorityLamports = 100_000,
       walletAddress,
       isSubmittingOrder = false,
+      onMarketQuoteRequest,
+      onExecuteSwap,
     },
     ref
   ) => {
@@ -118,8 +146,16 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
 
     // Limit mode state
     const [triggerMC, setTriggerMC] = useState<string>("");
+    const [deviationPercent, setDeviationPercent] = useState(0);
     const [expirationSeconds, setExpirationSeconds] = useState(DEFAULT_EXPIRATION_SECONDS);
     const [showConfirmation, setShowConfirmation] = useState(false);
+
+    // Execution state machine
+    const [execPhase, setExecPhase] = useState<ExecutionPhase>("idle");
+    const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
+    const [execResult, setExecResult] = useState<SwapExecutionResult | null>(null);
+    const [execError, setExecError] = useState<string | null>(null);
+    const [quoteTtl, setQuoteTtl] = useState<number>(30);
 
     // Sync with external activeSide prop
     useEffect(() => {
@@ -128,11 +164,60 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       }
     }, [activeSide, activeTab]);
 
-    // Reset limit fields when switching modes or tabs
+    // Reset limit fields + execution state when switching modes or tabs
     useEffect(() => {
       setTriggerMC("");
+      setDeviationPercent(0);
       setShowConfirmation(false);
+      setExecPhase("idle");
+      setQuoteResult(null);
+      setExecResult(null);
+      setExecError(null);
+      setQuoteTtl(30);
     }, [tradeMode, activeTab]);
+
+    // Quote TTL countdown — ticks every second while quote is displayed
+    useEffect(() => {
+      if (execPhase !== "quoted" && execPhase !== "confirming") return;
+      if (!quoteResult) return;
+
+      const interval = setInterval(() => {
+        const remaining = getQuoteTtlSecondsRemaining(quoteResult.requestedAtMs);
+        setQuoteTtl(remaining);
+        if (remaining <= 0) {
+          setExecPhase("idle");
+          setQuoteResult(null);
+        }
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }, [execPhase, quoteResult]);
+
+    // Reset execution state machine to idle
+    const resetExecution = useCallback((collapseSheet = false) => {
+      setExecPhase("idle");
+      setQuoteResult(null);
+      setExecResult(null);
+      setExecError(null);
+      setQuoteTtl(30);
+      // Only snap back when explicitly requested (e.g. after success/fail),
+      // NOT when the sheet itself closes (onChange -1) — that causes a reopen loop.
+      if (collapseSheet && ref && typeof ref !== "function" && ref.current) {
+        ref.current.snapToIndex(0);
+      }
+    }, [ref]);
+
+    // Slider → MC input sync
+    const handleDeviationChange = useCallback(
+      (pct: number) => {
+        setDeviationPercent(pct);
+        if (currentMarketCapUsd) {
+          const newMC = currentMarketCapUsd * (1 + pct / 100);
+          setTriggerMC(Math.max(0, Math.round(newMC)).toString());
+        }
+      },
+      [currentMarketCapUsd],
+    );
 
     // Backdrop component
     const renderBackdrop = useCallback(
@@ -197,15 +282,98 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     }, [amountNum, tradeMode, triggerMCNum, walletAddress]);
 
     // Handle main button press
-    const handleActionPress = useCallback(() => {
-      if (!canSubmit) return;
+    const handleActionPress = useCallback(async () => {
+      if (!canSubmit || execPhase !== "idle") return;
 
+      // Wallet guard
+      if (!walletAddress) {
+        toast.info("Connect wallet", "Connect your wallet to trade.");
+        return;
+      }
+
+      // Insufficient balance check
+      if (activeTab === "buy" && walletBalance != null) {
+        const solNeeded = amountNum * 1e9;
+        if (solNeeded > walletBalance) {
+          toast.error("Insufficient SOL", "Not enough SOL for this trade.");
+          return;
+        }
+      }
+      if (activeTab === "sell" && userBalance != null) {
+        if (amountNum > userBalance) {
+          toast.error("Insufficient balance", `Not enough ${tokenSymbol}.`);
+          return;
+        }
+      }
+
+      // Market / Instant mode — inline quote + execution flow
       if (tradeMode === "market" || tradeMode === "instant") {
-        onQuoteRequest({
-          side: activeTab,
-          amount: amountNum,
-          orderType: "market",
-        });
+        if (!onMarketQuoteRequest) {
+          // Fallback to legacy navigation-based flow
+          onQuoteRequest({ side: activeTab, amount: amountNum, orderType: "market" });
+          return;
+        }
+
+        const inputMint = activeTab === "buy" ? SOL_MINT : tokenAddress;
+        const outputMint = activeTab === "buy" ? tokenAddress : SOL_MINT;
+
+        if (tradeMode === "instant" && onExecuteSwap) {
+          // Instant mode — skip quote confirmation, go straight to submit
+          setExecPhase("submitting");
+          if (ref && typeof ref !== "function" && ref.current) {
+            ref.current.snapToIndex(1);
+          }
+          haptics.medium();
+          try {
+            const quote = await onMarketQuoteRequest({
+              side: activeTab,
+              amountUi: amountNum,
+              inputMint,
+              outputMint,
+            });
+            if (!quote) throw new Error("Quote unavailable");
+            const result = await onExecuteSwap({ quoteResult: quote, side: activeTab });
+            if (result?.signature) {
+              setExecResult(result);
+              setExecPhase("success");
+              haptics.success();
+            } else {
+              setExecError(result?.errorPreview ?? "Swap failed");
+              setExecPhase("failed");
+              haptics.error();
+            }
+          } catch (err) {
+            setExecError(err instanceof Error ? err.message : "Swap failed");
+            setExecPhase("failed");
+            haptics.error();
+          }
+          return;
+        }
+
+        // Market mode — get quote first, then confirm
+        setExecPhase("quoting");
+        if (ref && typeof ref !== "function" && ref.current) {
+          ref.current.snapToIndex(1);
+        }
+        try {
+          const quote = await onMarketQuoteRequest({
+            side: activeTab,
+            amountUi: amountNum,
+            inputMint,
+            outputMint,
+          });
+          if (quote) {
+            setQuoteResult(quote);
+            setExecPhase("quoted");
+            haptics.light();
+          } else {
+            throw new Error("No quote returned");
+          }
+        } catch (err) {
+          setExecError(err instanceof Error ? err.message : "Quote failed");
+          setExecPhase("failed");
+          haptics.error();
+        }
         return;
       }
 
@@ -233,21 +401,54 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       });
     }, [
       canSubmit,
+      execPhase,
       tradeMode,
       activeTab,
       amountNum,
       onQuoteRequest,
+      onMarketQuoteRequest,
+      onExecuteSwap,
+      tokenAddress,
+      ref,
       showConfirmation,
       detectedOrderType,
       walletAddress,
       onLimitOrderRequest,
-      tokenAddress,
       tokenDecimals,
       triggerPriceUSD,
       expirationSeconds,
       slippageBps,
       priorityLamports,
     ]);
+
+    // Confirm and execute a quoted swap
+    const handleConfirmExecution = useCallback(async () => {
+      if (!quoteResult || isQuoteStale(quoteResult.requestedAtMs)) {
+        resetExecution(true);
+        return;
+      }
+      setExecPhase("submitting");
+      haptics.medium();
+      try {
+        const result = await onExecuteSwap?.({
+          quoteResult,
+          side: activeTab,
+        });
+        if (result?.signature) {
+          setExecResult(result ?? null);
+          setExecPhase("success");
+          haptics.success();
+        } else {
+          setExecError(result?.errorPreview ?? "Swap failed");
+          setExecPhase("failed");
+          haptics.error();
+        }
+      } catch (err) {
+        setExecError(err instanceof Error ? err.message : "Execution failed");
+        setExecPhase("failed");
+        haptics.error();
+      }
+    }, [quoteResult, activeTab, onExecuteSwap, resetExecution]);
 
     // Handle tab change
     const handleTabChange = useCallback((tab: "buy" | "sell") => {
@@ -343,6 +544,9 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
         backgroundStyle={styles.sheetBackground}
         handleIndicatorStyle={styles.handleIndicator}
         onClose={onClose}
+        onChange={(index) => {
+          if (index === -1) resetExecution();
+        }}
       >
         <BottomSheetView style={styles.contentContainer}>
           {/* Header: Title + Mode Dropdown + Close */}
@@ -461,16 +665,113 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
             </Pressable>
           </View>
 
-          {/* Balance Display */}
-          {activeTab === "sell" ? (
-            <Text style={styles.balanceText}>
-              Your balance: {userBalance.toFixed(6)} {tokenSymbol}
-            </Text>
-          ) : (
-            <Text style={styles.balanceText}>
-              SOL balance: ◎{walletBalance.toFixed(6)}
-            </Text>
+          {/* ── Execution Phase UI ── */}
+          {execPhase === "quoting" && (
+            <View style={styles.phaseContainer}>
+              <ActivityIndicator color={qsColors.accent} />
+              <Text style={styles.phaseLabel}>Fetching quote...</Text>
+            </View>
           )}
+
+          {execPhase === "quoted" && quoteResult && (
+            <View style={styles.phaseContainer}>
+              <View style={styles.quoteSummaryRow}>
+                <Text style={styles.quoteLabel}>You receive</Text>
+                <Text style={styles.quoteValue}>
+                  {quoteResult.summary.amountOutUi != null
+                    ? quoteResult.summary.amountOutUi.toFixed(6)
+                    : "—"}{" "}
+                  {activeTab === "buy" ? tokenSymbol : "SOL"}
+                </Text>
+              </View>
+              <View style={styles.quoteSummaryRow}>
+                <Text style={styles.quoteLabel}>Price impact</Text>
+                <Text style={styles.quoteValue}>
+                  {quoteResult.summary.priceImpactPercent != null
+                    ? `${quoteResult.summary.priceImpactPercent.toFixed(2)}%`
+                    : "—"}
+                </Text>
+              </View>
+              <View style={styles.quoteSummaryRow}>
+                <Text style={styles.quoteLabel}>Expires</Text>
+                <Text
+                  style={[
+                    styles.quoteValue,
+                    quoteTtl <= 5 && { color: qsColors.warning },
+                  ]}
+                >
+                  {quoteTtl}s
+                </Text>
+              </View>
+              <Pressable
+                style={[
+                  styles.confirmButton,
+                  {
+                    backgroundColor:
+                      activeTab === "buy"
+                        ? qsColors.buyGreen
+                        : qsColors.sellRed,
+                  },
+                ]}
+                onPress={handleConfirmExecution}
+              >
+                <Text style={styles.confirmButtonText}>
+                  Confirm {activeTab === "buy" ? "Buy" : "Sell"}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => resetExecution(true)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {execPhase === "submitting" && (
+            <View style={styles.phaseContainer}>
+              <ActivityIndicator color={qsColors.accent} />
+              <Text style={styles.phaseLabel}>Executing swap...</Text>
+            </View>
+          )}
+
+          {execPhase === "success" && execResult && (
+            <View style={styles.phaseContainer}>
+              <Text style={styles.successIcon}>✓</Text>
+              <Text style={styles.successText}>Swap Complete</Text>
+              {execResult.signature && (
+                <Text style={styles.signatureText}>
+                  {execResult.signature.slice(0, 8)}...
+                  {execResult.signature.slice(-8)}
+                </Text>
+              )}
+              <Pressable style={styles.doneButton} onPress={() => resetExecution(true)}>
+                <Text style={styles.doneButtonText}>Done</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {execPhase === "failed" && (
+            <View style={styles.phaseContainer}>
+              <Text style={styles.failIcon}>✕</Text>
+              <Text style={styles.failText}>{execError ?? "Swap failed"}</Text>
+              <Pressable style={styles.retryButton} onPress={() => resetExecution(true)}>
+                <Text style={styles.retryButtonText}>Try Again</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* ── Idle Phase: Input & Controls ── */}
+          {execPhase === "idle" && (
+            <>
+          {/* Balance Display */}
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceLabel}>
+              {activeTab === "buy" ? "SOL Balance" : `${tokenSymbol} Balance`}
+            </Text>
+            <Text style={styles.balanceValue}>
+              {activeTab === "buy"
+                ? walletBalance != null ? (walletBalance / 1e9).toFixed(4) : "—"
+                : userBalance != null ? userBalance.toFixed(6) : "—"}
+            </Text>
+          </View>
 
           {/* Amount Input */}
           <View style={styles.inputContainer}>
@@ -510,61 +811,16 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
           {/* ── Limit Mode Fields ── */}
           {tradeMode === "limit" && (
             <View style={styles.limitSection}>
-              {/* Trigger MC Input */}
-              <Text style={styles.limitLabel}>Target Market Cap</Text>
-              <View style={styles.inputContainer}>
-                <View style={styles.mcInputRow}>
-                  <Text style={styles.mcPrefix}>$</Text>
-                  <TextInput
-                    style={[styles.input, styles.mcInput]}
-                    placeholder="e.g. 500000"
-                    placeholderTextColor={qsColors.textMuted}
-                    value={triggerMC}
-                    onChangeText={(text) => {
-                      setTriggerMC(text);
-                      setShowConfirmation(false);
-                    }}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              {/* Current MC reference */}
-              {currentMarketCapUsd !== undefined && currentMarketCapUsd > 0 && (
-                <Text style={styles.mcReference}>
-                  Current MC: ${formatCompactMC(currentMarketCapUsd)}
-                </Text>
+              {/* Price Deviation Slider */}
+              {currentMarketCapUsd != null && currentMarketCapUsd > 0 && (
+                <PriceDeviationSlider
+                  currentMC={currentMarketCapUsd}
+                  deviationPercent={deviationPercent}
+                  onDeviationChange={handleDeviationChange}
+                  side={activeTab}
+                />
               )}
 
-              {/* Expiration Pills */}
-              <Text style={styles.limitLabel}>Expires In</Text>
-              <View style={styles.expirationRow}>
-                {EXPIRATION_PRESETS.map((preset) => {
-                  const isActive = expirationSeconds === preset.seconds;
-                  return (
-                    <Pressable
-                      key={preset.label}
-                      onPress={() => {
-                        haptics.light();
-                        setExpirationSeconds(preset.seconds);
-                      }}
-                      style={[
-                        styles.expirationPill,
-                        isActive && styles.expirationPillActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.expirationText,
-                          isActive && styles.expirationTextActive,
-                        ]}
-                      >
-                        {preset.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
             </View>
           )}
 
@@ -595,12 +851,6 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
               <View style={styles.confirmRow}>
                 <Text style={styles.confirmLabel}>Slippage</Text>
                 <Text style={styles.confirmValue}>{formatSlippage(slippageBps)}</Text>
-              </View>
-              <View style={styles.confirmRow}>
-                <Text style={styles.confirmLabel}>Expires</Text>
-                <Text style={styles.confirmValue}>
-                  {EXPIRATION_PRESETS.find((p) => p.seconds === expirationSeconds)?.label ?? "—"}
-                </Text>
               </View>
 
               <View style={styles.confirmActions}>
@@ -695,6 +945,8 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
                 <Text style={styles.quoteButtonText}>{actionButtonLabel}</Text>
               )}
             </Pressable>
+          )}
+            </>
           )}
         </BottomSheetView>
       </BottomSheet>
@@ -850,10 +1102,21 @@ const styles = StyleSheet.create({
   },
 
   /* Balance */
-  balanceText: {
-    fontSize: 13,
-    color: qsColors.textSecondary,
+  balanceRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    paddingHorizontal: qsSpacing.lg,
+    paddingVertical: qsSpacing.xs,
     marginBottom: qsSpacing.sm,
+  },
+  balanceLabel: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxs,
+  },
+  balanceValue: {
+    color: qsColors.textSecondary,
+    fontSize: qsTypography.size.xxs,
+    fontVariant: ["tabular-nums"] as const,
   },
 
   /* Amount input */
@@ -888,54 +1151,6 @@ const styles = StyleSheet.create({
     color: qsColors.textSecondary,
     marginBottom: qsSpacing.xs,
   },
-  mcInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  mcPrefix: {
-    position: "absolute",
-    left: qsSpacing.md,
-    zIndex: 1,
-    fontSize: 16,
-    color: qsColors.textTertiary,
-    fontWeight: qsTypography.weight.semi,
-  },
-  mcInput: {
-    flex: 1,
-    paddingLeft: qsSpacing.xl + qsSpacing.xs,
-  },
-  mcReference: {
-    fontSize: 12,
-    color: qsColors.textTertiary,
-    marginTop: -qsSpacing.sm,
-    marginBottom: qsSpacing.md,
-  },
-  expirationRow: {
-    flexDirection: "row",
-    gap: qsSpacing.sm,
-    marginBottom: qsSpacing.md,
-  },
-  expirationPill: {
-    paddingHorizontal: qsSpacing.lg,
-    paddingVertical: qsSpacing.sm,
-    borderRadius: qsRadius.pill,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.layer2,
-  },
-  expirationPillActive: {
-    borderColor: qsColors.accent,
-    backgroundColor: "rgba(119, 102, 247, 0.12)",
-  },
-  expirationText: {
-    fontSize: 13,
-    fontWeight: qsTypography.weight.semi,
-    color: qsColors.textTertiary,
-  },
-  expirationTextActive: {
-    color: qsColors.textPrimary,
-  },
-
   /* ── Inline confirmation ── */
   confirmationBox: {
     backgroundColor: qsColors.layer2,
@@ -1065,5 +1280,102 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: qsTypography.weight.bold,
     color: qsColors.layer0,
+  },
+
+  /* Execution phase UI */
+  phaseContainer: {
+    alignItems: "center" as const,
+    paddingVertical: qsSpacing.xl,
+    gap: qsSpacing.md,
+  },
+  phaseLabel: {
+    color: qsColors.textSecondary,
+    fontSize: qsTypography.size.sm,
+  },
+  quoteSummaryRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    width: "100%" as const,
+    paddingHorizontal: qsSpacing.lg,
+    paddingVertical: qsSpacing.xs,
+  },
+  quoteLabel: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.sm,
+  },
+  quoteValue: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.sm,
+    fontVariant: ["tabular-nums"] as const,
+  },
+  confirmButton: {
+    width: "100%" as const,
+    height: 48,
+    borderRadius: qsRadius.lg,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginTop: qsSpacing.md,
+  },
+  confirmButtonText: {
+    color: "#fff",
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.semi,
+  },
+  cancelText: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.sm,
+    paddingVertical: qsSpacing.sm,
+  },
+  successIcon: {
+    fontSize: 48,
+    color: qsColors.buyGreen,
+  },
+  successText: {
+    color: qsColors.buyGreen,
+    fontSize: qsTypography.size.lg,
+    fontWeight: qsTypography.weight.semi,
+  },
+  signatureText: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxs,
+    fontVariant: ["tabular-nums"] as const,
+  },
+  doneButton: {
+    width: "100%" as const,
+    height: 48,
+    borderRadius: qsRadius.lg,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: qsColors.accent,
+    marginTop: qsSpacing.md,
+  },
+  doneButtonText: {
+    color: "#fff",
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.semi,
+  },
+  failIcon: {
+    fontSize: 48,
+    color: qsColors.sellRed,
+  },
+  failText: {
+    color: qsColors.sellRed,
+    fontSize: qsTypography.size.sm,
+    textAlign: "center" as const,
+    paddingHorizontal: qsSpacing.lg,
+  },
+  retryButton: {
+    width: "100%" as const,
+    height: 48,
+    borderRadius: qsRadius.lg,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: qsColors.layer3,
+    marginTop: qsSpacing.md,
+  },
+  retryButtonText: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.semi,
   },
 });

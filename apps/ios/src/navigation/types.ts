@@ -19,29 +19,6 @@ export type TradeRouteParams = {
   amount?: string;
 };
 
-export type TradeEntryRouteParams = TradeRouteParams;
-
-export type ReviewTradeRouteParams = {
-  source?: "trade-entry";
-  walletAddress: string;
-  inputMint: string;
-  outputMint: string;
-  amountUi: number;
-  amountAtomic: number;
-  inputTokenDecimals: number;
-  outputTokenDecimals?: number;
-  slippageBps: number;
-  estimatedOutAmountUi?: number;
-  minOutAmountUi?: number;
-  estimatedOutAmountAtomic?: number;
-  minOutAmountAtomic?: number;
-  priceImpactPercent?: number;
-  feeAmountSol?: number;
-  feeRateBps?: number;
-  routeHopCount?: number;
-  quoteRequestedAtMs: number;
-};
-
 export type ScopeRouteParams = DeepLinkMeta;
 
 export type PortfolioRouteParams = {
@@ -59,6 +36,13 @@ export type TelegramRouteParams = {
   action?: "share";
   tokenAddress?: string;
   chatId?: string;
+};
+
+export type WalletDetailRouteParams = {
+  source?: "tracking-row" | "portfolio-row" | "deep-link";
+  walletAddress: string;
+  walletName?: string;
+  walletEmoji?: string;
 };
 
 export type TokenDetailRouteParams = {
@@ -91,8 +75,7 @@ export type RootTabs = {
 export type RootStack = {
   MainTabs: NavigatorScreenParams<RootTabs>;
   TokenDetail: TokenDetailRouteParams;
-  TradeEntry: TradeEntryRouteParams | undefined;
-  ReviewTrade: ReviewTradeRouteParams;
+  WalletDetail: WalletDetailRouteParams;
   Rewards: undefined;
   Deposit: undefined;
 };

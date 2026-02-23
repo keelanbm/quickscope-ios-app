@@ -71,6 +71,8 @@ import {
   createTriggerOrder,
   type CreateTriggerOrderParams,
 } from "@/src/features/trade/triggerOrderService";
+import { requestSwapQuote } from "@/src/features/trade/tradeQuoteService";
+import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
 import { haptics } from "@/src/lib/haptics";
 import { ArrowLeft, Zap } from "@/src/ui/icons";
 
@@ -347,15 +349,10 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   const handleQuickTrade = useCallback(
     (presetParams: { side: "buy" | "sell"; amount: number }) => {
-      // TODO: When instantTrade is enabled, execute swap directly
-      navigation.navigate("TradeEntry", {
-        source: "deep-link",
-        tokenAddress,
-        outputMintDecimals: params?.tokenDecimals,
-        amount: presetParams.amount.toString(),
-      });
+      setTradeSide(presetParams.side);
+      bottomSheetRef.current?.snapToIndex(0);
     },
-    [navigation, tokenAddress, params?.tokenDecimals]
+    []
   );
 
   const handleExpandTrade = useCallback(() => {
@@ -393,14 +390,40 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   const handleQuoteRequest = useCallback(
     (quoteParams: { side: "buy" | "sell"; amount: number; orderType: "market" }) => {
-      navigation.navigate("TradeEntry", {
-        source: "deep-link",
-        tokenAddress,
-        outputMintDecimals: params?.tokenDecimals,
-        amount: quoteParams.amount.toString(),
-      });
+      setTradeSide(quoteParams.side);
+      bottomSheetRef.current?.snapToIndex(0);
     },
-    [navigation, tokenAddress, params?.tokenDecimals]
+    []
+  );
+
+  const handleMarketQuoteRequest = useCallback(
+    async (params2: { side: "buy" | "sell"; amountUi: number; inputMint: string; outputMint: string }) => {
+      const quote = await requestSwapQuote(rpcClient, {
+        walletAddress: walletAddress!,
+        inputMint: params2.inputMint,
+        outputMint: params2.outputMint,
+        amountUi: params2.amountUi,
+        slippageBps: currentProfile.slippageBps,
+      });
+      return quote;
+    },
+    [rpcClient, walletAddress, currentProfile.slippageBps]
+  );
+
+  const handleExecuteSwap = useCallback(
+    async (swapParams: { quoteResult: { inputMint: string; outputMint: string; amountAtomic: number; slippageBps: number }; side: "buy" | "sell" }) => {
+      const result = await requestSwapExecution(rpcClient, {
+        walletAddress: walletAddress!,
+        inputMint: swapParams.quoteResult.inputMint,
+        outputMint: swapParams.quoteResult.outputMint,
+        amountAtomic: swapParams.quoteResult.amountAtomic,
+        slippageBps: swapParams.quoteResult.slippageBps,
+        priorityFeeLamports: currentProfile.priorityLamports,
+        jitoTipLamports: currentProfile.tipLamports ?? 0,
+      });
+      return result;
+    },
+    [rpcClient, walletAddress, currentProfile]
   );
 
   const handleLimitOrderRequest = useCallback(
@@ -602,6 +625,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           tokenAddress={tokenAddress}
           walletBalance={positionInfo?.position?.balance}
           tokenBalance={positionInfo?.position?.balance}
+          currentMarketCapUsd={marketCapUsd}
           onPresetPress={handleQuickTrade}
           onExpandPress={handleExpandTrade}
           onLimitPress={handleLimitPress}
@@ -637,6 +661,8 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
         walletAddress={walletAddress ?? undefined}
         onLimitOrderRequest={handleLimitOrderRequest}
         isSubmittingOrder={isSubmittingOrder}
+        onMarketQuoteRequest={handleMarketQuoteRequest}
+        onExecuteSwap={handleExecuteSwap}
       />
 
       {/* ── Trade Settings Modal ── */}
