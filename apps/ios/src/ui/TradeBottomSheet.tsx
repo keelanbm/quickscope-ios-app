@@ -39,6 +39,7 @@ import type { QuoteResult } from "@/src/features/trade/tradeQuoteService";
 import type { SwapExecutionResult } from "@/src/features/trade/tradeExecutionService";
 import { isQuoteStale, getQuoteTtlSecondsRemaining } from "@/src/features/trade/quoteUtils";
 import { toast } from "@/src/lib/toast";
+import { PriceDeviationSlider } from "@/src/ui/PriceDeviationSlider";
 
 type ExecutionPhase =
   | "idle"
@@ -145,6 +146,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
 
     // Limit mode state
     const [triggerMC, setTriggerMC] = useState<string>("");
+    const [deviationPercent, setDeviationPercent] = useState(0);
     const [expirationSeconds, setExpirationSeconds] = useState(DEFAULT_EXPIRATION_SECONDS);
     const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -165,6 +167,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     // Reset limit fields + execution state when switching modes or tabs
     useEffect(() => {
       setTriggerMC("");
+      setDeviationPercent(0);
       setShowConfirmation(false);
       setExecPhase("idle");
       setQuoteResult(null);
@@ -202,6 +205,18 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
         ref.current.snapToIndex(0);
       }
     }, [ref]);
+
+    // Slider → MC input sync
+    const handleDeviationChange = useCallback(
+      (pct: number) => {
+        setDeviationPercent(pct);
+        if (currentMarketCapUsd) {
+          const newMC = currentMarketCapUsd * (1 + pct / 100);
+          setTriggerMC(Math.max(0, Math.round(newMC)).toString());
+        }
+      },
+      [currentMarketCapUsd],
+    );
 
     // Backdrop component
     const renderBackdrop = useCallback(
@@ -787,6 +802,16 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
           {/* ── Limit Mode Fields ── */}
           {tradeMode === "limit" && (
             <View style={styles.limitSection}>
+              {/* Price Deviation Slider */}
+              {currentMarketCapUsd != null && currentMarketCapUsd > 0 && (
+                <PriceDeviationSlider
+                  currentMC={currentMarketCapUsd}
+                  deviationPercent={deviationPercent}
+                  onDeviationChange={handleDeviationChange}
+                  side={activeTab}
+                />
+              )}
+
               {/* Trigger MC Input */}
               <Text style={styles.limitLabel}>Target Market Cap</Text>
               <View style={styles.inputContainer}>
@@ -800,6 +825,12 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
                     onChangeText={(text) => {
                       setTriggerMC(text);
                       setShowConfirmation(false);
+                      // Sync MC input → deviation slider
+                      const parsedMC = Number(text);
+                      if (currentMarketCapUsd && currentMarketCapUsd > 0 && !isNaN(parsedMC) && parsedMC > 0) {
+                        const pct = ((parsedMC - currentMarketCapUsd) / currentMarketCapUsd) * 100;
+                        setDeviationPercent(Math.round(pct));
+                      }
                     }}
                     keyboardType="numeric"
                   />
