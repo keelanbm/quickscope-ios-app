@@ -284,6 +284,12 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     const handleActionPress = useCallback(async () => {
       if (!canSubmit || execPhase !== "idle") return;
 
+      // Wallet guard
+      if (!walletAddress) {
+        toast.info("Connect wallet", "Connect your wallet to trade.");
+        return;
+      }
+
       // Insufficient balance check
       if (activeTab === "buy" && walletBalance != null) {
         const solNeeded = amountNum * 1e9;
@@ -538,6 +544,9 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
         backgroundStyle={styles.sheetBackground}
         handleIndicatorStyle={styles.handleIndicator}
         onClose={onClose}
+        onChange={(index) => {
+          if (index === -1) resetExecution();
+        }}
       >
         <BottomSheetView style={styles.contentContainer}>
           {/* Header: Title + Mode Dropdown + Close */}
