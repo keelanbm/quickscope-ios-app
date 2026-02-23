@@ -349,15 +349,10 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   const handleQuickTrade = useCallback(
     (presetParams: { side: "buy" | "sell"; amount: number }) => {
-      // TODO: When instantTrade is enabled, execute swap directly
-      navigation.navigate("TradeEntry", {
-        source: "deep-link",
-        tokenAddress,
-        outputMintDecimals: params?.tokenDecimals,
-        amount: presetParams.amount.toString(),
-      });
+      setTradeSide(presetParams.side);
+      bottomSheetRef.current?.snapToIndex(0);
     },
-    [navigation, tokenAddress, params?.tokenDecimals]
+    []
   );
 
   const handleExpandTrade = useCallback(() => {
@@ -395,14 +390,10 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   const handleQuoteRequest = useCallback(
     (quoteParams: { side: "buy" | "sell"; amount: number; orderType: "market" }) => {
-      navigation.navigate("TradeEntry", {
-        source: "deep-link",
-        tokenAddress,
-        outputMintDecimals: params?.tokenDecimals,
-        amount: quoteParams.amount.toString(),
-      });
+      setTradeSide(quoteParams.side);
+      bottomSheetRef.current?.snapToIndex(0);
     },
-    [navigation, tokenAddress, params?.tokenDecimals]
+    []
   );
 
   const handleMarketQuoteRequest = useCallback(
