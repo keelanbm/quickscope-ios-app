@@ -10,6 +10,7 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 
@@ -38,7 +39,7 @@ import {
 } from "@/src/features/watchlist/tokenWatchlistService";
 import type { RootStack, RootTabs, TrackingRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Activity, Copy, Eye, Globe, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
+import { Activity, Copy, Eye, Globe, MessageCircle, Search, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
 import { XIcon, TelegramIcon } from "@/src/ui/icons/BrandIcons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
@@ -66,6 +67,7 @@ type ActivityRow = {
   tokenSymbol: string;
   tokenName: string;
   tokenAddress: string;
+  imageUri?: string;
   walletLabel: string;
   action: "Buy" | "Sell" | "Add" | "Remove";
   amountSol: string;
@@ -183,6 +185,11 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   const [trackedWallets, setTrackedWallets] = useState<TrackedWallet[]>([]);
   const [activity, setActivity] = useState<ActivityRow[]>([]);
 
+  // ── Wallet activity filters ──
+  const [activityActionFilter, setActivityActionFilter] = useState<"all" | "Buy" | "Sell">("all");
+  const [activityWalletFilter, setActivityWalletFilter] = useState<string | null>(null); // walletLabel or null=all
+  const [activitySearch, setActivitySearch] = useState("");
+
   // ── Chats tab state ──
   const [telegramEvents, setTelegramEvents] = useState<TelegramEvent[]>([]);
 
@@ -270,6 +277,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
             tokenSymbol: tokenInfo?.symbol ?? row.mint.slice(0, 4),
             tokenName: tokenInfo?.name ?? "Unknown token",
             tokenAddress: row.mint,
+            imageUri: tokenInfo?.image_uri,
             walletLabel: resolveWalletLabel(wallets, row.maker),
             action: ACTION_LABELS[row.type] ?? ("Buy" as const),
             amountSol: formatAmount(row.amount_quote ?? 0),
@@ -397,17 +405,9 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       return null;
     }
 
-    if (activeTab === "wallets" && activity.length > 0) {
-      return (
-        <View style={styles.columnHeaders}>
-          <View style={styles.colHeaderLeft}>
-            <Text style={styles.colHeaderText}>Activity</Text>
-          </View>
-          <View style={styles.colHeaderRight}>
-            <Text style={styles.colHeaderText}>Amount</Text>
-          </View>
-        </View>
-      );
+    if (activeTab === "wallets") {
+      // Clean activity feed — no column headers needed
+      return null;
     }
 
     if (activeTab === "chats" && telegramEvents.length > 0) {
@@ -424,6 +424,103 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     }
 
     return null;
+  }
+
+  /** Wallet activity filter bar */
+  function renderActivityFilters() {
+    if (activeTab !== "wallets" || activity.length === 0) return null;
+
+    const actionOptions: Array<{ label: string; value: "all" | "Buy" | "Sell" }> = [
+      { label: "All", value: "all" },
+      { label: "Buys", value: "Buy" },
+      { label: "Sells", value: "Sell" },
+    ];
+
+    return (
+      <View style={styles.activityFilters}>
+        {/* Search bar */}
+        <View style={styles.activitySearchWrap}>
+          <Search size={14} color={qsColors.textSubtle} />
+          <TextInput
+            style={styles.activitySearchInput}
+            placeholder="Search token…"
+            placeholderTextColor={qsColors.textSubtle}
+            value={activitySearch}
+            onChangeText={setActivitySearch}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+        </View>
+
+        {/* Action filter chips */}
+        <View style={styles.filterChipRow}>
+          {actionOptions.map((opt) => {
+            const active = activityActionFilter === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => {
+                  haptics.selection();
+                  setActivityActionFilter(opt.value);
+                }}
+              >
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          {/* Wallet filter chips (only if >1 wallet) */}
+          {uniqueWalletLabels.length > 1 ? (
+            <>
+              <View style={styles.filterDivider} />
+              <Pressable
+                style={[styles.filterChip, !activityWalletFilter && styles.filterChipActive]}
+                onPress={() => {
+                  haptics.selection();
+                  setActivityWalletFilter(null);
+                }}
+              >
+                <Text style={[styles.filterChipText, !activityWalletFilter && styles.filterChipTextActive]}>
+                  All wallets
+                </Text>
+              </Pressable>
+              {uniqueWalletLabels.map((label) => {
+                const active = activityWalletFilter === label;
+                return (
+                  <Pressable
+                    key={label}
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                    onPress={() => {
+                      haptics.selection();
+                      setActivityWalletFilter(active ? null : label);
+                    }}
+                  >
+                    <Wallet size={10} color={active ? qsColors.textPrimary : qsColors.textTertiary} />
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.filterChipText, active && styles.filterChipTextActive]}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </>
+          ) : null}
+        </View>
+
+        {/* Result count when filtered */}
+        {(activityActionFilter !== "all" || activityWalletFilter || activitySearch) ? (
+          <Text style={styles.filterResultCount}>
+            {filteredActivity.length} result{filteredActivity.length !== 1 ? "s" : ""}
+          </Text>
+        ) : null}
+      </View>
+    );
   }
 
   /** Tab-specific summary line */
@@ -530,11 +627,25 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     | { type: "activity"; data: ActivityRow }
     | { type: "chat"; data: TelegramEvent };
 
+  // Apply wallet activity filters
+  const filteredActivity = activity.filter((row) => {
+    if (activityActionFilter !== "all" && row.action !== activityActionFilter) return false;
+    if (activityWalletFilter && row.walletLabel !== activityWalletFilter) return false;
+    if (activitySearch) {
+      const q = activitySearch.toLowerCase();
+      if (!row.tokenSymbol.toLowerCase().includes(q) && !row.tokenName.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Unique wallet labels for the wallet filter chips
+  const uniqueWalletLabels = [...new Set(activity.map((a) => a.walletLabel))];
+
   let listData: ListItem[] = [];
   if (activeTab === "tokens") {
     listData = watchlistTokens.map((t) => ({ type: "token" as const, data: t }));
   } else if (activeTab === "wallets") {
-    listData = activity.map((a) => ({ type: "activity" as const, data: a }));
+    listData = filteredActivity.map((a) => ({ type: "activity" as const, data: a }));
   } else {
     listData = telegramEvents.map((e) => ({ type: "chat" as const, data: e }));
   }
@@ -619,6 +730,9 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
 
           {/* ── Column headers ── */}
           {renderColumnHeaders()}
+
+          {/* ── Wallet activity filters ── */}
+          {renderActivityFilters()}
         </View>
       }
       renderItem={({ item }) => {
@@ -704,34 +818,28 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
               onPress={() => handleOpenTokenDetail(row.tokenAddress, row.tokenSymbol)}
             >
               <View style={styles.rowMain}>
-                <View style={styles.tokenAvatar}>
-                  <Text style={styles.tokenAvatarText}>{row.tokenSymbol[0]}</Text>
-                </View>
+                <TokenAvatar uri={row.imageUri} size={44} />
                 <View style={styles.nameColumn}>
-                  <View style={styles.nameRow}>
-                    <Text numberOfLines={1} style={styles.tokenSymbol}>
-                      {row.tokenSymbol}
+                  <Text numberOfLines={1} style={styles.tokenSymbol}>
+                    {row.tokenSymbol}
+                  </Text>
+                  <View style={styles.walletMetaRow}>
+                    <Wallet size={10} color={qsColors.textSubtle} />
+                    <Text numberOfLines={1} style={styles.walletMetaText}>
+                      {row.walletLabel}
                     </Text>
-                    <ActionPill action={row.action} />
+                    <Text style={styles.walletMetaDot}>·</Text>
+                    <Text style={styles.walletMetaText}>{row.timeAgo}</Text>
                   </View>
-                  <Text numberOfLines={1} style={styles.tokenName}>
-                    {row.tokenName}
-                  </Text>
                 </View>
-                <View style={styles.metricCol}>
-                  <Text numberOfLines={1} style={styles.metricValue}>
-                    {row.amountSol} SOL
-                  </Text>
-                  <Text numberOfLines={1} style={styles.metricSub}>
-                    {row.timeAgo}
-                  </Text>
+                <View style={styles.activityRight}>
+                  <View style={styles.activityAmountRow}>
+                    <Text numberOfLines={1} style={styles.activityAmount}>
+                      {row.amountSol} SOL
+                    </Text>
+                  </View>
+                  <ActionPill action={row.action} />
                 </View>
-              </View>
-              <View style={styles.rowFooter}>
-                <Wallet size={10} color={qsColors.textSubtle} />
-                <Text numberOfLines={1} style={styles.walletLabel}>
-                  {row.walletLabel}
-                </Text>
               </View>
             </Pressable>
           );
@@ -1038,6 +1146,97 @@ const styles = StyleSheet.create({
     color: qsColors.textSubtle,
     fontSize: 10,
     fontWeight: qsTypography.weight.medium,
+  },
+
+  // ── Wallet activity filters ──
+  activityFilters: {
+    gap: qsSpacing.sm,
+  },
+  activitySearchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.sm,
+    backgroundColor: qsColors.layer2,
+    borderRadius: qsRadius.md,
+    paddingHorizontal: qsSpacing.md,
+    paddingVertical: qsSpacing.xs,
+    height: 36,
+  },
+  activitySearchInput: {
+    flex: 1,
+    color: qsColors.textPrimary,
+    fontSize: 13,
+    fontWeight: qsTypography.weight.medium,
+    padding: 0,
+  },
+  filterChipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: qsRadius.pill,
+    backgroundColor: qsColors.layer2,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  filterChipActive: {
+    backgroundColor: qsColors.accent,
+  },
+  filterChipText: {
+    color: qsColors.textTertiary,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.semi,
+  },
+  filterChipTextActive: {
+    color: qsColors.textPrimary,
+  },
+  filterDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: qsColors.borderDefault,
+    marginHorizontal: 2,
+  },
+  filterResultCount: {
+    color: qsColors.textSubtle,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.medium,
+  },
+
+  // ── Wallet activity rows ──
+  walletMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  walletMetaText: {
+    color: qsColors.textSubtle,
+    fontSize: 11,
+    fontWeight: qsTypography.weight.medium,
+  },
+  walletMetaDot: {
+    color: qsColors.textSubtle,
+    fontSize: 11,
+  },
+  activityRight: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  activityAmountRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 3,
+  },
+  activityAmount: {
+    color: qsColors.textPrimary,
+    fontSize: 15,
+    fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
   },
 
   // ── Action pills (wallets tab) ──
