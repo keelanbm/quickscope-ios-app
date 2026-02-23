@@ -39,6 +39,7 @@ import type { QuoteResult } from "@/src/features/trade/tradeQuoteService";
 import type { SwapExecutionResult } from "@/src/features/trade/tradeExecutionService";
 import { isQuoteStale, getQuoteTtlSecondsRemaining } from "@/src/features/trade/quoteUtils";
 import { toast } from "@/src/lib/toast";
+import { SOL_MINT } from "@/src/lib/constants";
 import { PriceDeviationSlider } from "@/src/ui/PriceDeviationSlider";
 
 type ExecutionPhase =
@@ -313,7 +314,6 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
           return;
         }
 
-        const SOL_MINT = "So11111111111111111111111111111111111111112";
         const inputMint = activeTab === "buy" ? SOL_MINT : tokenAddress;
         const outputMint = activeTab === "buy" ? tokenAddress : SOL_MINT;
 
