@@ -196,7 +196,11 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       setExecResult(null);
       setExecError(null);
       setQuoteTtl(30);
-    }, []);
+      // Collapse sheet back to default snap point
+      if (ref && typeof ref !== "function" && ref.current) {
+        ref.current.snapToIndex(0);
+      }
+    }, [ref]);
 
     // Backdrop component
     const renderBackdrop = useCallback(
@@ -621,6 +625,102 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
             </Pressable>
           </View>
 
+          {/* ── Execution Phase UI ── */}
+          {execPhase === "quoting" && (
+            <View style={styles.phaseContainer}>
+              <ActivityIndicator color={qsColors.accent} />
+              <Text style={styles.phaseLabel}>Fetching quote...</Text>
+            </View>
+          )}
+
+          {execPhase === "quoted" && quoteResult && (
+            <View style={styles.phaseContainer}>
+              <View style={styles.quoteSummaryRow}>
+                <Text style={styles.quoteLabel}>You receive</Text>
+                <Text style={styles.quoteValue}>
+                  {quoteResult.summary.amountOutUi != null
+                    ? quoteResult.summary.amountOutUi.toFixed(6)
+                    : "—"}{" "}
+                  {activeTab === "buy" ? tokenSymbol : "SOL"}
+                </Text>
+              </View>
+              <View style={styles.quoteSummaryRow}>
+                <Text style={styles.quoteLabel}>Price impact</Text>
+                <Text style={styles.quoteValue}>
+                  {quoteResult.summary.priceImpactPercent != null
+                    ? `${quoteResult.summary.priceImpactPercent.toFixed(2)}%`
+                    : "—"}
+                </Text>
+              </View>
+              <View style={styles.quoteSummaryRow}>
+                <Text style={styles.quoteLabel}>Expires</Text>
+                <Text
+                  style={[
+                    styles.quoteValue,
+                    quoteTtl <= 5 && { color: qsColors.warning },
+                  ]}
+                >
+                  {quoteTtl}s
+                </Text>
+              </View>
+              <Pressable
+                style={[
+                  styles.confirmButton,
+                  {
+                    backgroundColor:
+                      activeTab === "buy"
+                        ? qsColors.buyGreen
+                        : qsColors.sellRed,
+                  },
+                ]}
+                onPress={handleConfirmExecution}
+              >
+                <Text style={styles.confirmButtonText}>
+                  Confirm {activeTab === "buy" ? "Buy" : "Sell"}
+                </Text>
+              </Pressable>
+              <Pressable onPress={resetExecution}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {execPhase === "submitting" && (
+            <View style={styles.phaseContainer}>
+              <ActivityIndicator color={qsColors.accent} />
+              <Text style={styles.phaseLabel}>Executing swap...</Text>
+            </View>
+          )}
+
+          {execPhase === "success" && execResult && (
+            <View style={styles.phaseContainer}>
+              <Text style={styles.successIcon}>✓</Text>
+              <Text style={styles.successText}>Swap Complete</Text>
+              {execResult.signature && (
+                <Text style={styles.signatureText}>
+                  {execResult.signature.slice(0, 8)}...
+                  {execResult.signature.slice(-8)}
+                </Text>
+              )}
+              <Pressable style={styles.doneButton} onPress={resetExecution}>
+                <Text style={styles.doneButtonText}>Done</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {execPhase === "failed" && (
+            <View style={styles.phaseContainer}>
+              <Text style={styles.failIcon}>✕</Text>
+              <Text style={styles.failText}>{execError ?? "Swap failed"}</Text>
+              <Pressable style={styles.retryButton} onPress={resetExecution}>
+                <Text style={styles.retryButtonText}>Try Again</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* ── Idle Phase: Input & Controls ── */}
+          {execPhase === "idle" && (
+            <>
           {/* Balance Display */}
           {activeTab === "sell" ? (
             <Text style={styles.balanceText}>
@@ -855,6 +955,8 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
                 <Text style={styles.quoteButtonText}>{actionButtonLabel}</Text>
               )}
             </Pressable>
+          )}
+            </>
           )}
         </BottomSheetView>
       </BottomSheet>
@@ -1225,5 +1327,102 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: qsTypography.weight.bold,
     color: qsColors.layer0,
+  },
+
+  /* Execution phase UI */
+  phaseContainer: {
+    alignItems: "center" as const,
+    paddingVertical: qsSpacing.xl,
+    gap: qsSpacing.md,
+  },
+  phaseLabel: {
+    color: qsColors.textSecondary,
+    fontSize: qsTypography.size.sm,
+  },
+  quoteSummaryRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    width: "100%" as const,
+    paddingHorizontal: qsSpacing.lg,
+    paddingVertical: qsSpacing.xs,
+  },
+  quoteLabel: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.sm,
+  },
+  quoteValue: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.sm,
+    fontVariant: ["tabular-nums"] as const,
+  },
+  confirmButton: {
+    width: "100%" as const,
+    height: 48,
+    borderRadius: qsRadius.lg,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginTop: qsSpacing.md,
+  },
+  confirmButtonText: {
+    color: "#fff",
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.semi,
+  },
+  cancelText: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.sm,
+    paddingVertical: qsSpacing.sm,
+  },
+  successIcon: {
+    fontSize: 48,
+    color: qsColors.buyGreen,
+  },
+  successText: {
+    color: qsColors.buyGreen,
+    fontSize: qsTypography.size.lg,
+    fontWeight: qsTypography.weight.semi,
+  },
+  signatureText: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxs,
+    fontVariant: ["tabular-nums"] as const,
+  },
+  doneButton: {
+    width: "100%" as const,
+    height: 48,
+    borderRadius: qsRadius.lg,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: qsColors.accent,
+    marginTop: qsSpacing.md,
+  },
+  doneButtonText: {
+    color: "#fff",
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.semi,
+  },
+  failIcon: {
+    fontSize: 48,
+    color: qsColors.sellRed,
+  },
+  failText: {
+    color: qsColors.sellRed,
+    fontSize: qsTypography.size.sm,
+    textAlign: "center" as const,
+    paddingHorizontal: qsSpacing.lg,
+  },
+  retryButton: {
+    width: "100%" as const,
+    height: 48,
+    borderRadius: qsRadius.lg,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: qsColors.layer3,
+    marginTop: qsSpacing.md,
+  },
+  retryButtonText: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.semi,
   },
 });
