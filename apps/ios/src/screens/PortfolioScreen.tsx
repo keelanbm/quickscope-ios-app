@@ -12,28 +12,20 @@ import { formatCompactUsd, formatWalletAddress } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
-  fetchAccountTokenHoldings,
   fetchTraderOverview,
-  type AccountTokenHoldings,
+  fetchTraderPositions,
   type TraderOverview,
+  type Position,
 } from "@/src/features/portfolio/portfolioService";
 import type { PortfolioRouteParams, RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 import { SectionCard } from "@/src/ui/SectionCard";
 
+const PAGE_SIZE = 20;
+
 type PortfolioScreenProps = {
   rpcClient: RpcClient;
   params?: PortfolioRouteParams;
-};
-
-type PositionRow = {
-  id: string;
-  symbol: string;
-  name: string;
-  value: string;
-  pnl: string;
-  pnlPositive: boolean;
-  valueUsd: number;
 };
 
 export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
@@ -41,7 +33,11 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
   const { walletAddress } = useAuthSession();
   const requestRef = useRef(0);
   const [overview, setOverview] = useState<TraderOverview | null>(null);
-  const [holdings, setHoldings] = useState<AccountTokenHoldings | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [solPriceUsd, setSolPriceUsd] = useState(0);
+  const [solBalance, setSolBalance] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -50,7 +46,7 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
     (options?: { refreshing?: boolean }) => {
       if (!walletAddress) {
         setOverview(null);
-        setHoldings(null);
+        setPositions([]);
         setIsLoading(false);
         return;
       }
@@ -65,12 +61,19 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
 
       Promise.all([
         fetchTraderOverview(rpcClient, walletAddress),
-        fetchAccountTokenHoldings(rpcClient, walletAddress),
+        fetchTraderPositions(rpcClient, walletAddress, {
+          limit: PAGE_SIZE,
+          offset: 0,
+          sort_column: "position_value_quote",
+        }),
       ])
-        .then(([nextOverview, nextHoldings]) => {
+        .then(([nextOverview, positionsResponse]) => {
           if (requestId !== requestRef.current) return;
           setOverview(nextOverview);
-          setHoldings(nextHoldings);
+          setSolPriceUsd(positionsResponse.sol_price_usd);
+          setSolBalance(positionsResponse.sol_balance);
+          setPositions(positionsResponse.positions);
+          setHasMore(positionsResponse.positions.length >= PAGE_SIZE);
         })
         .catch((error) => {
           if (requestId !== requestRef.current) return;
@@ -91,50 +94,43 @@ export function PortfolioScreen({ rpcClient, params }: PortfolioScreenProps) {
 
   const handleRefresh = () => loadData({ refreshing: true });
 
-  const positions = useMemo<PositionRow[]>(() => {
-    if (!holdings?.token_holdings) {
-      return [];
-    }
+  const loadMore = useCallback(() => {
+    if (!walletAddress || !hasMore || isLoadingMore || isLoading) return;
 
-    const solPriceUsd = holdings.sol_price_usd || overview?.sol_price_usd || 0;
-    return holdings.token_holdings
-      .map((entry) => {
-        const tokenMeta = entry.token_info?.token_metadata;
-        const symbol = tokenMeta?.symbol ?? "UNK";
-        const name = tokenMeta?.name ?? "Unknown token";
-        const valueUsd = entry.value_sol * solPriceUsd;
+    const requestId = ++requestRef.current;
+    setIsLoadingMore(true);
 
-        return {
-          id: tokenMeta?.mint ?? symbol,
-          symbol,
-          name,
-          value: formatCompactUsd(valueUsd),
-          pnl: "--",
-          pnlPositive: true,
-          valueUsd,
-        };
+    fetchTraderPositions(rpcClient, walletAddress, {
+      limit: PAGE_SIZE,
+      offset: positions.length,
+      sort_column: "position_value_quote",
+    })
+      .then((response) => {
+        if (requestId !== requestRef.current) return;
+        setPositions((prev) => [...prev, ...response.positions]);
+        setHasMore(response.positions.length >= PAGE_SIZE);
       })
-      .sort((a, b) => {
-        return b.valueUsd - a.valueUsd;
+      .catch(() => {
+        // Silently fail on paginated load — user can scroll again
       })
-      .slice(0, 6);
-  }, [holdings, overview?.sol_price_usd]);
+      .finally(() => {
+        if (requestId !== requestRef.current) return;
+        setIsLoadingMore(false);
+      });
+  }, [rpcClient, walletAddress, hasMore, isLoadingMore, isLoading, positions.length]);
 
   const stats = useMemo(() => {
-    const solPriceUsd = holdings?.sol_price_usd || overview?.sol_price_usd || 0;
-    const solBalanceUsd = holdings?.sol_balance ? holdings.sol_balance * solPriceUsd : undefined;
-    const positionsValueUsd = holdings?.value_usd;
-    const totalVolumeUsd =
-      (overview?.cumulatives?.bought_usd_cumulative ?? 0) +
-      (overview?.cumulatives?.sold_usd_cumulative ?? 0);
+    const balanceUsd = solBalance ? solBalance * solPriceUsd : undefined;
+    const totalPnl = positions.reduce((sum, p) => sum + ((p.total_pnl_quote ?? 0) * solPriceUsd), 0);
+    const unrealizedPnl = positions.reduce((sum, p) => sum + ((p.unrealized_pnl_quote ?? 0) * solPriceUsd), 0);
 
     return [
-      { label: "Balance", value: formatCompactUsd(solBalanceUsd) },
-      { label: "Positions", value: positions.length.toString() },
-      { label: "Total Volume", value: formatCompactUsd(totalVolumeUsd || undefined) },
-      { label: "Unrealized PnL", value: "--" },
+      { label: "Balance", value: formatCompactUsd(balanceUsd) },
+      { label: "Positions", value: positions.length > 0 ? positions.length.toString() : "--" },
+      { label: "Total PnL", value: formatCompactUsd(totalPnl || undefined) },
+      { label: "Unrealized PnL", value: formatCompactUsd(unrealizedPnl || undefined) },
     ];
-  }, [holdings, overview, positions.length]);
+  }, [solBalance, solPriceUsd, positions]);
 
   return (
     <ScrollView
