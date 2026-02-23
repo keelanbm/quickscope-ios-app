@@ -38,6 +38,7 @@ import {
 import type { QuoteResult } from "@/src/features/trade/tradeQuoteService";
 import type { SwapExecutionResult } from "@/src/features/trade/tradeExecutionService";
 import { isQuoteStale, getQuoteTtlSecondsRemaining } from "@/src/features/trade/quoteUtils";
+import { toast } from "@/src/lib/toast";
 
 type ExecutionPhase =
   | "idle"
@@ -267,6 +268,21 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     // Handle main button press
     const handleActionPress = useCallback(async () => {
       if (!canSubmit || execPhase !== "idle") return;
+
+      // Insufficient balance check
+      if (activeTab === "buy" && walletBalance != null) {
+        const solNeeded = amountNum * 1e9;
+        if (solNeeded > walletBalance) {
+          toast.error("Insufficient SOL", "Not enough SOL for this trade.");
+          return;
+        }
+      }
+      if (activeTab === "sell" && userBalance != null) {
+        if (amountNum > userBalance) {
+          toast.error("Insufficient balance", `Not enough ${tokenSymbol}.`);
+          return;
+        }
+      }
 
       // Market / Instant mode — inline quote + execution flow
       if (tradeMode === "market" || tradeMode === "instant") {
@@ -722,15 +738,16 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
           {execPhase === "idle" && (
             <>
           {/* Balance Display */}
-          {activeTab === "sell" ? (
-            <Text style={styles.balanceText}>
-              Your balance: {userBalance.toFixed(6)} {tokenSymbol}
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceLabel}>
+              {activeTab === "buy" ? "SOL Balance" : `${tokenSymbol} Balance`}
             </Text>
-          ) : (
-            <Text style={styles.balanceText}>
-              SOL balance: ◎{walletBalance.toFixed(6)}
+            <Text style={styles.balanceValue}>
+              {activeTab === "buy"
+                ? walletBalance != null ? (walletBalance / 1e9).toFixed(4) : "—"
+                : userBalance != null ? userBalance.toFixed(6) : "—"}
             </Text>
-          )}
+          </View>
 
           {/* Amount Input */}
           <View style={styles.inputContainer}>
@@ -1112,10 +1129,21 @@ const styles = StyleSheet.create({
   },
 
   /* Balance */
-  balanceText: {
-    fontSize: 13,
-    color: qsColors.textSecondary,
+  balanceRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    paddingHorizontal: qsSpacing.lg,
+    paddingVertical: qsSpacing.xs,
     marginBottom: qsSpacing.sm,
+  },
+  balanceLabel: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxs,
+  },
+  balanceValue: {
+    color: qsColors.textSecondary,
+    fontSize: qsTypography.size.xxs,
+    fontVariant: ["tabular-nums"] as const,
   },
 
   /* Amount input */
