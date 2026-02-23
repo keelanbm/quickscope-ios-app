@@ -625,6 +625,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           tokenAddress={tokenAddress}
           walletBalance={positionInfo?.position?.balance}
           tokenBalance={positionInfo?.position?.balance}
+          currentMarketCapUsd={marketCapUsd}
           onPresetPress={handleQuickTrade}
           onExpandPress={handleExpandTrade}
           onLimitPress={handleLimitPress}

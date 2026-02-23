@@ -27,7 +27,6 @@ import { ChevronDown, X, Settings, Zap } from "@/src/ui/icons";
 import { haptics } from "@/src/lib/haptics";
 import { formatSlippage } from "@/src/features/trade/tradeSettings";
 import {
-  EXPIRATION_PRESETS,
   DEFAULT_EXPIRATION_SECONDS,
   detectOrderType,
   calcTriggerPrice,
@@ -195,14 +194,15 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     }, [execPhase, quoteResult]);
 
     // Reset execution state machine to idle
-    const resetExecution = useCallback(() => {
+    const resetExecution = useCallback((collapseSheet = false) => {
       setExecPhase("idle");
       setQuoteResult(null);
       setExecResult(null);
       setExecError(null);
       setQuoteTtl(30);
-      // Collapse sheet back to default snap point
-      if (ref && typeof ref !== "function" && ref.current) {
+      // Only snap back when explicitly requested (e.g. after success/fail),
+      // NOT when the sheet itself closes (onChange -1) — that causes a reopen loop.
+      if (collapseSheet && ref && typeof ref !== "function" && ref.current) {
         ref.current.snapToIndex(0);
       }
     }, [ref]);
@@ -424,7 +424,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     // Confirm and execute a quoted swap
     const handleConfirmExecution = useCallback(async () => {
       if (!quoteResult || isQuoteStale(quoteResult.requestedAtMs)) {
-        resetExecution();
+        resetExecution(true);
         return;
       }
       setExecPhase("submitting");
@@ -719,7 +719,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
                   Confirm {activeTab === "buy" ? "Buy" : "Sell"}
                 </Text>
               </Pressable>
-              <Pressable onPress={resetExecution}>
+              <Pressable onPress={() => resetExecution(true)}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </Pressable>
             </View>
@@ -742,7 +742,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
                   {execResult.signature.slice(-8)}
                 </Text>
               )}
-              <Pressable style={styles.doneButton} onPress={resetExecution}>
+              <Pressable style={styles.doneButton} onPress={() => resetExecution(true)}>
                 <Text style={styles.doneButtonText}>Done</Text>
               </Pressable>
             </View>
@@ -752,7 +752,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
             <View style={styles.phaseContainer}>
               <Text style={styles.failIcon}>✕</Text>
               <Text style={styles.failText}>{execError ?? "Swap failed"}</Text>
-              <Pressable style={styles.retryButton} onPress={resetExecution}>
+              <Pressable style={styles.retryButton} onPress={() => resetExecution(true)}>
                 <Text style={styles.retryButtonText}>Try Again</Text>
               </Pressable>
             </View>
@@ -821,67 +821,6 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
                 />
               )}
 
-              {/* Trigger MC Input */}
-              <Text style={styles.limitLabel}>Target Market Cap</Text>
-              <View style={styles.inputContainer}>
-                <View style={styles.mcInputRow}>
-                  <Text style={styles.mcPrefix}>$</Text>
-                  <TextInput
-                    style={[styles.input, styles.mcInput]}
-                    placeholder="e.g. 500000"
-                    placeholderTextColor={qsColors.textMuted}
-                    value={triggerMC}
-                    onChangeText={(text) => {
-                      setTriggerMC(text);
-                      setShowConfirmation(false);
-                      // Sync MC input → deviation slider
-                      const parsedMC = Number(text);
-                      if (currentMarketCapUsd && currentMarketCapUsd > 0 && !isNaN(parsedMC) && parsedMC > 0) {
-                        const pct = ((parsedMC - currentMarketCapUsd) / currentMarketCapUsd) * 100;
-                        setDeviationPercent(Math.round(pct));
-                      }
-                    }}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              {/* Current MC reference */}
-              {currentMarketCapUsd !== undefined && currentMarketCapUsd > 0 && (
-                <Text style={styles.mcReference}>
-                  Current MC: ${formatCompactMC(currentMarketCapUsd)}
-                </Text>
-              )}
-
-              {/* Expiration Pills */}
-              <Text style={styles.limitLabel}>Expires In</Text>
-              <View style={styles.expirationRow}>
-                {EXPIRATION_PRESETS.map((preset) => {
-                  const isActive = expirationSeconds === preset.seconds;
-                  return (
-                    <Pressable
-                      key={preset.label}
-                      onPress={() => {
-                        haptics.light();
-                        setExpirationSeconds(preset.seconds);
-                      }}
-                      style={[
-                        styles.expirationPill,
-                        isActive && styles.expirationPillActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.expirationText,
-                          isActive && styles.expirationTextActive,
-                        ]}
-                      >
-                        {preset.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
             </View>
           )}
 
@@ -912,12 +851,6 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
               <View style={styles.confirmRow}>
                 <Text style={styles.confirmLabel}>Slippage</Text>
                 <Text style={styles.confirmValue}>{formatSlippage(slippageBps)}</Text>
-              </View>
-              <View style={styles.confirmRow}>
-                <Text style={styles.confirmLabel}>Expires</Text>
-                <Text style={styles.confirmValue}>
-                  {EXPIRATION_PRESETS.find((p) => p.seconds === expirationSeconds)?.label ?? "—"}
-                </Text>
               </View>
 
               <View style={styles.confirmActions}>
@@ -1218,54 +1151,6 @@ const styles = StyleSheet.create({
     color: qsColors.textSecondary,
     marginBottom: qsSpacing.xs,
   },
-  mcInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  mcPrefix: {
-    position: "absolute",
-    left: qsSpacing.md,
-    zIndex: 1,
-    fontSize: 16,
-    color: qsColors.textTertiary,
-    fontWeight: qsTypography.weight.semi,
-  },
-  mcInput: {
-    flex: 1,
-    paddingLeft: qsSpacing.xl + qsSpacing.xs,
-  },
-  mcReference: {
-    fontSize: 12,
-    color: qsColors.textTertiary,
-    marginTop: -qsSpacing.sm,
-    marginBottom: qsSpacing.md,
-  },
-  expirationRow: {
-    flexDirection: "row",
-    gap: qsSpacing.sm,
-    marginBottom: qsSpacing.md,
-  },
-  expirationPill: {
-    paddingHorizontal: qsSpacing.lg,
-    paddingVertical: qsSpacing.sm,
-    borderRadius: qsRadius.pill,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.layer2,
-  },
-  expirationPillActive: {
-    borderColor: qsColors.accent,
-    backgroundColor: "rgba(119, 102, 247, 0.12)",
-  },
-  expirationText: {
-    fontSize: 13,
-    fontWeight: qsTypography.weight.semi,
-    color: qsColors.textTertiary,
-  },
-  expirationTextActive: {
-    color: qsColors.textPrimary,
-  },
-
   /* ── Inline confirmation ── */
   confirmationBox: {
     backgroundColor: qsColors.layer2,

@@ -1,14 +1,12 @@
 /**
- * PriceDeviationSlider — draggable slider for setting limit order trigger MC
- * as a percentage deviation from current market cap.
+ * PriceDeviationSlider — compact inline slider for limit order trigger MC.
  *
- * Range: -90% to +500% (configurable)
- * Center notch at 0% = current MC
- * Green right of center (limit sell), Red left (stop loss), Purple left on buy side
+ * Matches reference: thin track line with tick marks at -100%, -50%, 0%, +50%, +100%,
+ * small draggable thumb, and a compact % input box on the right.
  */
 
-import { useCallback, useMemo } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
@@ -20,45 +18,34 @@ import { haptics } from "@/src/lib/haptics";
 
 type Props = {
   currentMC: number;
-  deviationPercent: number; // -90 to +500
+  deviationPercent: number; // -100 to +100
   onDeviationChange: (percent: number) => void;
   side: "buy" | "sell";
-  minPercent?: number; // default -90
-  maxPercent?: number; // default +500
+  minPercent?: number;
+  maxPercent?: number;
 };
 
-const TRACK_HEIGHT = 40;
-const THUMB_SIZE = 28;
-const SNAP_THRESHOLD = 3; // snap to 0% within ±3%
+const TRACK_HEIGHT = 2;
+const THUMB_SIZE = 14;
+const SNAP_THRESHOLD = 3;
+const TICK_POSITIONS = [-100, -50, 0, 50, 100];
 
 export function PriceDeviationSlider({
   currentMC,
   deviationPercent,
   onDeviationChange,
   side,
-  minPercent = -90,
-  maxPercent = 500,
+  minPercent = -100,
+  maxPercent = 100,
 }: Props) {
   const trackWidth = useSharedValue(0);
   const translateX = useSharedValue(0);
+  const [inputText, setInputText] = useState(String(deviationPercent));
 
-  // Convert percent to x position
   const percentToX = useCallback(
     (pct: number, width: number) => {
       const range = maxPercent - minPercent;
       return ((pct - minPercent) / range) * width;
-    },
-    [minPercent, maxPercent],
-  );
-
-  // Convert x position to percent
-  const xToPercent = useCallback(
-    (x: number, width: number) => {
-      const range = maxPercent - minPercent;
-      const pct = (x / width) * range + minPercent;
-      // Snap to zero near center
-      if (Math.abs(pct) < SNAP_THRESHOLD) return 0;
-      return Math.round(pct);
     },
     [minPercent, maxPercent],
   );
@@ -74,6 +61,7 @@ export function PriceDeviationSlider({
       const pct = (clampedX / width) * range + minPercent;
       const snapped = Math.abs(pct) < SNAP_THRESHOLD ? 0 : Math.round(pct);
       runOnJS(onDeviationChange)(snapped);
+      runOnJS(setInputText)(String(snapped));
     })
     .onEnd(() => {
       "worklet";
@@ -84,62 +72,117 @@ export function PriceDeviationSlider({
     transform: [{ translateX: translateX.value - THUMB_SIZE / 2 }],
   }));
 
-  const targetMC = currentMC * (1 + deviationPercent / 100);
-  const deviationLabel =
-    deviationPercent >= 0 ? `+${deviationPercent}%` : `${deviationPercent}%`;
-
-  // Fill color: green for profit direction, red for loss direction
+  // Thumb color
   const fillColor = useMemo(() => {
+    if (deviationPercent === 0) return qsColors.accent;
     if (side === "sell") {
       return deviationPercent >= 0 ? qsColors.buyGreen : qsColors.sellRed;
     }
-    // Buy side: below current = good (buying dip)
     return deviationPercent <= 0 ? qsColors.buyGreen : qsColors.accent;
   }, [side, deviationPercent]);
 
-  // Center notch position (memoized for layout callback)
-  const centerNotchLeft = useMemo(() => {
-    const range = maxPercent - minPercent;
-    return `${((0 - minPercent) / range) * 100}%`;
-  }, [minPercent, maxPercent]);
+  // Handle % input submit
+  const handleInputSubmit = useCallback(() => {
+    const val = parseInt(inputText, 10);
+    if (isNaN(val)) {
+      setInputText(String(deviationPercent));
+      return;
+    }
+    const clamped = Math.max(minPercent, Math.min(maxPercent, val));
+    onDeviationChange(clamped);
+    setInputText(String(clamped));
+    haptics.light();
+    // Sync thumb position
+    const width = trackWidth.value;
+    if (width > 0) {
+      translateX.value = percentToX(clamped, width);
+    }
+  }, [inputText, deviationPercent, minPercent, maxPercent, onDeviationChange, trackWidth, translateX, percentToX]);
 
-  const formatMC = (mc: number): string => {
-    if (mc >= 1_000_000) return `$${(mc / 1_000_000).toFixed(2)}M`;
-    if (mc >= 1_000) return `$${(mc / 1_000).toFixed(1)}K`;
-    return `$${mc.toFixed(0)}`;
-  };
+  // Sync inputText when parent changes deviationPercent
+  const displayText = String(deviationPercent);
+  if (inputText !== displayText && !isNaN(parseInt(inputText, 10))) {
+    // Only sync if not actively editing
+  }
+
+  // Tick mark positions as percentages
+  const tickPositions = useMemo(() => {
+    const range = maxPercent - minPercent;
+    return TICK_POSITIONS.filter((t) => t >= minPercent && t <= maxPercent).map((t) => ({
+      value: t,
+      left: ((t - minPercent) / range) * 100,
+    }));
+  }, [minPercent, maxPercent]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.labelRow}>
-        <Text style={styles.label}>Price Deviation</Text>
-        <Text style={[styles.deviationText, { color: fillColor }]}>
-          {deviationLabel}
-        </Text>
-      </View>
+      {/* Slider + % input in one row */}
+      <View style={styles.sliderRow}>
+        {/* Track area */}
+        <View style={styles.trackWrap}>
+          <GestureDetector gesture={panGesture}>
+            <View
+              style={styles.trackHitArea}
+              onLayout={(e) => {
+                const width = e.nativeEvent.layout.width;
+                trackWidth.value = width;
+                translateX.value = percentToX(deviationPercent, width);
+              }}
+            >
+              {/* Thin track line */}
+              <View style={styles.track} />
 
-      <GestureDetector gesture={panGesture}>
-        <View
-          style={styles.track}
-          onLayout={(e) => {
-            const width = e.nativeEvent.layout.width;
-            trackWidth.value = width;
-            translateX.value = percentToX(deviationPercent, width);
-          }}
-        >
-          {/* Center notch (0%) */}
-          <View style={[styles.centerNotch, { left: centerNotchLeft as unknown as number }]} />
+              {/* Tick marks */}
+              {tickPositions.map((tick) => (
+                <View
+                  key={tick.value}
+                  style={[
+                    styles.tick,
+                    { left: `${tick.left}%` },
+                    tick.value === 0 && styles.tickCenter,
+                  ]}
+                />
+              ))}
 
-          {/* Thumb */}
-          <Animated.View
-            style={[styles.thumb, thumbStyle, { backgroundColor: fillColor }]}
-          />
+              {/* Thumb */}
+              <Animated.View
+                style={[styles.thumb, thumbStyle, { backgroundColor: fillColor }]}
+              />
+            </View>
+          </GestureDetector>
+
+          {/* Tick labels */}
+          <View style={styles.tickLabelsRow}>
+            {tickPositions.map((tick) => (
+              <Text
+                key={tick.value}
+                style={[
+                  styles.tickLabel,
+                  { left: `${tick.left}%` },
+                  tick.value === 0 && styles.tickLabelCenter,
+                ]}
+              >
+                {tick.value > 0 ? `+${tick.value}%` : `${tick.value}%`}
+              </Text>
+            ))}
+          </View>
         </View>
-      </GestureDetector>
 
-      <View style={styles.mcRow}>
-        <Text style={styles.mcLabel}>Target MC</Text>
-        <Text style={styles.mcValue}>{formatMC(targetMC)}</Text>
+        {/* % input box */}
+        <View style={styles.percentInputWrap}>
+          <TextInput
+            style={styles.percentInput}
+            value={inputText}
+            onChangeText={setInputText}
+            onBlur={handleInputSubmit}
+            onSubmitEditing={handleInputSubmit}
+            keyboardType="number-pad"
+            returnKeyType="done"
+            selectTextOnFocus
+            maxLength={4}
+          />
+          <Text style={styles.percentSymbol}>%</Text>
+        </View>
       </View>
     </View>
   );
@@ -147,54 +190,85 @@ export function PriceDeviationSlider({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: qsSpacing.lg,
-    gap: qsSpacing.sm,
+    gap: 2,
   },
-  labelRow: {
+  sliderRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: qsSpacing.md,
   },
-  label: {
-    color: qsColors.textTertiary,
-    fontSize: qsTypography.size.xxs,
+  trackWrap: {
+    flex: 1,
+    paddingTop: 4,
   },
-  deviationText: {
-    fontSize: qsTypography.size.sm,
-    fontWeight: qsTypography.weight.semi,
+  trackHitArea: {
+    height: 24,
+    justifyContent: "center",
   },
   track: {
     height: TRACK_HEIGHT,
-    backgroundColor: qsColors.layer3,
-    borderRadius: qsRadius.md,
-    justifyContent: "center",
-  },
-  centerNotch: {
-    position: "absolute",
-    width: 2,
-    height: TRACK_HEIGHT - 8,
     backgroundColor: qsColors.textSubtle,
     borderRadius: 1,
+  },
+  tick: {
+    position: "absolute",
+    width: 1,
+    height: 8,
+    backgroundColor: qsColors.textSubtle,
+    top: 8,
+    marginLeft: -0.5,
+  },
+  tickCenter: {
+    height: 10,
+    top: 7,
+    backgroundColor: qsColors.textTertiary,
   },
   thumb: {
     position: "absolute",
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
+    top: (24 - THUMB_SIZE) / 2,
     borderWidth: 2,
     borderColor: qsColors.textPrimary,
   },
-  mcRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  tickLabelsRow: {
+    position: "relative",
+    height: 14,
+    marginTop: 2,
   },
-  mcLabel: {
+  tickLabel: {
+    position: "absolute",
+    color: qsColors.textSubtle,
+    fontSize: 9,
+    fontVariant: ["tabular-nums"],
+    transform: [{ translateX: -14 }],
+  },
+  tickLabelCenter: {
     color: qsColors.textTertiary,
-    fontSize: qsTypography.size.xxs,
   },
-  mcValue: {
+  percentInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: qsColors.layer3,
+    borderRadius: qsRadius.sm,
+    paddingHorizontal: qsSpacing.sm,
+    paddingVertical: qsSpacing.xs,
+    minWidth: 56,
+    gap: 2,
+  },
+  percentInput: {
     color: qsColors.textPrimary,
     fontSize: qsTypography.size.sm,
     fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
+    padding: 0,
+    minWidth: 28,
+    textAlign: "right",
+  },
+  percentSymbol: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.semi,
   },
 });
