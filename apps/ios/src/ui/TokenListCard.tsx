@@ -3,7 +3,7 @@ import { memo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { formatCompactUsd, formatPercent, formatCompactNumber } from "@/src/lib/format";
-import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 import { SocialChips, type SocialLink } from "@/src/ui/SocialChips";
 import { SparklineChart } from "@/src/ui/SparklineChart";
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: qsSpacing.sm,
     paddingVertical: qsSpacing.sm,
     minHeight: 64,
-    gap: 6,
+    gap: qsSpacing.sm,
   },
   containerHighlighted: {
     backgroundColor: qsColors.layer1,
@@ -221,20 +221,20 @@ const styles = StyleSheet.create({
   },
   imageFallbackText: {
     color: qsColors.textPrimary,
-    fontWeight: "700",
-    fontSize: 16,
+    fontWeight: qsTypography.weight.bold,
+    fontSize: qsTypography.size.md,
   },
   tokenInfo: {
     flex: 2.5,
     gap: 1,
   },
   symbol: {
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: qsTypography.size.base,
+    fontWeight: qsTypography.weight.bold,
     color: qsColors.textPrimary,
   },
   name: {
-    fontSize: 11,
+    fontSize: qsTypography.size.xxs,
     color: qsColors.textMuted,
   },
   platformBadge: {
@@ -243,13 +243,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.pill,
-    paddingHorizontal: 4,
+    paddingHorizontal: qsSpacing.xs,
     paddingVertical: 1,
-    marginTop: 2,
+    marginTop: qsSpacing.xxs,
   },
   platformText: {
-    fontSize: 9,
-    fontWeight: "600",
+    fontSize: qsTypography.size.xxxs,
+    fontWeight: qsTypography.weight.semi,
     color: qsColors.textSubtle,
   },
   mcColumn: {
@@ -257,8 +257,8 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   mcValue: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: qsTypography.size.xxs,
+    fontWeight: qsTypography.weight.semi,
     color: qsColors.textSecondary,
     fontVariant: ["tabular-nums"],
   },
@@ -267,14 +267,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   changeValue: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.bold,
     fontVariant: ["tabular-nums"],
   },
   actionsColumn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: qsSpacing.sm,
     minWidth: 40,
     justifyContent: "flex-end",
   },
@@ -283,8 +283,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: qsSpacing.sm,
+    paddingVertical: qsSpacing.xs,
   },
   // Row 2: Sparkline
   sparklineRow: {
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     gap: qsSpacing.sm,
   },
   metaText: {
-    fontSize: 10,
+    fontSize: qsTypography.size.xxxs,
     color: qsColors.textSubtle,
   },
 });
