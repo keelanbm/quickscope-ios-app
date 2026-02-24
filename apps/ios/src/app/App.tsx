@@ -43,9 +43,6 @@ const PortfolioScreen = React.lazy(() =>
 const DepositScreen = React.lazy(() =>
   import("@/src/screens/DepositScreen").then((m) => ({ default: m.DepositScreen }))
 );
-const ReviewTradeScreen = React.lazy(() =>
-  import("@/src/screens/ReviewTradeScreen").then((m) => ({ default: m.ReviewTradeScreen }))
-);
 const RewardsScreen = React.lazy(() =>
   import("@/src/screens/RewardsScreen").then((m) => ({ default: m.RewardsScreen }))
 );
@@ -61,8 +58,8 @@ const TokenDetailScreen = React.lazy(() =>
 const TelegramScreen = React.lazy(() =>
   import("@/src/screens/TelegramScreen").then((m) => ({ default: m.TelegramScreen }))
 );
-const TradeEntryScreen = React.lazy(() =>
-  import("@/src/screens/TradeEntryScreen").then((m) => ({ default: m.TradeEntryScreen }))
+const WalletDetailScreen = React.lazy(() =>
+  import("@/src/screens/walletDetail/WalletDetailScreen").then((m) => ({ default: m.WalletDetailScreen }))
 );
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
@@ -111,7 +108,9 @@ function navigateToTarget(
       navigationRef.navigate("MainTabs", { screen: "Scope", params: target.params });
       return;
     case "Trade":
-      navigationRef.navigate("TradeEntry", target.params);
+      navigationRef.navigate("TokenDetail", {
+        tokenAddress: target.params?.tokenAddress ?? "",
+      });
       return;
     case "Portfolio":
       navigationRef.navigate("MainTabs", { screen: "Portfolio", params: target.params });
@@ -394,38 +393,13 @@ export default function App() {
                 )}
               />
               <Stack.Screen
-                name="TradeEntry"
-                options={{ title: "Trade", headerBackButtonDisplayMode: "minimal" }}
+                name="WalletDetail"
+                options={{ headerShown: false }}
                 children={({ route }) => (
-                  <RouteErrorBoundary routeName="Trade">
-                    <AuthRouteGate
-                      featureName="Trade"
-                      subtitle="Connect to request quotes and execute trades."
-                    >
-                      <Suspense fallback={<LazyFallback />}>
-                        <TradeEntryScreen rpcClient={rpcClient} params={route.params} />
-                      </Suspense>
-                    </AuthRouteGate>
-                  </RouteErrorBoundary>
-                )}
-              />
-              <Stack.Screen
-                name="ReviewTrade"
-                options={{ title: "Review Trade", headerBackButtonDisplayMode: "minimal" }}
-                children={({ route }) => (
-                  <RouteErrorBoundary routeName="Review Trade">
-                    <AuthRouteGate
-                      featureName="Trade"
-                      subtitle="Connect to review and execute trades."
-                    >
-                      <Suspense fallback={<LazyFallback />}>
-                        <ReviewTradeScreen
-                          rpcClient={rpcClient}
-                          executionEnabled={env.enableSwapExecution}
-                          params={route.params}
-                        />
-                      </Suspense>
-                    </AuthRouteGate>
+                  <RouteErrorBoundary routeName="Wallet Detail">
+                    <Suspense fallback={<LazyFallback />}>
+                      <WalletDetailScreen rpcClient={rpcClient} params={route.params} />
+                    </Suspense>
                   </RouteErrorBoundary>
                 )}
               />
