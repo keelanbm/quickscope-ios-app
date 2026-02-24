@@ -344,7 +344,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
       return (
         <Pressable
           key={item.mint}
-          style={styles.rowItem}
+          style={({ pressed }) => [styles.rowItem, pressed && styles.rowPressed]}
           onPress={() => handleOpenTokenDetail(item)}
         >
           <View style={styles.rowMain}>
@@ -439,7 +439,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
               {recentSearches.map((entry) => (
                 <Pressable
                   key={entry.mint}
-                  style={styles.recentChip}
+                  style={({ pressed }) => [styles.recentChip, pressed && styles.recentChipPressed]}
                   onPress={() => handleOpenRecentSearch(entry)}
                 >
                   {entry.imageUri ? (
@@ -643,12 +643,12 @@ const styles = StyleSheet.create({
     backgroundColor: qsColors.layer2,
     borderRadius: qsRadius.lg,
     paddingHorizontal: qsSpacing.md,
-    paddingVertical: 10,
+    paddingVertical: qsSpacing.md,
   },
   searchInput: {
     flex: 1,
     color: qsColors.textPrimary,
-    fontSize: 14,
+    fontSize: qsTypography.size.sm,
     padding: 0,
   },
   clearButton: {
@@ -665,49 +665,49 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.layer1,
     padding: qsSpacing.md,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   deepLinkTitle: {
     color: qsColors.textMuted,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   deepLinkBody: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   errorBox: {
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.dangerDark,
     padding: qsSpacing.md,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   errorText: {
     color: qsColors.dangerLight,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   retryButton: {
-    marginTop: 4,
+    marginTop: qsSpacing.xs,
     alignSelf: "flex-start",
     borderRadius: qsRadius.sm,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    backgroundColor: "rgba(239, 68, 68, 0.2)",
+    paddingVertical: qsSpacing.xs,
+    paddingHorizontal: qsSpacing.md,
+    backgroundColor: qsColors.dangerBg,
   },
   retryButtonText: {
     color: qsColors.dangerLight,
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: qsTypography.size.xxs,
+    fontWeight: qsTypography.weight.bold,
   },
 
   // ── Skeleton loading ──
   skeletonWrap: {
-    gap: 14,
+    gap: qsSpacing.md,
     paddingTop: qsSpacing.sm,
   },
   skeletonRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: qsSpacing.md,
   },
   skeletonCircle: {
     width: 40,
@@ -721,7 +721,7 @@ const styles = StyleSheet.create({
   },
   skeletonLine: {
     height: 10,
-    borderRadius: 4,
+    borderRadius: qsRadius.xs,
     backgroundColor: qsColors.layer2,
   },
 
@@ -737,21 +737,21 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: qsSpacing.sm,
   },
   sectionTitle: {
     color: qsColors.textPrimary,
-    fontSize: 14,
+    fontSize: qsTypography.size.sm,
     fontWeight: qsTypography.weight.semi,
     flex: 1,
   },
   sectionSubtitle: {
     color: qsColors.textSubtle,
-    fontSize: 11,
+    fontSize: qsTypography.size.xxxs,
   },
   clearAllText: {
     color: qsColors.textSubtle,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.medium,
   },
 
@@ -764,12 +764,12 @@ const styles = StyleSheet.create({
   recentChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: qsSpacing.sm,
     backgroundColor: qsColors.layer1,
     borderRadius: qsRadius.pill,
-    paddingVertical: 7,
-    paddingLeft: 8,
-    paddingRight: 10,
+    paddingVertical: qsSpacing.sm,
+    paddingLeft: qsSpacing.sm,
+    paddingRight: qsSpacing.md,
   },
   recentChipImage: {
     width: 18,
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
   },
   recentChipText: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.semi,
     maxWidth: 80,
   },
@@ -788,9 +788,9 @@ const styles = StyleSheet.create({
   columnHeaders: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
+    paddingVertical: qsSpacing.xs,
     paddingHorizontal: qsSpacing.lg,
-    gap: 8,
+    gap: qsSpacing.sm,
   },
   colHeaderLeft: {
     flex: 1,
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
   },
   colHeaderText: {
     color: qsColors.textSubtle,
-    fontSize: 10,
+    fontSize: qsTypography.size.xxxs,
     fontWeight: qsTypography.weight.semi,
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -810,21 +810,23 @@ const styles = StyleSheet.create({
   // ── Result count ──
   resultCount: {
     color: qsColors.textSubtle,
-    fontSize: 11,
+    fontSize: qsTypography.size.xxxs,
     fontWeight: qsTypography.weight.medium,
   },
 
   // ── Token rows ──
   rowItem: {
     paddingHorizontal: qsSpacing.lg,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingVertical: qsSpacing.md,
     backgroundColor: qsColors.layer0,
+  },
+  rowPressed: {
+    backgroundColor: qsColors.pressedOverlay,
   },
   rowMain: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: qsSpacing.sm,
   },
   imageWrap: {
     width: 40,
@@ -843,7 +845,7 @@ const styles = StyleSheet.create({
     left: -5,
     backgroundColor: qsColors.layer1,
     borderRadius: qsRadius.xs,
-    paddingHorizontal: 3,
+    paddingHorizontal: qsSpacing.xxs,
     paddingVertical: 1,
   },
   launchBadgeText: {
@@ -853,56 +855,59 @@ const styles = StyleSheet.create({
   },
   nameColumn: {
     flex: 1,
-    gap: 1,
+    gap: qsSpacing.xxs,
   },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 14,
+    fontSize: qsTypography.size.sm,
     fontWeight: qsTypography.weight.bold,
     flexShrink: 1,
   },
   tokenName: {
     color: qsColors.textTertiary,
-    fontSize: 11,
+    fontSize: qsTypography.size.xxs,
   },
   metricCol: {
     alignItems: "flex-end",
-    gap: 2,
+    gap: qsSpacing.xxs,
     minWidth: 64,
   },
   metricValue: {
     color: qsColors.textPrimary,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
   },
   metricSub: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
   },
   changeValue: {
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
   },
   rowFooter: {
-    marginTop: 4,
+    marginTop: qsSpacing.xs,
     marginLeft: 48,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: qsSpacing.sm,
   },
   ageText: {
-    color: qsColors.buyGreen,
-    fontSize: 10,
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxxs,
     fontWeight: qsTypography.weight.semi,
+  },
+  recentChipPressed: {
+    opacity: 0.7,
   },
 
 });
