@@ -9,14 +9,15 @@ import { useCandleLayout } from "@/src/ui/chart/useCandleLayout";
 import { useChartGestures } from "@/src/ui/chart/useChartGestures";
 import { AnimatedCandle } from "@/src/ui/chart/AnimatedCandle";
 import { ChartTooltip } from "@/src/ui/chart/ChartTooltip";
+import { SignalMarker } from "@/src/ui/chart/SignalMarker";
 import { LivePriceLine } from "@/src/ui/chart/LivePriceLine";
 import { LiveCandleGlow } from "@/src/ui/chart/LiveCandleGlow";
 import { LiveBreathingDot } from "@/src/ui/chart/LiveBreathingDot";
 import { LiveIndicator } from "@/src/ui/LiveIndicator";
 
 // Re-export types from shared module for backwards compat
-export type { TokenChartPoint, TokenCandlePoint } from "@/src/ui/chart/chartTypes";
-import type { TokenChartPoint, TokenCandlePoint } from "@/src/ui/chart/chartTypes";
+export type { TokenChartPoint, TokenCandlePoint, ChartSignal } from "@/src/ui/chart/chartTypes";
+import type { TokenChartPoint, TokenCandlePoint, ChartSignal } from "@/src/ui/chart/chartTypes";
 
 type TokenChartProps = {
   data: TokenChartPoint[];
@@ -25,6 +26,9 @@ type TokenChartProps = {
   height?: number;
   isLive?: boolean;
   isLoading?: boolean;
+  signals?: ChartSignal[];
+  visibleSignalTypes?: Set<string>;
+  onSignalTap?: (signal: ChartSignal) => void;
   formatValue: (value: number) => string;
   formatTimestamp: (timestampSeconds: number) => string;
 };
@@ -50,6 +54,9 @@ export function TokenChart({
   height = 160,
   isLive = false,
   isLoading = false,
+  signals,
+  visibleSignalTypes,
+  onSignalTap,
   formatValue,
   formatTimestamp,
 }: TokenChartProps) {
@@ -229,6 +236,68 @@ export function TokenChart({
     return filteredCandles[clamp(activeIndex - 1, 0, filteredCandles.length - 1)];
   }, [showCandles, activeIndex, filteredCandles]);
 
+  /* ── Signal marker positions ── */
+  const signalMarkers = useMemo(() => {
+    if (!signals || signals.length === 0 || candleRender.length === 0) return [];
+
+    // Build a timestamp → candle index lookup
+    const tsToCandleIndex = new Map<number, number>();
+    for (let i = 0; i < candleRender.length; i++) {
+      tsToCandleIndex.set(candleRender[i].ts, i);
+    }
+
+    // Filter by visible types and match to candle positions
+    const filtered = visibleSignalTypes
+      ? signals.filter((s) => visibleSignalTypes.has(s.type))
+      : signals;
+
+    // Group by candle timestamp for stacking
+    const grouped = new Map<number, { signal: ChartSignal; candleIdx: number }[]>();
+
+    for (const signal of filtered) {
+      // Exact match first, then find nearest candle
+      let candleIdx = tsToCandleIndex.get(signal.ts);
+      if (candleIdx === undefined) {
+        // Find nearest candle by timestamp
+        let minDist = Infinity;
+        for (let i = 0; i < candleRender.length; i++) {
+          const dist = Math.abs(candleRender[i].ts - signal.ts);
+          if (dist < minDist) {
+            minDist = dist;
+            candleIdx = i;
+          }
+        }
+      }
+      if (candleIdx === undefined) continue;
+
+      const key = candleIdx;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push({ signal, candleIdx });
+    }
+
+    // Flatten with stack index
+    const markers: {
+      signal: ChartSignal;
+      cx: number;
+      baseY: number;
+      stackIndex: number;
+    }[] = [];
+
+    for (const [, group] of grouped) {
+      group.forEach((entry, stackIdx) => {
+        const candle = candleRender[entry.candleIdx];
+        markers.push({
+          signal: entry.signal,
+          cx: candle.centerX,
+          baseY: Math.min(candle.lowY + 10, height - 6),
+          stackIndex: stackIdx,
+        });
+      });
+    }
+
+    return markers;
+  }, [signals, visibleSignalTypes, candleRender, height]);
+
   /* ── Scrub horizontal price line Y ── */
   const scrubPriceY = useMemo(() => {
     if (!isScrubActive || !activePoint) return null;
@@ -306,6 +375,18 @@ export function TokenChart({
           bodyHeight={c.bodyHeight}
           isGreen={c.isGreen}
           candleWidth={candleLayout.candleWidth}
+        />
+      ))}
+
+      {/* Signal markers below candles */}
+      {signalMarkers.map((m, i) => (
+        <SignalMarker
+          key={`sig-${i}`}
+          signal={m.signal}
+          cx={m.cx}
+          baseY={m.baseY}
+          stackIndex={m.stackIndex}
+          onPress={onSignalTap}
         />
       ))}
 
