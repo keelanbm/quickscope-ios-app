@@ -1,8 +1,9 @@
 import { useState } from "react";
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 import { ChevronDown, X } from "@/src/ui/icons";
 
 type SortOption = {
@@ -45,19 +46,19 @@ export function FilterBar({
         contentContainerStyle={styles.container}
       >
         {/* Sort dropdown trigger */}
-        <Pressable
+        <AnimatedPressable
           style={styles.sortButton}
           onPress={() => setShowSortMenu(!showSortMenu)}
         >
           <Text style={styles.sortText}>{activeSortLabel}</Text>
           <ChevronDown size={14} color={qsColors.textSecondary} />
-        </Pressable>
+        </AnimatedPressable>
 
         {/* Filter chips */}
         {filterChips.map((chip) => {
           const isActive = activeFilters.includes(chip.value);
           return (
-            <Pressable
+            <AnimatedPressable
               key={chip.value}
               style={[styles.chip, isActive && styles.chipActive]}
               onPress={() => onFilterToggle?.(chip.value)}
@@ -68,7 +69,7 @@ export function FilterBar({
               {isActive ? (
                 <X size={12} color={qsColors.accent} />
               ) : null}
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </ScrollView>
@@ -77,7 +78,7 @@ export function FilterBar({
       {showSortMenu ? (
         <View style={styles.sortMenu}>
           {sortOptions.map((option) => (
-            <Pressable
+            <AnimatedPressable
               key={option.value}
               style={[
                 styles.sortOption,
@@ -96,7 +97,7 @@ export function FilterBar({
               >
                 {option.label}
               </Text>
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </View>
       ) : null}
@@ -118,7 +119,7 @@ const styles = StyleSheet.create({
   sortButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: qsSpacing.xs,
     backgroundColor: qsColors.layer2,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: qsSpacing.xs,
     backgroundColor: qsColors.layer2,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,

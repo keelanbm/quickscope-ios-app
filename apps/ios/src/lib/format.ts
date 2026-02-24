@@ -100,3 +100,80 @@ export function formatSol(value: number | undefined): string {
 
   return value.toFixed(3);
 }
+
+export function formatCompactNumber(value: number): string;
+export function formatCompactNumber(value: number | undefined): string;
+export function formatCompactNumber(value: number | undefined): string {
+  if (value === undefined) {
+    return "--";
+  }
+
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0";
+  }
+
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
+  }
+
+  return String(Math.round(value));
+}
+
+export function formatChartTimestamp(
+  timestampSeconds: number,
+  timeframeId: string
+): string {
+  if (!timestampSeconds) {
+    return "--";
+  }
+
+  const date = new Date(timestampSeconds * 1000);
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+
+  if (
+    timeframeId === "1m" ||
+    timeframeId === "5m" ||
+    timeframeId === "15m"
+  ) {
+    return `${hours}:${minutes}`;
+  }
+  if (timeframeId === "1h") {
+    return `${date.getMonth() + 1}/${date.getDate()} ${hours}:${minutes}`;
+  }
+
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+export function formatTime(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "n/a";
+  }
+
+  return new Date(value).toLocaleTimeString();
+}
+
+export function formatAtomic(value: number): string;
+export function formatAtomic(value: number | undefined): string;
+export function formatAtomic(value: number | undefined): string {
+  if (value === undefined) {
+    return "n/a";
+  }
+
+  return value.toLocaleString();
+}
+
+export function formatTokenAmount(value: number | undefined, decimals?: number): string {
+  if (value === undefined || !Number.isFinite(value)) {
+    return "n/a";
+  }
+
+  const clamped = Math.max(0, Math.min(decimals ?? 6, 8));
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: clamped,
+  });
+}

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { qsColors, qsRadius, qsTypography } from "@/src/theme/tokens";
+import { qsColors, qsRadius, qsShadows, qsSpacing, qsTypography } from "@/src/theme/tokens";
 import { MessageCircle, Star, Wallet } from "@/src/ui/icons";
 import { haptics } from "@/src/lib/haptics";
 
@@ -103,11 +103,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(30, 28, 40, 0.85)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    ...qsShadows.lg,
   },
 
   // ── Expanded: popout row ──
@@ -117,13 +113,9 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.pill,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    padding: 4,
-    gap: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    padding: qsSpacing.xs,
+    gap: qsSpacing.xs,
+    ...qsShadows.lg,
   },
   expandedTab: {
     flexDirection: "row",

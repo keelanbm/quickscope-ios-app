@@ -8,7 +8,6 @@ import {
   FlatList,
   type ListRenderItemInfo,
   Linking,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -17,6 +16,7 @@ import {
 } from "react-native";
 
 import { haptics } from "@/src/lib/haptics";
+import { formatCompactUsd, formatPercent } from "@/src/lib/format";
 import {
   fetchDiscoveryTokens,
   type DiscoveryTabId,
@@ -26,9 +26,10 @@ import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { toast } from "@/src/lib/toast";
 import type { DiscoveryRouteParams, RootStack, RootTabs } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 import { Compass, SlidersHorizontal } from "@/src/ui/icons";
 import { EmptyState } from "@/src/ui/EmptyState";
-import { SkeletonRow } from "@/src/ui/Skeleton";
+import { SkeletonRows } from "@/src/ui/Skeleton";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
 import { TokenListCard } from "@/src/ui/TokenListCard";
 
@@ -42,25 +43,13 @@ type DiscoveryTab = {
   label: string;
 };
 
+const TOP_MOVER_CARD_WIDTH = 120;
+
 const tabs: DiscoveryTab[] = [
   { id: "trending", label: "Trending" },
   { id: "gainers", label: "Gainers" },
   { id: "scan-feed", label: "Scans" },
 ];
-
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "$0";
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(2)}`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return "0.0%";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(1)}%`;
-}
 
 /** Short label for the launchpad / exchange */
 function launchpadLabel(platform?: string, exchange?: string): string | null {
@@ -277,25 +266,19 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>Failed to load discovery list.</Text>
               <Text style={styles.errorText}>{errorText}</Text>
-              <Pressable
+              <AnimatedPressable
                 style={styles.retryButton}
                 onPress={() => {
                   void loadRows();
                 }}
               >
                 <Text style={styles.retryButtonText}>Retry</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           ) : null}
 
           {isInitialLoading ? (
-            <View style={{ gap: 4 }}>
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-            </View>
+            <SkeletonRows count={5} style={{ gap: qsSpacing.xs }} />
           ) : null}
 
           {/* ── Top Movers carousel ── */}
@@ -306,11 +289,13 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.topMoversScroll}
+                snapToInterval={TOP_MOVER_CARD_WIDTH + qsSpacing.sm}
+                decelerationRate="fast"
               >
                 {topMovers.map((token) => {
                   const isPositive = token.oneHourChangePercent >= 0;
                   return (
-                    <Pressable
+                    <AnimatedPressable
                       key={token.mint}
                       style={styles.topMoverCard}
                       onPress={() => handleOpenTokenDetail(token)}
@@ -331,7 +316,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                       >
                         {formatPercent(token.oneHourChangePercent)}
                       </Text>
-                    </Pressable>
+                    </AnimatedPressable>
                   );
                 })}
               </ScrollView>
@@ -344,24 +329,24 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
               {tabs.map((tab) => {
                 const active = tab.id === activeTab;
                 return (
-                  <Pressable
+                  <AnimatedPressable
                     key={tab.id}
                     onPress={() => {
                       haptics.selection();
                       setActiveTab(tab.id);
                     }}
-                    style={[styles.tabButton, active ? styles.tabButtonActive : null]}
+                    style={active ? [styles.tabButton, styles.tabButtonActive] : styles.tabButton}
                   >
-                    <Text style={[styles.tabButtonText, active ? styles.tabButtonTextActive : null]}>
+                    <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>
                       {tab.label}
                     </Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 );
               })}
             </View>
-            <Pressable onPress={handleFilterPress} style={styles.filterButton} hitSlop={8}>
+            <AnimatedPressable onPress={handleFilterPress} style={styles.filterButton} hitSlop={8}>
               <SlidersHorizontal size={18} color={qsColors.textSecondary} />
-            </Pressable>
+            </AnimatedPressable>
           </View>
         </View>
       }
@@ -420,14 +405,14 @@ const styles = StyleSheet.create({
   tabButtonText: {
     color: qsColors.textTertiary,
     fontWeight: qsTypography.weight.semi,
-    fontSize: 13,
+    fontSize: qsTypography.size.xs,
   },
   tabButtonTextActive: {
     color: qsColors.textPrimary,
   },
   filterButton: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: qsRadius.pill,
     backgroundColor: qsColors.layer2,
     alignItems: "center",
@@ -439,37 +424,37 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.layer1,
     padding: qsSpacing.md,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   deepLinkTitle: {
     color: qsColors.textMuted,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   deepLinkBody: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   errorBox: {
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.dangerDark,
     padding: qsSpacing.md,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   errorText: {
     color: qsColors.dangerLight,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   retryButton: {
-    marginTop: 4,
+    marginTop: qsSpacing.xs,
     alignSelf: "flex-start",
     borderRadius: qsRadius.sm,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingVertical: qsSpacing.xs,
+    paddingHorizontal: qsSpacing.sm,
     backgroundColor: qsColors.dangerBg,
   },
   retryButtonText: {
     color: qsColors.dangerLight,
-    fontSize: 11,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.bold,
   },
 
@@ -479,35 +464,35 @@ const styles = StyleSheet.create({
   },
   topMoversHeader: {
     color: qsColors.textPrimary,
-    fontSize: 15,
+    fontSize: qsTypography.size.base,
     fontWeight: qsTypography.weight.semi,
   },
   topMoversScroll: {
     gap: qsSpacing.sm,
   },
   topMoverCard: {
-    width: 120,
+    width: TOP_MOVER_CARD_WIDTH,
     backgroundColor: qsColors.layer1,
     borderRadius: qsRadius.lg,
-    paddingVertical: 12,
+    paddingVertical: qsSpacing.md,
     paddingHorizontal: qsSpacing.sm,
     alignItems: "center",
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   topMoverSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 13,
+    fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.bold,
-    marginTop: 4,
+    marginTop: qsSpacing.xs,
   },
   topMoverMC: {
     color: qsColors.textSecondary,
-    fontSize: 11,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.medium,
     fontVariant: ["tabular-nums"],
   },
   topMoverChange: {
-    fontSize: 13,
+    fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.bold,
     fontVariant: ["tabular-nums"],
   },

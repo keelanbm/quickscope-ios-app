@@ -1,8 +1,10 @@
 import { memo } from "react";
 
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
-import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { formatCompactUsd, formatPercent, formatCompactNumber } from "@/src/lib/format";
+import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 import { SocialChips, type SocialLink } from "@/src/ui/SocialChips";
 import { SparklineChart } from "@/src/ui/SparklineChart";
 import { Star, Zap } from "@/src/ui/icons";
@@ -44,27 +46,6 @@ type TokenListCardProps = {
   highlighted?: boolean;
 };
 
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "$0";
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return "--";
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
-}
-
-function formatCompactCount(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "0";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return value.toFixed(0);
-}
-
 function TokenListCardInner({
   symbol,
   name,
@@ -98,15 +79,14 @@ function TokenListCardInner({
     metaParts.push(`Vol ${formatCompactUsd(oneHourVolumeUsd)}`);
   }
   if (oneHourTxCount != null && oneHourTxCount > 0) {
-    metaParts.push(`TX ${formatCompactCount(oneHourTxCount)}`);
+    metaParts.push(`TX ${formatCompactNumber(oneHourTxCount)}`);
   }
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <AnimatedPressable
+      style={[
         styles.container,
         highlighted && styles.containerHighlighted,
-        pressed && styles.containerPressed,
       ]}
       onPress={onPress}
     >
@@ -152,22 +132,22 @@ function TokenListCardInner({
         {/* Actions */}
         <View style={styles.actionsColumn}>
           {onToggleStar ? (
-            <Pressable onPress={onToggleStar} hitSlop={8}>
+            <AnimatedPressable onPress={onToggleStar} hitSlop={8}>
               <Star
                 size={16}
                 color={isStarred ? qsColors.accent : qsColors.textTertiary}
                 fill={isStarred ? qsColors.accent : "none"}
               />
-            </Pressable>
+            </AnimatedPressable>
           ) : null}
           {onQuickTrade ? (
-            <Pressable
+            <AnimatedPressable
               style={styles.quickTradeButton}
               onPress={onQuickTrade}
               hitSlop={4}
             >
               <Zap size={12} color={qsColors.textSecondary} />
-            </Pressable>
+            </AnimatedPressable>
           ) : null}
         </View>
       </View>
@@ -193,7 +173,7 @@ function TokenListCardInner({
           <SocialChips links={socialLinks} size="sm" />
         </View>
       ) : null}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -207,7 +187,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: qsSpacing.sm,
     paddingVertical: qsSpacing.sm,
     minHeight: 64,
-    gap: 6,
+    gap: qsSpacing.sm,
   },
   containerHighlighted: {
     backgroundColor: qsColors.layer1,
@@ -241,20 +221,20 @@ const styles = StyleSheet.create({
   },
   imageFallbackText: {
     color: qsColors.textPrimary,
-    fontWeight: "700",
-    fontSize: 16,
+    fontWeight: qsTypography.weight.bold,
+    fontSize: qsTypography.size.md,
   },
   tokenInfo: {
     flex: 2.5,
     gap: 1,
   },
   symbol: {
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: qsTypography.size.base,
+    fontWeight: qsTypography.weight.bold,
     color: qsColors.textPrimary,
   },
   name: {
-    fontSize: 11,
+    fontSize: qsTypography.size.xxs,
     color: qsColors.textMuted,
   },
   platformBadge: {
@@ -263,13 +243,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.pill,
-    paddingHorizontal: 4,
+    paddingHorizontal: qsSpacing.xs,
     paddingVertical: 1,
-    marginTop: 2,
+    marginTop: qsSpacing.xxs,
   },
   platformText: {
-    fontSize: 9,
-    fontWeight: "600",
+    fontSize: qsTypography.size.xxxs,
+    fontWeight: qsTypography.weight.semi,
     color: qsColors.textSubtle,
   },
   mcColumn: {
@@ -277,8 +257,8 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   mcValue: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: qsTypography.size.xxs,
+    fontWeight: qsTypography.weight.semi,
     color: qsColors.textSecondary,
     fontVariant: ["tabular-nums"],
   },
@@ -287,14 +267,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   changeValue: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.bold,
     fontVariant: ["tabular-nums"],
   },
   actionsColumn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: qsSpacing.sm,
     minWidth: 40,
     justifyContent: "flex-end",
   },
@@ -303,8 +283,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: qsSpacing.sm,
+    paddingVertical: qsSpacing.xs,
   },
   // Row 2: Sparkline
   sparklineRow: {
@@ -318,7 +298,7 @@ const styles = StyleSheet.create({
     gap: qsSpacing.sm,
   },
   metaText: {
-    fontSize: 10,
+    fontSize: qsTypography.size.xxxs,
     color: qsColors.textSubtle,
   },
 });
