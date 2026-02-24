@@ -166,6 +166,16 @@ export function formatAtomic(value: number | undefined): string {
   return value.toLocaleString();
 }
 
+export function formatSignedUsd(value: number | undefined): string {
+  if (value === undefined || value === 0) return "--";
+  const abs = Math.abs(value);
+  const prefix = value < 0 ? "-" : "+";
+  if (abs >= 1_000_000) return `${prefix}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${prefix}$${(abs / 1_000).toFixed(1)}K`;
+  if (abs >= 1) return `${prefix}$${abs.toFixed(2)}`;
+  return `${prefix}$${abs.toFixed(4)}`;
+}
+
 export function formatTokenAmount(value: number | undefined, decimals?: number): string {
   if (value === undefined || !Number.isFinite(value)) {
     return "n/a";
