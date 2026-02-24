@@ -22,7 +22,12 @@ import { SkeletonRows } from "@/src/ui/Skeleton";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
 import { ChevronDown, ChevronUp, Wallet as WalletIcon } from "@/src/ui/icons";
 
-import { formatCompactUsd, formatPercent, formatWalletAddress } from "@/src/lib/format";
+import {
+  formatCompactUsd,
+  formatPercent,
+  formatSignedUsd,
+  formatWalletAddress,
+} from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
@@ -32,7 +37,7 @@ import {
   type Position,
 } from "@/src/features/portfolio/portfolioService";
 import type { PortfolioRouteParams, RootStack } from "@/src/navigation/types";
-import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -45,19 +50,7 @@ type PortfolioScreenProps = {
   params?: PortfolioRouteParams;
 };
 
-// ── Helper: stat value formatting for signed USD ──
-
-function formatSignedUsd(value: number | undefined): string {
-  if (value === undefined || value === 0) return "--";
-  const abs = Math.abs(value);
-  const prefix = value < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${prefix}$${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${prefix}$${(abs / 1_000).toFixed(1)}K`;
-  if (abs >= 1) return `${prefix}$${abs.toFixed(2)}`;
-  return `${prefix}$${abs.toFixed(4)}`;
-}
-
-// ── MetricCell (expanded row grid) ──
+// -- MetricCell (expanded row grid) --
 
 function MetricCell({
   label,
@@ -84,7 +77,7 @@ function MetricCell({
   );
 }
 
-// ── PositionRowItem (expandable) ──
+// -- PositionRowItem (expandable) --
 
 function PositionRowItem({
   position,
@@ -171,7 +164,7 @@ function PositionRowItem({
   );
 }
 
-// ── ListHeader (wallet card + stats grid) ──
+// -- ListHeader (wallet card + stats grid) --
 
 function ListHeader({
   walletAddress,
@@ -208,7 +201,7 @@ function ListHeader({
   );
 }
 
-// ── Main screen ──
+// -- Main screen --
 
 export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
@@ -386,7 +379,7 @@ export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
       onEndReachedThreshold={0.3}
       refreshControl={
         <RefreshControl
-          tintColor={qsColors.textMuted}
+          tintColor={qsColors.textTertiary}
           refreshing={isRefreshing}
           onRefresh={handleRefresh}
         />
@@ -395,7 +388,7 @@ export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
   );
 }
 
-// ── Styles ──
+// -- Styles --
 
 const styles = StyleSheet.create({
   page: {
@@ -432,20 +425,21 @@ const styles = StyleSheet.create({
   },
   walletAvatarText: {
     color: qsColors.textPrimary,
-    fontWeight: "700",
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.bold,
   },
   walletText: {
     flex: 1,
-    gap: 2,
+    gap: qsSpacing.xxs,
   },
   walletName: {
     color: qsColors.textPrimary,
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: qsTypography.size.base,
+    fontWeight: qsTypography.weight.semi,
   },
   walletAddress: {
     color: qsColors.textSubtle,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   statsRow: {
     flexDirection: "row",
@@ -453,29 +447,30 @@ const styles = StyleSheet.create({
     gap: qsSpacing.sm,
   },
   statCard: {
-    width: "48%",
+    flex: 1,
+    flexBasis: "45%",
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.layer2,
     padding: qsSpacing.sm,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   statLabel: {
     color: qsColors.textSubtle,
-    fontSize: 11,
+    fontSize: qsTypography.size.xxxs,
   },
   statValue: {
-    color: qsColors.textSecondary,
-    fontSize: 16,
-    fontWeight: "700",
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.md,
+    fontWeight: qsTypography.weight.bold,
     fontVariant: ["tabular-nums"],
   },
   positionRow: {
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    backgroundColor: qsColors.layer2,
+    backgroundColor: qsColors.layer1,
     padding: qsSpacing.sm,
   },
   positionSummary: {
@@ -485,30 +480,30 @@ const styles = StyleSheet.create({
   },
   positionText: {
     flex: 1,
-    gap: 2,
+    gap: qsSpacing.xxs,
   },
   positionSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.bold,
   },
   positionName: {
-    color: qsColors.textMuted,
-    fontSize: 12,
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxs,
   },
   positionRight: {
     alignItems: "flex-end",
-    gap: 2,
+    gap: qsSpacing.xxs,
   },
   positionValue: {
-    color: qsColors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
   },
   positionPnl: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: qsTypography.size.xxs,
+    fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
   },
   pnlPositive: {
@@ -530,17 +525,18 @@ const styles = StyleSheet.create({
     gap: qsSpacing.sm,
   },
   metricCell: {
-    width: "30%",
-    gap: 2,
+    flex: 1,
+    flexBasis: "28%",
+    gap: qsSpacing.xxs,
   },
   metricLabel: {
     color: qsColors.textTertiary,
-    fontSize: 11,
+    fontSize: qsTypography.size.xxxs,
   },
   metricValue: {
     color: qsColors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
   },
   tradeButton: {
@@ -551,8 +547,8 @@ const styles = StyleSheet.create({
   },
   tradeButtonText: {
     color: qsColors.textPrimary,
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.bold,
   },
   footer: {
     paddingVertical: qsSpacing.lg,
@@ -560,7 +556,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: qsColors.textSubtle,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     textAlign: "center",
     padding: qsSpacing.lg,
   },
