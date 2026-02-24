@@ -1,11 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LayoutChangeEvent, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Line, Path } from "react-native-svg";
+import { GestureDetector } from "react-native-gesture-handler";
 
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 import { useCandleLayout } from "@/src/ui/chart/useCandleLayout";
+import { useChartGestures } from "@/src/ui/chart/useChartGestures";
 import { AnimatedCandle } from "@/src/ui/chart/AnimatedCandle";
+import { ChartTooltip } from "@/src/ui/chart/ChartTooltip";
 import { LivePriceLine } from "@/src/ui/chart/LivePriceLine";
 import { LiveCandleGlow } from "@/src/ui/chart/LiveCandleGlow";
 import { LiveBreathingDot } from "@/src/ui/chart/LiveBreathingDot";
@@ -52,6 +55,7 @@ export function TokenChart({
 }: TokenChartProps) {
   const [layoutWidth, setLayoutWidth] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [isScrubActive, setIsScrubActive] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const showCandles = chartType === "candle" && candleData && candleData.length > 0;
@@ -214,20 +218,46 @@ export function TokenChart({
     return null;
   }, [isLive, showCandles, candleRender, points]);
 
+  /* ── Active candle + previous candle for enhanced tooltip ── */
+  const activeCandle = useMemo(() => {
+    if (!showCandles || activeIndex === null || filteredCandles.length === 0) return undefined;
+    return filteredCandles[clamp(activeIndex, 0, filteredCandles.length - 1)];
+  }, [showCandles, activeIndex, filteredCandles]);
+
+  const previousCandle = useMemo(() => {
+    if (!showCandles || activeIndex === null || activeIndex <= 0 || filteredCandles.length < 2) return undefined;
+    return filteredCandles[clamp(activeIndex - 1, 0, filteredCandles.length - 1)];
+  }, [showCandles, activeIndex, filteredCandles]);
+
+  /* ── Scrub horizontal price line Y ── */
+  const scrubPriceY = useMemo(() => {
+    if (!isScrubActive || !activePoint) return null;
+    return activePoint.y;
+  }, [isScrubActive, activePoint]);
+
   const handleLayout = (event: LayoutChangeEvent) => {
     setLayoutWidth(event.nativeEvent.layout.width);
   };
 
-  const updateActiveIndex = (xPosition: number) => {
-    if (showCandles && candleRender.length > 0) {
-      const step = candleLayout.candleWidth + candleLayout.gap;
-      const nextIndex = Math.round(xPosition / step);
-      setActiveIndex(clamp(nextIndex, 0, candleRender.length - 1));
-    } else if (layoutWidth > 0 && points.length > 0) {
-      const nextIndex = Math.round((xPosition / layoutWidth) * (points.length - 1));
-      setActiveIndex(clamp(nextIndex, 0, points.length - 1));
-    }
-  };
+  /* ── Gesture-driven scrub ── */
+  const dataLength = showCandles ? filteredCandles.length : chartData.length;
+  const candleStep = showCandles ? candleLayout.candleWidth + candleLayout.gap : 0;
+
+  const onIndexChange = useCallback(
+    (index: number) => setActiveIndex(index),
+    [],
+  );
+  const onScrubStart = useCallback(() => setIsScrubActive(true), []);
+  const onScrubEnd = useCallback(() => setIsScrubActive(false), []);
+
+  const { gesture } = useChartGestures({
+    dataLength,
+    layoutWidth,
+    candleStep,
+    onIndexChange,
+    onScrubStart,
+    onScrubEnd,
+  });
 
   if (isLoading) {
     return (
@@ -284,6 +314,20 @@ export function TokenChart({
         <LivePriceLine y={livePriceY} width={candleLayout.svgWidth} />
       ) : null}
 
+      {/* Horizontal price line during scrub */}
+      {isScrubActive && scrubPriceY !== null ? (
+        <Line
+          x1={0}
+          x2={candleLayout.svgWidth}
+          y1={scrubPriceY}
+          y2={scrubPriceY}
+          stroke={qsColors.textTertiary}
+          strokeWidth={0.5}
+          strokeDasharray="4 3"
+          strokeOpacity={0.6}
+        />
+      ) : null}
+
       {/* Crosshair */}
       {activePoint ? (
         <Line
@@ -306,25 +350,135 @@ export function TokenChart({
         ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        onStartShouldSetResponder={() => true}
-        onResponderGrant={(event) => updateActiveIndex(event.nativeEvent.locationX)}
-        onResponderMove={(event) => updateActiveIndex(event.nativeEvent.locationX)}
+        scrollEnabled={!isScrubActive}
       >
         {renderCandleSvg()}
       </ScrollView>
     ) : (
-      <View
-        onStartShouldSetResponder={() => true}
-        onResponderGrant={(event) => updateActiveIndex(event.nativeEvent.locationX)}
-        onResponderMove={(event) => updateActiveIndex(event.nativeEvent.locationX)}
-      >
-        {renderCandleSvg()}
-      </View>
+      <View>{renderCandleSvg()}</View>
     );
 
     return (
-      <View style={[styles.chartContainer, { height }]} onLayout={handleLayout}>
-        {candleContent}
+      <GestureDetector gesture={gesture}>
+        <View style={[styles.chartContainer, { height }]} onLayout={handleLayout}>
+          {candleContent}
+
+          {/* Scrub price label on right edge */}
+          {isScrubActive && scrubPriceY !== null && activePoint ? (
+            <View
+              style={[
+                styles.scrubPriceLabel,
+                { top: clamp(scrubPriceY - 10, 0, height - 20) },
+              ]}
+              pointerEvents="none"
+            >
+              <Text style={styles.scrubPriceLabelText}>
+                {formatValue(activePoint.value)}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Live indicator badge */}
+          {isLive ? (
+            <View style={styles.liveBadge}>
+              <LiveIndicator />
+            </View>
+          ) : null}
+
+          {/* Enhanced tooltip */}
+          {activePoint ? (
+            <View style={[styles.tooltipWrap, { left: 6 }]}>
+              <ChartTooltip
+                candle={activeCandle}
+                previousCandle={previousCandle}
+                timestamp={activePoint.ts}
+                formatValue={formatValue}
+                formatTimestamp={formatTimestamp}
+                isCandleMode
+              />
+            </View>
+          ) : null}
+        </View>
+      </GestureDetector>
+    );
+  }
+
+  /* ── Line chart (fills container width) ── */
+  return (
+    <GestureDetector gesture={gesture}>
+      <View
+        style={[styles.chartContainer, { height }]}
+        onLayout={handleLayout}
+      >
+        <Svg width={layoutWidth} height={height}>
+          {areaPath ? <Path d={areaPath} fill={chartFill} /> : null}
+          {linePath ? <Path d={linePath} stroke={chartStroke} strokeWidth={2} fill="none" /> : null}
+
+          {/* Live price line */}
+          {isLive && livePriceY !== null ? (
+            <LivePriceLine y={livePriceY} width={layoutWidth} />
+          ) : null}
+
+          {/* Live breathing dot at last point */}
+          {isLive && points.length > 0 ? (
+            <LiveBreathingDot
+              cx={points[points.length - 1].x}
+              cy={points[points.length - 1].y}
+            />
+          ) : null}
+
+          {/* Horizontal price line during scrub */}
+          {isScrubActive && scrubPriceY !== null ? (
+            <Line
+              x1={0}
+              x2={layoutWidth}
+              y1={scrubPriceY}
+              y2={scrubPriceY}
+              stroke={qsColors.textTertiary}
+              strokeWidth={0.5}
+              strokeDasharray="4 3"
+              strokeOpacity={0.6}
+            />
+          ) : null}
+
+          {/* Crosshair */}
+          {activePoint ? (
+            <>
+              <Line
+                x1={activePoint.x}
+                y1={0}
+                x2={activePoint.x}
+                y2={height}
+                stroke={qsColors.borderDefault}
+                strokeWidth={1}
+                strokeDasharray="4 4"
+              />
+              <Circle
+                cx={activePoint.x}
+                cy={activePoint.y}
+                r={4}
+                fill={chartStroke}
+                stroke={qsColors.layer0}
+                strokeWidth={2}
+              />
+            </>
+          ) : null}
+        </Svg>
+
+        {/* Scrub price label on right edge */}
+        {isScrubActive && scrubPriceY !== null && activePoint ? (
+          <View
+            style={[
+              styles.scrubPriceLabel,
+              { top: clamp(scrubPriceY - 10, 0, height - 20) },
+            ]}
+            pointerEvents="none"
+          >
+            <Text style={styles.scrubPriceLabelText}>
+              {formatValue(activePoint.value)}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Live indicator badge */}
         {isLive ? (
@@ -333,93 +487,27 @@ export function TokenChart({
           </View>
         ) : null}
 
-        {/* Tooltip — positioned relative to outer container */}
+        {/* Enhanced tooltip */}
         {activePoint ? (
-          <View style={[styles.tooltip, { left: 6 }]}>
-            <Text style={styles.tooltipValue}>{formatValue(activePoint.value)}</Text>
-            <Text style={styles.tooltipTime}>{formatTimestamp(activePoint.ts)}</Text>
+          <View
+            style={[
+              styles.tooltipWrap,
+              {
+                left: clamp(activePoint.x - 40, 6, Math.max(6, layoutWidth - 100)),
+              },
+            ]}
+          >
+            <ChartTooltip
+              value={activePoint.value}
+              timestamp={activePoint.ts}
+              formatValue={formatValue}
+              formatTimestamp={formatTimestamp}
+              isCandleMode={false}
+            />
           </View>
         ) : null}
       </View>
-    );
-  }
-
-  /* ── Line chart (fills container width) ── */
-  return (
-    <View
-      style={[styles.chartContainer, { height }]}
-      onLayout={handleLayout}
-      onStartShouldSetResponder={() => true}
-      onResponderGrant={(event) => updateActiveIndex(event.nativeEvent.locationX)}
-      onResponderMove={(event) => updateActiveIndex(event.nativeEvent.locationX)}
-      onResponderRelease={() => {
-        if (activeIndex === null) {
-          if (points.length > 0) setActiveIndex(points.length - 1);
-        }
-      }}
-    >
-      <Svg width={layoutWidth} height={height}>
-        {areaPath ? <Path d={areaPath} fill={chartFill} /> : null}
-        {linePath ? <Path d={linePath} stroke={chartStroke} strokeWidth={2} fill="none" /> : null}
-
-        {/* Live price line */}
-        {isLive && livePriceY !== null ? (
-          <LivePriceLine y={livePriceY} width={layoutWidth} />
-        ) : null}
-
-        {/* Live breathing dot at last point */}
-        {isLive && points.length > 0 ? (
-          <LiveBreathingDot
-            cx={points[points.length - 1].x}
-            cy={points[points.length - 1].y}
-          />
-        ) : null}
-
-        {/* Crosshair */}
-        {activePoint ? (
-          <>
-            <Line
-              x1={activePoint.x}
-              y1={0}
-              x2={activePoint.x}
-              y2={height}
-              stroke={qsColors.borderDefault}
-              strokeWidth={1}
-              strokeDasharray="4 4"
-            />
-            <Circle
-              cx={activePoint.x}
-              cy={activePoint.y}
-              r={4}
-              fill={chartStroke}
-              stroke={qsColors.layer0}
-              strokeWidth={2}
-            />
-          </>
-        ) : null}
-      </Svg>
-
-      {/* Live indicator badge */}
-      {isLive ? (
-        <View style={styles.liveBadge}>
-          <LiveIndicator />
-        </View>
-      ) : null}
-
-      {activePoint ? (
-        <View
-          style={[
-            styles.tooltip,
-            {
-              left: clamp(activePoint.x - 70, 6, Math.max(6, layoutWidth - 140)),
-            },
-          ]}
-        >
-          <Text style={styles.tooltipValue}>{formatValue(activePoint.value)}</Text>
-          <Text style={styles.tooltipTime}>{formatTimestamp(activePoint.ts)}</Text>
-        </View>
-      ) : null}
-    </View>
+    </GestureDetector>
   );
 }
 
@@ -441,25 +529,23 @@ const styles = StyleSheet.create({
     color: qsColors.textSubtle,
     fontSize: 12,
   },
-  tooltip: {
+  tooltipWrap: {
     position: "absolute",
     top: qsSpacing.sm,
-    backgroundColor: qsColors.layer1,
-    borderRadius: qsRadius.sm,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    paddingHorizontal: qsSpacing.sm,
-    paddingVertical: 6,
-    gap: 2,
   },
-  tooltipValue: {
-    color: qsColors.textPrimary,
-    fontSize: 12,
-    fontWeight: "600",
+  scrubPriceLabel: {
+    position: "absolute",
+    right: qsSpacing.xs,
+    backgroundColor: qsColors.layer3,
+    borderRadius: qsRadius.xs,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
-  tooltipTime: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
+  scrubPriceLabelText: {
+    color: qsColors.textSecondary,
+    fontSize: 9,
+    fontWeight: "500",
+    fontVariant: ["tabular-nums"],
   },
   liveBadge: {
     position: "absolute",
