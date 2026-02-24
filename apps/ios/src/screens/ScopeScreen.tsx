@@ -243,7 +243,7 @@ const ScopeTokenRowItem = React.memo(
                   stopRowPress(e);
                   void onCopyAddress(item.mint);
                 }}
-                hitSlop={6}
+                hitSlop={8}
               >
                 <Copy size={12} color={qsColors.textTertiary} />
               </Pressable>
@@ -252,7 +252,7 @@ const ScopeTokenRowItem = React.memo(
                   stopRowPress(e);
                   onToggleStar(item.mint);
                 }}
-                hitSlop={6}
+                hitSlop={8}
               >
                 <Star
                   size={12}
@@ -274,12 +274,6 @@ const ScopeTokenRowItem = React.memo(
             <Text style={styles.mcValue}>{formatCompactUsd(item.marketCapUsd)}</Text>
           </Text>
           <View style={styles.priceCluster}>
-            <View
-              style={[
-                styles.priceDot,
-                { backgroundColor: isPositive ? qsColors.buyGreen : qsColors.sellRed },
-              ]}
-            />
             <Text style={styles.priceHero}>{formatCompactUsd(priceValue)}</Text>
             <Text
               style={[
@@ -298,17 +292,17 @@ const ScopeTokenRowItem = React.memo(
           <View style={styles.socialCluster}>
             <Text style={styles.addressText}>{truncateAddress(item.mint)}</Text>
             {twitterUrl ? (
-              <Pressable hitSlop={6} onPress={stopRowPress}>
+              <Pressable hitSlop={8} onPress={stopRowPress}>
                 <XIcon size={13} color={qsColors.textTertiary} />
               </Pressable>
             ) : null}
             {telegramUrl ? (
-              <Pressable hitSlop={6} onPress={stopRowPress}>
+              <Pressable hitSlop={8} onPress={stopRowPress}>
                 <TelegramIcon size={13} color={qsColors.textTertiary} />
               </Pressable>
             ) : null}
             {websiteUrl ? (
-              <Pressable hitSlop={6} onPress={stopRowPress}>
+              <Pressable hitSlop={8} onPress={stopRowPress}>
                 <Globe size={13} color={qsColors.textTertiary} />
               </Pressable>
             ) : null}
@@ -341,13 +335,13 @@ const ScopeTokenRowItem = React.memo(
               </Text>
             </View>
             <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>👥</Text>
+              <Text style={styles.metricLabel}>H</Text>
               <Text style={styles.metricVal}>
                 {holderCount != null ? formatCompactNumber(holderCount) : "—"}
               </Text>
             </View>
             <View style={styles.metricItem}>
-              <Text style={styles.metricLabel}>↕</Text>
+              <Text style={styles.metricLabel}>TX</Text>
               <Text style={styles.metricVal}>{formatCompactNumber(item.oneHourTxCount)}</Text>
             </View>
             {item.scanMentionsOneHour > 0 ? (
@@ -366,21 +360,21 @@ const ScopeTokenRowItem = React.memo(
               {topHolderPercent != null ? (
                 <View style={[styles.percentChip, topHolderPercent > 50 ? styles.chipRed : styles.chipGreen]}>
                   <Text style={[styles.percentChipText, topHolderPercent > 50 ? styles.chipTextRed : styles.chipTextGreen]}>
-                    📈{topHolderPercent}%
+                    Top {topHolderPercent}%
                   </Text>
                 </View>
               ) : null}
               {devSoldPercent != null ? (
                 <View style={[styles.percentChip, devSoldPercent > 50 ? styles.chipRed : styles.chipGreen]}>
                   <Text style={[styles.percentChipText, devSoldPercent > 50 ? styles.chipTextRed : styles.chipTextGreen]}>
-                    📉{devSoldPercent}%
+                    Dev {devSoldPercent}%
                   </Text>
                 </View>
               ) : null}
               {bundlePercent != null ? (
                 <View style={[styles.percentChip, bundlePercent > 20 ? styles.chipRed : styles.chipGreen]}>
                   <Text style={[styles.percentChipText, bundlePercent > 20 ? styles.chipTextRed : styles.chipTextGreen]}>
-                    🎯{bundlePercent}%
+                    Bun {bundlePercent}%
                   </Text>
                 </View>
               ) : null}
@@ -701,7 +695,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
           ) : null}
 
           {isInitialLoading ? (
-            <View style={{ gap: 4 }}>
+            <View style={{ gap: qsSpacing.xs }}>
               <SkeletonRow />
               <SkeletonRow />
               <SkeletonRow />
@@ -984,7 +978,7 @@ const styles = StyleSheet.create({
   tabButtonText: {
     color: qsColors.textTertiary,
     fontWeight: qsTypography.weight.semi,
-    fontSize: 13,
+    fontSize: qsTypography.size.xs,
   },
   tabButtonTextActive: {
     color: qsColors.textPrimary,
@@ -999,7 +993,7 @@ const styles = StyleSheet.create({
   launchpadDropdown: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: qsSpacing.xs,
     backgroundColor: qsColors.layer2,
     borderRadius: qsRadius.sm,
     paddingVertical: qsSpacing.sm,
@@ -1007,13 +1001,13 @@ const styles = StyleSheet.create({
   },
   launchpadDropdownText: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.semi,
   },
   solAmountButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: qsSpacing.xs,
     borderRadius: qsRadius.sm,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
@@ -1022,7 +1016,7 @@ const styles = StyleSheet.create({
   },
   solAmountText: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.semi,
   },
   filterIconButton: {
@@ -1037,12 +1031,12 @@ const styles = StyleSheet.create({
   },
   filterIconButtonActive: {
     borderColor: qsColors.accent,
-    backgroundColor: "rgba(119, 102, 247, 0.1)",
+    backgroundColor: qsColors.hoverOverlay,
   },
   filterBadge: {
     position: "absolute",
-    top: 4,
-    right: 4,
+    top: qsSpacing.xs,
+    right: qsSpacing.xs,
     width: 6,
     height: 6,
     borderRadius: 3,
@@ -1050,7 +1044,7 @@ const styles = StyleSheet.create({
   },
   filterChipActive: {
     borderColor: qsColors.accent,
-    backgroundColor: "rgba(119, 102, 247, 0.1)",
+    backgroundColor: qsColors.hoverOverlay,
   },
   filterChipTextActive: {
     color: qsColors.accent,
@@ -1061,28 +1055,28 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.layer1,
     padding: qsSpacing.md,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   deepLinkTitle: {
     color: qsColors.textMuted,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   errorBox: {
     borderRadius: qsRadius.md,
     backgroundColor: qsColors.dangerDark,
     padding: qsSpacing.md,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   errorText: {
     color: qsColors.dangerLight,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
   },
   retryButton: {
-    marginTop: 4,
+    marginTop: qsSpacing.xs,
     alignSelf: "flex-start",
     borderRadius: qsRadius.sm,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingVertical: qsSpacing.xs,
+    paddingHorizontal: qsSpacing.sm,
     backgroundColor: qsColors.dangerBg,
   },
   retryButtonText: {
@@ -1100,7 +1094,7 @@ const styles = StyleSheet.create({
     borderRadius: qsRadius.lg,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
-    gap: 8,
+    gap: qsSpacing.sm,
   },
   rowItemPressed: {
     backgroundColor: qsColors.layer2,
@@ -1110,7 +1104,7 @@ const styles = StyleSheet.create({
   row1: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: qsSpacing.md,
   },
   imageWrap: {
     width: 48,
@@ -1141,23 +1135,24 @@ const styles = StyleSheet.create({
   symbolRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: qsSpacing.xs,
   },
   tokenSymbol: {
     color: qsColors.textPrimary,
-    fontSize: 15,
+    fontSize: qsTypography.size.base,
     fontWeight: qsTypography.weight.bold,
     flexShrink: 1,
   },
   tokenName: {
     color: qsColors.textSecondary,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     flexShrink: 1,
   },
   ageText: {
-    color: qsColors.accent,
-    fontSize: 12,
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
   },
 
   // ── Row 2: Price Hero ──
@@ -1165,11 +1160,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingLeft: 58, // align with text after avatar (48 + 10 gap)
+    paddingLeft: 60, // align with text after avatar (48 + 12 gap)
   },
   mcLabel: {
     color: qsColors.textSubtle,
-    fontSize: 12,
+    fontSize: qsTypography.size.xxs,
     fontWeight: qsTypography.weight.medium,
   },
   mcValue: {
@@ -1180,21 +1175,16 @@ const styles = StyleSheet.create({
   priceCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-  },
-  priceDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    gap: qsSpacing.xs,
   },
   priceHero: {
     color: qsColors.textPrimary,
-    fontSize: 16,
+    fontSize: qsTypography.size.md,
     fontWeight: qsTypography.weight.bold,
     fontVariant: ["tabular-nums"],
   },
   changePercent: {
-    fontSize: 13,
+    fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.semi,
     fontVariant: ["tabular-nums"],
   },
@@ -1204,12 +1194,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingLeft: 58,
+    paddingLeft: 60,
   },
   socialCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: qsSpacing.sm,
   },
   addressText: {
     color: qsColors.textTertiary,
@@ -1220,11 +1210,11 @@ const styles = StyleSheet.create({
   athCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   athLabel: {
     color: qsColors.textSubtle,
-    fontSize: 10,
+    fontSize: qsTypography.size.xxxs,
     fontWeight: qsTypography.weight.semi,
     textTransform: "uppercase",
     letterSpacing: 0.3,
@@ -1237,7 +1227,7 @@ const styles = StyleSheet.create({
   },
   athMultiplier: {
     color: qsColors.textTertiary,
-    fontSize: 10,
+    fontSize: qsTypography.size.xxxs,
     fontWeight: qsTypography.weight.medium,
     fontVariant: ["tabular-nums"],
   },
@@ -1246,25 +1236,25 @@ const styles = StyleSheet.create({
   row4: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: qsSpacing.sm,
     borderTopWidth: 1,
     borderTopColor: qsColors.borderDefault,
-    paddingTop: 8,
-    marginTop: 2,
+    paddingTop: qsSpacing.sm,
+    marginTop: qsSpacing.xxs,
   },
   metricsCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: qsSpacing.sm,
   },
   metricItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    gap: qsSpacing.xxs,
   },
   metricLabel: {
     color: qsColors.textSubtle,
-    fontSize: 10,
+    fontSize: qsTypography.size.xxxs,
     fontWeight: qsTypography.weight.semi,
     letterSpacing: 0.3,
   },
@@ -1282,12 +1272,12 @@ const styles = StyleSheet.create({
   chipCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   percentChip: {
     borderRadius: qsRadius.pill,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    paddingVertical: qsSpacing.xxs,
+    paddingHorizontal: qsSpacing.xs,
   },
   percentChipText: {
     fontSize: 9,
@@ -1295,13 +1285,13 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   chipGreen: {
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    backgroundColor: qsColors.buyGreenBg,
   },
   chipTextGreen: {
     color: qsColors.buyGreen,
   },
   chipRed: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    backgroundColor: qsColors.sellRedBg,
   },
   chipTextRed: {
     color: qsColors.sellRed,
@@ -1312,9 +1302,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
+    gap: qsSpacing.xxs,
     height: 28,
-    paddingHorizontal: 10,
+    paddingHorizontal: qsSpacing.sm,
     borderRadius: qsRadius.pill,
     backgroundColor: qsColors.layer4,
   },
@@ -1350,7 +1340,7 @@ const styles = StyleSheet.create({
     marginBottom: qsSpacing.xl,
   },
   sheetTitle: {
-    fontSize: 18,
+    fontSize: qsTypography.size.lg,
     fontWeight: qsTypography.weight.bold,
     color: qsColors.textPrimary,
   },
@@ -1360,7 +1350,7 @@ const styles = StyleSheet.create({
     gap: qsSpacing.md,
   },
   resetText: {
-    fontSize: 13,
+    fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.semi,
     color: qsColors.accent,
   },
@@ -1370,7 +1360,7 @@ const styles = StyleSheet.create({
     marginBottom: qsSpacing.xl,
   },
   filterSectionLabel: {
-    fontSize: 13,
+    fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.semi,
     color: qsColors.textSecondary,
     marginBottom: qsSpacing.sm,
@@ -1391,7 +1381,7 @@ const styles = StyleSheet.create({
     backgroundColor: qsColors.layer2,
   },
   filterChipText: {
-    fontSize: 13,
+    fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.semi,
     color: qsColors.textSecondary,
   },
@@ -1408,7 +1398,7 @@ const styles = StyleSheet.create({
     marginTop: qsSpacing.md,
   },
   applyButtonText: {
-    fontSize: 14,
+    fontSize: qsTypography.size.sm,
     fontWeight: qsTypography.weight.bold,
     color: qsColors.layer0,
   },
