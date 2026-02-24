@@ -586,6 +586,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
             candleData={candleData}
             chartType={chartType}
             height={280}
+            isLive
             isLoading={isChartLoading}
             formatValue={formatCompactUsd}
             formatTimestamp={(ts) => formatChartTimestamp(ts, selectedTimeframe.id)}

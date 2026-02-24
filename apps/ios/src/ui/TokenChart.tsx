@@ -1,28 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { LayoutChangeEvent, ScrollView, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Line, Path, Rect } from "react-native-svg";
+import Svg, { Circle, Line, Path } from "react-native-svg";
 
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { useCandleLayout } from "@/src/ui/chart/useCandleLayout";
+import { AnimatedCandle } from "@/src/ui/chart/AnimatedCandle";
+import { LivePriceLine } from "@/src/ui/chart/LivePriceLine";
+import { LiveCandleGlow } from "@/src/ui/chart/LiveCandleGlow";
+import { LiveBreathingDot } from "@/src/ui/chart/LiveBreathingDot";
+import { LiveIndicator } from "@/src/ui/LiveIndicator";
 
-export type TokenChartPoint = {
-  ts: number;
-  value: number;
-};
-
-export type TokenCandlePoint = {
-  ts: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-};
+// Re-export types from shared module for backwards compat
+export type { TokenChartPoint, TokenCandlePoint } from "@/src/ui/chart/chartTypes";
+import type { TokenChartPoint, TokenCandlePoint } from "@/src/ui/chart/chartTypes";
 
 type TokenChartProps = {
   data: TokenChartPoint[];
   candleData?: TokenCandlePoint[];
   chartType?: "line" | "candle";
   height?: number;
+  isLive?: boolean;
   isLoading?: boolean;
   formatValue: (value: number) => string;
   formatTimestamp: (timestampSeconds: number) => string;
@@ -38,10 +36,6 @@ type ChartPoint = {
 const chartFill = "rgba(78, 163, 255, 0.18)";
 const chartStroke = qsColors.accent;
 
-/** Fixed candle dimensions */
-const CANDLE_WIDTH = 8;
-const CANDLE_GAP = 3;
-
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -51,6 +45,7 @@ export function TokenChart({
   candleData,
   chartType = "line",
   height = 160,
+  isLive = false,
   isLoading = false,
   formatValue,
   formatTimestamp,
@@ -69,6 +64,9 @@ export function TokenChart({
     if (!candleData) return [];
     return candleData.filter((c) => c.ts > 0 && Number.isFinite(c.close));
   }, [candleData]);
+
+  /* ── Dynamic candle layout ── */
+  const candleLayout = useCandleLayout(filteredCandles.length, layoutWidth);
 
   /* ── Line chart points ── */
   const points = useMemo<ChartPoint[]>(() => {
@@ -100,14 +98,10 @@ export function TokenChart({
   }, [chartData, height, layoutWidth]);
 
   /* ── Candle chart computed values ── */
-  const candleSvgWidth = useMemo(() => {
-    if (filteredCandles.length === 0) return 0;
-    return filteredCandles.length * CANDLE_WIDTH + (filteredCandles.length - 1) * CANDLE_GAP;
-  }, [filteredCandles.length]);
-
   const candleRender = useMemo(() => {
     if (filteredCandles.length === 0) return [];
 
+    const { candleWidth, gap } = candleLayout;
     const allValues = filteredCandles.flatMap((c) => [c.open, c.high, c.low, c.close]);
     const minValue = Math.min(...allValues);
     const maxValue = Math.max(...allValues);
@@ -117,8 +111,8 @@ export function TokenChart({
     const span = (maxValue + padding) - paddedMin || 1;
 
     return filteredCandles.map((candle, index) => {
-      const x = index * (CANDLE_WIDTH + CANDLE_GAP);
-      const centerX = x + CANDLE_WIDTH / 2;
+      const x = index * (candleWidth + gap);
+      const centerX = x + candleWidth / 2;
 
       const toY = (val: number) => height - ((val - paddedMin) / span) * height;
 
@@ -143,7 +137,7 @@ export function TokenChart({
         close: candle.close,
       };
     });
-  }, [filteredCandles, height]);
+  }, [filteredCandles, height, candleLayout]);
 
   useEffect(() => {
     if (showCandles) {
@@ -162,14 +156,14 @@ export function TokenChart({
     setActiveIndex(null);
   }, [chartType]);
 
-  // Auto-scroll to the end when candle data loads
+  // Auto-scroll to the end when candle data loads (only when scrollable)
   useEffect(() => {
-    if (showCandles && candleSvgWidth > layoutWidth && scrollRef.current) {
+    if (showCandles && candleLayout.scrollable && scrollRef.current) {
       setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: false });
       }, 50);
     }
-  }, [showCandles, candleSvgWidth, layoutWidth]);
+  }, [showCandles, candleLayout.scrollable, candleLayout.svgWidth, layoutWidth]);
 
   const linePath = useMemo(() => {
     if (points.length === 0) {
@@ -203,13 +197,30 @@ export function TokenChart({
     return points[clamp(activeIndex, 0, points.length - 1)];
   }, [activeIndex, points, candleRender, showCandles]);
 
+  /* ── Live price Y for horizontal price line ── */
+  const livePriceY = useMemo(() => {
+    if (!isLive) return null;
+
+    if (showCandles && candleRender.length > 0) {
+      const lastCandle = candleRender[candleRender.length - 1];
+      // Compute Y from close price using same scale as candleRender
+      return lastCandle.bodyTop + (lastCandle.isGreen ? 0 : lastCandle.bodyHeight);
+    }
+
+    if (points.length > 0) {
+      return points[points.length - 1].y;
+    }
+
+    return null;
+  }, [isLive, showCandles, candleRender, points]);
+
   const handleLayout = (event: LayoutChangeEvent) => {
     setLayoutWidth(event.nativeEvent.layout.width);
   };
 
   const updateActiveIndex = (xPosition: number) => {
     if (showCandles && candleRender.length > 0) {
-      const step = CANDLE_WIDTH + CANDLE_GAP;
+      const step = candleLayout.candleWidth + candleLayout.gap;
       const nextIndex = Math.round(xPosition / step);
       setActiveIndex(clamp(nextIndex, 0, candleRender.length - 1));
     } else if (layoutWidth > 0 && points.length > 0) {
@@ -240,54 +251,87 @@ export function TokenChart({
     );
   }
 
-  /* ── Candlestick chart (scrollable) ── */
+  /* ── Candle SVG content (shared between scrollable and non-scrollable) ── */
+  const lastCandle = candleRender.length > 0 ? candleRender[candleRender.length - 1] : null;
+
+  const renderCandleSvg = () => (
+    <Svg width={candleLayout.svgWidth} height={height}>
+      {/* Live glow behind last candle */}
+      {isLive && lastCandle ? (
+        <LiveCandleGlow
+          x={lastCandle.x}
+          candleWidth={candleLayout.candleWidth}
+          chartHeight={height}
+        />
+      ) : null}
+
+      {candleRender.map((c, i) => (
+        <AnimatedCandle
+          key={i}
+          x={c.x}
+          centerX={c.centerX}
+          highY={c.highY}
+          lowY={c.lowY}
+          bodyTop={c.bodyTop}
+          bodyHeight={c.bodyHeight}
+          isGreen={c.isGreen}
+          candleWidth={candleLayout.candleWidth}
+        />
+      ))}
+
+      {/* Live price line */}
+      {isLive && livePriceY !== null ? (
+        <LivePriceLine y={livePriceY} width={candleLayout.svgWidth} />
+      ) : null}
+
+      {/* Crosshair */}
+      {activePoint ? (
+        <Line
+          x1={activePoint.x}
+          y1={0}
+          x2={activePoint.x}
+          y2={height}
+          stroke={qsColors.borderDefault}
+          strokeWidth={1}
+          strokeDasharray="4 4"
+        />
+      ) : null}
+    </Svg>
+  );
+
+  /* ── Candlestick chart ── */
   if (showCandles) {
+    const candleContent = candleLayout.scrollable ? (
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={(event) => updateActiveIndex(event.nativeEvent.locationX)}
+        onResponderMove={(event) => updateActiveIndex(event.nativeEvent.locationX)}
+      >
+        {renderCandleSvg()}
+      </ScrollView>
+    ) : (
+      <View
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={(event) => updateActiveIndex(event.nativeEvent.locationX)}
+        onResponderMove={(event) => updateActiveIndex(event.nativeEvent.locationX)}
+      >
+        {renderCandleSvg()}
+      </View>
+    );
+
     return (
       <View style={[styles.chartContainer, { height }]} onLayout={handleLayout}>
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          onStartShouldSetResponder={() => true}
-          onResponderGrant={(event) => updateActiveIndex(event.nativeEvent.locationX)}
-          onResponderMove={(event) => updateActiveIndex(event.nativeEvent.locationX)}
-        >
-          <Svg width={candleSvgWidth} height={height}>
-            {candleRender.map((c, i) => (
-              <React.Fragment key={i}>
-                <Line
-                  x1={c.centerX}
-                  y1={c.highY}
-                  x2={c.centerX}
-                  y2={c.lowY}
-                  stroke={c.isGreen ? qsColors.buyGreen : qsColors.sellRed}
-                  strokeWidth={1}
-                />
-                <Rect
-                  x={c.x}
-                  y={c.bodyTop}
-                  width={CANDLE_WIDTH}
-                  height={c.bodyHeight}
-                  fill={c.isGreen ? qsColors.buyGreen : qsColors.sellRed}
-                  rx={1}
-                />
-              </React.Fragment>
-            ))}
+        {candleContent}
 
-            {/* Crosshair */}
-            {activePoint ? (
-              <Line
-                x1={activePoint.x}
-                y1={0}
-                x2={activePoint.x}
-                y2={height}
-                stroke={qsColors.borderDefault}
-                strokeWidth={1}
-                strokeDasharray="4 4"
-              />
-            ) : null}
-          </Svg>
-        </ScrollView>
+        {/* Live indicator badge */}
+        {isLive ? (
+          <View style={styles.liveBadge}>
+            <LiveIndicator />
+          </View>
+        ) : null}
 
         {/* Tooltip — positioned relative to outer container */}
         {activePoint ? (
@@ -318,6 +362,19 @@ export function TokenChart({
         {areaPath ? <Path d={areaPath} fill={chartFill} /> : null}
         {linePath ? <Path d={linePath} stroke={chartStroke} strokeWidth={2} fill="none" /> : null}
 
+        {/* Live price line */}
+        {isLive && livePriceY !== null ? (
+          <LivePriceLine y={livePriceY} width={layoutWidth} />
+        ) : null}
+
+        {/* Live breathing dot at last point */}
+        {isLive && points.length > 0 ? (
+          <LiveBreathingDot
+            cx={points[points.length - 1].x}
+            cy={points[points.length - 1].y}
+          />
+        ) : null}
+
         {/* Crosshair */}
         {activePoint ? (
           <>
@@ -341,6 +398,14 @@ export function TokenChart({
           </>
         ) : null}
       </Svg>
+
+      {/* Live indicator badge */}
+      {isLive ? (
+        <View style={styles.liveBadge}>
+          <LiveIndicator />
+        </View>
+      ) : null}
+
       {activePoint ? (
         <View
           style={[
@@ -395,5 +460,10 @@ const styles = StyleSheet.create({
   tooltipTime: {
     color: qsColors.textSubtle,
     fontSize: 11,
+  },
+  liveBadge: {
+    position: "absolute",
+    top: qsSpacing.sm,
+    right: qsSpacing.sm,
   },
 });
