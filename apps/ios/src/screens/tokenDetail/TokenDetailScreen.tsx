@@ -57,6 +57,11 @@ import {
   type TokenWatchlist,
 } from "@/src/features/watchlist/tokenWatchlistService";
 import { TokenChart } from "@/src/ui/TokenChart";
+import type { ChartSignal } from "@/src/ui/TokenChart";
+import { SignalFilterChips } from "@/src/ui/chart/SignalFilterChips";
+import type { SignalType } from "@/src/ui/chart/chartTypes";
+import { FILTER_SIGNAL_TYPES } from "@/src/ui/chart/chartSignalTypes";
+import { fetchHistoricalSignals } from "@/src/features/token/tokenSignalService";
 import type { SocialLink } from "@/src/ui/SocialChips";
 import { QuickTradePanel } from "@/src/ui/QuickTradePanel";
 import { TradeBottomSheet } from "@/src/ui/TradeBottomSheet";
@@ -138,6 +143,10 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const [tradeSettings, setTradeSettings] = useState<TradeSettings>(DEFAULT_SETTINGS);
   const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [signals, setSignals] = useState<ChartSignal[]>([]);
+  const [activeSignalTypes, setActiveSignalTypes] = useState<Set<SignalType>>(
+    () => new Set(FILTER_SIGNAL_TYPES),
+  );
 
   const tokenAddress = params?.tokenAddress ?? "";
 
@@ -246,6 +255,32 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   // Load trade settings on mount
   useEffect(() => {
     loadTradeSettings().then(setTradeSettings);
+  }, []);
+
+  // Fetch historical signals for chart overlay
+  useEffect(() => {
+    if (!tokenAddress) return;
+    let isActive = true;
+
+    fetchHistoricalSignals(rpcClient, tokenAddress)
+      .then((data) => {
+        if (isActive) setSignals(data);
+      })
+      .catch(() => {
+        // Signals are non-critical — fail silently
+        if (isActive) setSignals([]);
+      });
+
+    return () => { isActive = false; };
+  }, [rpcClient, tokenAddress]);
+
+  const handleSignalToggle = useCallback((type: SignalType) => {
+    setActiveSignalTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
   }, []);
 
   const currentProfile = activeProfile(tradeSettings);
@@ -579,6 +614,14 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           </View>
         </View>
 
+        {/* ── Signal filter chips ── */}
+        {signals.length > 0 && (
+          <SignalFilterChips
+            activeTypes={activeSignalTypes}
+            onToggle={handleSignalToggle}
+          />
+        )}
+
         {/* ── Edge-to-edge Chart ── */}
         <View style={styles.chartSection}>
           <TokenChart
@@ -586,7 +629,10 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
             candleData={candleData}
             chartType={chartType}
             height={280}
+            isLive
             isLoading={isChartLoading}
+            signals={signals}
+            visibleSignalTypes={activeSignalTypes}
             formatValue={formatCompactUsd}
             formatTimestamp={(ts) => formatChartTimestamp(ts, selectedTimeframe.id)}
           />
