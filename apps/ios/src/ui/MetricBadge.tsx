@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     borderRadius: qsRadius.md,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   containerSm: {
     flex: 1,

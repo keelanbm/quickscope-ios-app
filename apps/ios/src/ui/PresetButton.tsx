@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { qsColors, qsRadius } from "@/src/theme/tokens";
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 
 type PresetButtonProps = {
   label: string;
@@ -51,13 +52,13 @@ export function PresetButton({
         : qsColors.textPrimary;
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <AnimatedPressable
+      style={[
         styles.button,
         {
           backgroundColor: bg,
           borderColor: border,
-          opacity: disabled ? 0.4 : pressed ? 0.8 : 1,
+          opacity: disabled ? 0.4 : 1,
         },
       ]}
       onPress={onPress}
@@ -67,7 +68,7 @@ export function PresetButton({
         {icon}
         <Text style={[styles.text, { color: textColor }]}>{label}</Text>
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { formatAtomic, formatTokenAmount } from "@/src/lib/format";
 import {
   getQuoteTtlSecondsRemaining,
   isQuoteStale,
@@ -25,26 +26,6 @@ type TradeEntryScreenProps = {
   rpcClient: RpcClient;
   params?: TradeEntryRouteParams;
 };
-
-function formatAtomic(value: number | undefined): string {
-  if (value === undefined) {
-    return "n/a";
-  }
-
-  return value.toLocaleString();
-}
-
-function formatTokenAmount(value: number | undefined, decimals = 6): string {
-  if (value === undefined || !Number.isFinite(value)) {
-    return "n/a";
-  }
-
-  const clampedDecimals = Math.max(0, Math.min(decimals, 8));
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: clampedDecimals,
-  });
-}
 
 function formatPercent(value: number | undefined): string {
   if (value === undefined) {

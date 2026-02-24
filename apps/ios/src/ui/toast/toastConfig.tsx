@@ -10,6 +10,7 @@ import type { ToastConfigParams } from "react-native-toast-message";
 import {
   qsColors,
   qsRadius,
+  qsShadows,
   qsSpacing,
   qsTypography,
 } from "@/src/theme/tokens";
@@ -54,12 +55,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     paddingVertical: qsSpacing.md,
     paddingHorizontal: qsSpacing.lg,
-    // shadow
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...qsShadows.lg,
   },
   title: {
     color: qsColors.textPrimary,

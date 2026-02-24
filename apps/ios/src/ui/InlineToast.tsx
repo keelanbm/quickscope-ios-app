@@ -7,7 +7,7 @@ import Animated, {
   runOnJS,
   Easing,
 } from "react-native-reanimated";
-import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { qsColors, qsRadius, qsShadows, qsSpacing } from "@/src/theme/tokens";
 
 type ToastVariant = "success" | "error" | "info";
 
@@ -106,11 +106,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: qsSpacing.md,
     paddingVertical: qsSpacing.sm,
     zIndex: 1000,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    ...qsShadows.md,
   },
   text: {
     color: qsColors.textPrimary,

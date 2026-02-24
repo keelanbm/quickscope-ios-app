@@ -1,8 +1,10 @@
 import { memo } from "react";
 
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
+import { formatCompactUsd, formatPercent, formatCompactNumber } from "@/src/lib/format";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 import { SocialChips, type SocialLink } from "@/src/ui/SocialChips";
 import { SparklineChart } from "@/src/ui/SparklineChart";
 import { Star, Zap } from "@/src/ui/icons";
@@ -44,27 +46,6 @@ type TokenListCardProps = {
   highlighted?: boolean;
 };
 
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "$0";
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return "--";
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
-}
-
-function formatCompactCount(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "0";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return value.toFixed(0);
-}
-
 function TokenListCardInner({
   symbol,
   name,
@@ -98,15 +79,14 @@ function TokenListCardInner({
     metaParts.push(`Vol ${formatCompactUsd(oneHourVolumeUsd)}`);
   }
   if (oneHourTxCount != null && oneHourTxCount > 0) {
-    metaParts.push(`TX ${formatCompactCount(oneHourTxCount)}`);
+    metaParts.push(`TX ${formatCompactNumber(oneHourTxCount)}`);
   }
 
   return (
-    <Pressable
-      style={({ pressed }) => [
+    <AnimatedPressable
+      style={[
         styles.container,
         highlighted && styles.containerHighlighted,
-        pressed && styles.containerPressed,
       ]}
       onPress={onPress}
     >
@@ -152,22 +132,22 @@ function TokenListCardInner({
         {/* Actions */}
         <View style={styles.actionsColumn}>
           {onToggleStar ? (
-            <Pressable onPress={onToggleStar} hitSlop={8}>
+            <AnimatedPressable onPress={onToggleStar} hitSlop={8}>
               <Star
                 size={16}
                 color={isStarred ? qsColors.accent : qsColors.textTertiary}
                 fill={isStarred ? qsColors.accent : "none"}
               />
-            </Pressable>
+            </AnimatedPressable>
           ) : null}
           {onQuickTrade ? (
-            <Pressable
+            <AnimatedPressable
               style={styles.quickTradeButton}
               onPress={onQuickTrade}
               hitSlop={4}
             >
               <Zap size={12} color={qsColors.textSecondary} />
-            </Pressable>
+            </AnimatedPressable>
           ) : null}
         </View>
       </View>
@@ -193,7 +173,7 @@ function TokenListCardInner({
           <SocialChips links={socialLinks} size="sm" />
         </View>
       ) : null}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

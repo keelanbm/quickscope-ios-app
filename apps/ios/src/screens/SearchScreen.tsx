@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import { haptics } from "@/src/lib/haptics";
+import { formatCompactUsd, formatPercent, formatCompactNumber, formatAgeFromSeconds } from "@/src/lib/format";
 import {
   FlatList,
   type GestureResponderEvent,
@@ -70,39 +71,6 @@ const SKELETON_COUNT = 6;
 // ────────────────────────────────────────────────────────────────
 //  Helpers (pure)
 // ────────────────────────────────────────────────────────────────
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "$0";
-  const a = Math.abs(value);
-  if (a >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  if (a >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (a >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  if (a >= 1) return `$${value.toFixed(2)}`;
-  return `$${value.toFixed(4)}`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return "0.0%";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(1)}%`;
-}
-
-function formatCompactNumber(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "0";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return String(Math.round(value));
-}
-
-function formatAgeFromSeconds(unixSeconds: number): string {
-  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return "n/a";
-  const elapsed = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (elapsed < 60) return `${elapsed}s`;
-  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
-  if (elapsed < 86400) return `${Math.floor(elapsed / 3600)}h`;
-  if (elapsed < 604800) return `${Math.floor(elapsed / 86400)}d`;
-  return `${Math.floor(elapsed / 604800)}w`;
-}
-
 function launchpadLabel(platform?: string, exchange?: string): string | null {
   const raw = (platform || exchange || "").toLowerCase();
   if (!raw) return null;

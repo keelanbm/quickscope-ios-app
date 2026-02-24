@@ -122,11 +122,11 @@ const skeletonStyles = StyleSheet.create({
   },
   rowContent: {
     flex: 1,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   rowRight: {
     alignItems: "flex-end",
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   card: {
     backgroundColor: qsColors.bgCardSoft,
@@ -134,7 +134,7 @@ const skeletonStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     padding: qsSpacing.md,
-    gap: 4,
+    gap: qsSpacing.xs,
   },
   chart: {
     backgroundColor: qsColors.bgCardSoft,

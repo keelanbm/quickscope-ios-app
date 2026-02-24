@@ -367,11 +367,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sideToggleButtonActive: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    ...qsShadows.sm,
   },
   sideToggleButtonBuy: {
     backgroundColor: qsColors.buyGreenBg,

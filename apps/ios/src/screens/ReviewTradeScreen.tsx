@@ -7,6 +7,7 @@ import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native"
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import { haptics } from "@/src/lib/haptics";
+import { formatTokenAmount, formatTime } from "@/src/lib/format";
 import {
   getQuoteTtlSecondsRemaining,
   isQuoteStale,
@@ -24,32 +25,12 @@ type ReviewTradeScreenProps = {
   params: ReviewTradeRouteParams;
 };
 
-function formatAmount(value: number | undefined, decimals = 6): string {
-  if (value === undefined || !Number.isFinite(value)) {
-    return "n/a";
-  }
-
-  const clamped = Math.max(0, Math.min(decimals, 8));
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: clamped,
-  });
-}
-
 function formatPercent(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) {
     return "n/a";
   }
 
   return `${value.toFixed(2)}%`;
-}
-
-function formatTime(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "n/a";
-  }
-
-  return new Date(value).toLocaleTimeString();
 }
 
 export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: ReviewTradeScreenProps) {
@@ -224,18 +205,18 @@ export function ReviewTradeScreen({ rpcClient, executionEnabled, params }: Revie
           </Text>
         </View>
         <Text style={styles.line}>
-          You pay: {formatAmount(params.amountUi, params.inputTokenDecimals)}
+          You pay: {formatTokenAmount(params.amountUi, params.inputTokenDecimals)}
         </Text>
         <Text style={styles.line}>
           Est. receive:{" "}
           {params.estimatedOutAmountUi !== undefined
-            ? formatAmount(params.estimatedOutAmountUi, params.outputTokenDecimals ?? 6)
+            ? formatTokenAmount(params.estimatedOutAmountUi, params.outputTokenDecimals ?? 6)
             : "n/a"}
         </Text>
         <Text style={styles.line}>
           Min receive:{" "}
           {params.minOutAmountUi !== undefined
-            ? formatAmount(params.minOutAmountUi, params.outputTokenDecimals ?? 6)
+            ? formatTokenAmount(params.minOutAmountUi, params.outputTokenDecimals ?? 6)
             : "n/a"}
         </Text>
         <Text style={styles.line}>Price impact: {formatPercent(params.priceImpactPercent)}</Text>

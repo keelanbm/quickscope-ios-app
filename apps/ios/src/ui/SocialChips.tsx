@@ -1,6 +1,7 @@
-import { Linking, Pressable, StyleSheet, View } from "react-native";
+import { Linking, StyleSheet, View } from "react-native";
 
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
+import { AnimatedPressable } from "@/src/ui/AnimatedPressable";
 import { Globe } from "@/src/ui/icons";
 import { TelegramIcon, XIcon } from "@/src/ui/icons";
 
@@ -40,21 +41,20 @@ export function SocialChips({ links, size = "sm" }: SocialChipsProps) {
   return (
     <View style={styles.container}>
       {links.map((link) => (
-        <Pressable
+        <AnimatedPressable
           key={link.url}
-          style={({ pressed }) => [
+          style={[
             styles.chip,
             {
               paddingHorizontal: pad.h,
               paddingVertical: pad.v,
-              opacity: pressed ? 0.7 : 1,
             },
           ]}
           onPress={() => Linking.openURL(link.url)}
           hitSlop={size === "sm" ? 8 : 4}
         >
           <SocialIcon type={link.type} size={iconSize} color={qsColors.textSecondary} />
-        </Pressable>
+        </AnimatedPressable>
       ))}
     </View>
   );

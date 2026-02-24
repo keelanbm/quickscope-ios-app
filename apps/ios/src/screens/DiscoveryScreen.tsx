@@ -17,6 +17,7 @@ import {
 } from "react-native";
 
 import { haptics } from "@/src/lib/haptics";
+import { formatCompactUsd, formatPercent } from "@/src/lib/format";
 import {
   fetchDiscoveryTokens,
   type DiscoveryTabId,
@@ -47,20 +48,6 @@ const tabs: DiscoveryTab[] = [
   { id: "gainers", label: "Gainers" },
   { id: "scan-feed", label: "Scans" },
 ];
-
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "$0";
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(2)}`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return "0.0%";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(1)}%`;
-}
 
 /** Short label for the launchpad / exchange */
 function launchpadLabel(platform?: string, exchange?: string): string | null {

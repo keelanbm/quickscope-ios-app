@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { haptics } from "@/src/lib/haptics";
+import { formatCompactUsd, formatPercent, formatCompactNumber, formatAgeFromSeconds, formatSol } from "@/src/lib/format";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { toast } from "@/src/lib/toast";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
@@ -80,44 +81,6 @@ const ACTION_LABELS: Record<string, ActivityRow["action"]> = {
 };
 
 /* ─── Formatters ─── */
-
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "$0";
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  if (value >= 1) return `$${value.toFixed(0)}`;
-  return `$${value.toFixed(4)}`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return "0%";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(1)}%`;
-}
-
-function formatCompactNumber(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "0";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return String(Math.round(value));
-}
-
-function formatAmount(value: number): string {
-  if (!Number.isFinite(value)) return "--";
-  if (value >= 1000) return value.toFixed(0);
-  if (value >= 10) return value.toFixed(2);
-  return value.toFixed(3);
-}
-
-function formatTimeAgo(unixSeconds: number): string {
-  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return "--";
-  const delta = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (delta < 60) return `${delta}s`;
-  if (delta < 3600) return `${Math.floor(delta / 60)}m`;
-  if (delta < 86400) return `${Math.floor(delta / 3600)}h`;
-  return `${Math.floor(delta / 86400)}d`;
-}
 
 function resolveWalletLabel(wallets: TrackedWallet[], maker: string): string {
   const wallet = wallets.find((entry) => entry.public_key === maker);
@@ -272,8 +235,8 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
             tokenAddress: row.mint,
             walletLabel: resolveWalletLabel(wallets, row.maker),
             action: ACTION_LABELS[row.type] ?? ("Buy" as const),
-            amountSol: formatAmount(row.amount_quote ?? 0),
-            timeAgo: formatTimeAgo(row.ts),
+            amountSol: formatSol(row.amount_quote ?? 0),
+            timeAgo: formatAgeFromSeconds(row.ts),
           };
         });
         setActivity(mapped);
@@ -752,7 +715,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
                   {event.symbol}
                 </Text>
                 <Text numberOfLines={1} style={styles.tokenName}>
-                  {event.eventType} · {formatTimeAgo(event.timestamp)}
+                  {event.eventType} · {formatAgeFromSeconds(event.timestamp)}
                 </Text>
               </View>
               <View style={styles.metricCol}>

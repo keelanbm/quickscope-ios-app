@@ -19,6 +19,7 @@ import BottomSheet, {
 import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 
 import { haptics } from "@/src/lib/haptics";
+import { formatCompactUsd, formatPercent, formatCompactNumber, formatAgeFromSeconds } from "@/src/lib/format";
 import { toast } from "@/src/lib/toast";
 import {
   fetchScopeTokens,
@@ -152,38 +153,6 @@ function getExchangeLabel(filters: ScopeFilters): string {
 
 /* ─── Formatters ─── */
 
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "$0";
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  if (value >= 1) return `$${value.toFixed(0)}`;
-  return `$${value.toFixed(4)}`;
-}
-
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return "0%";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value.toFixed(1)}%`;
-}
-
-function formatCompactNumber(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "0";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return String(Math.round(value));
-}
-
-function formatAge(unixSeconds: number): string {
-  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0) return "--";
-  const elapsed = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (elapsed < 60) return `${elapsed}s`;
-  if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
-  if (elapsed < 86400) return `${Math.floor(elapsed / 3600)}h`;
-  if (elapsed < 604800) return `${Math.floor(elapsed / 86400)}d`;
-  return `${Math.floor(elapsed / 604800)}w`;
-}
-
 function truncateAddress(mint: string): string {
   if (!mint || mint.length < 10) return mint || "—";
   return `${mint.slice(0, 4)}..${mint.slice(-4)}`;
@@ -222,7 +191,7 @@ const ScopeTokenRowItem = React.memo(
     onQuickBuy,
   }: ScopeTokenRowItemProps) {
     const isPositive = item.oneHourChangePercent >= 0;
-    const age = formatAge(item.mintedAtSeconds);
+    const age = formatAgeFromSeconds(item.mintedAtSeconds);
     const platformAbbrev = getPlatformAbbrev(item.platform);
     const highScans = item.scanMentionsOneHour > 10;
     const priceValue = item.marketCapUsd; // proxy until priceUsd available
