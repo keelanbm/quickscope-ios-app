@@ -13,6 +13,7 @@ import { SignalMarker } from "@/src/ui/chart/SignalMarker";
 import { LivePriceLine } from "@/src/ui/chart/LivePriceLine";
 import { LiveCandleGlow } from "@/src/ui/chart/LiveCandleGlow";
 import { LiveBreathingDot } from "@/src/ui/chart/LiveBreathingDot";
+import { VolumeOverlay } from "@/src/ui/chart/VolumeOverlay";
 import { LiveIndicator } from "@/src/ui/LiveIndicator";
 
 // Re-export types from shared module for backwards compat
@@ -137,6 +138,7 @@ export function TokenChart({
       const bodyHeight = Math.max(1, Math.abs(closeY - openY));
 
       return {
+        index,
         x,
         centerX,
         highY,
@@ -146,6 +148,7 @@ export function TokenChart({
         isGreen,
         ts: candle.ts,
         close: candle.close,
+        volume: candle.volume,
       };
     });
   }, [filteredCandles, height, candleLayout]);
@@ -355,6 +358,13 @@ export function TokenChart({
 
   const renderCandleSvg = () => (
     <Svg width={candleLayout.svgWidth} height={height}>
+      {/* Volume bars (behind everything) */}
+      <VolumeOverlay
+        candles={candleRender}
+        candleWidth={candleLayout.candleWidth}
+        chartHeight={height}
+      />
+
       {/* Live glow behind last candle */}
       {isLive && lastCandle ? (
         <LiveCandleGlow

@@ -38,6 +38,7 @@ export type TokenCandle = {
   low?: string;
   close: string;
   quote_asset_price_usd: number;
+  volume_base?: number;
 };
 
 export type TokenCandlesResponse = {
@@ -57,6 +58,7 @@ export type TokenCandlePoint = {
   high: number;
   low: number;
   close: number;
+  volume?: number;
 };
 
 function toNumber(value: unknown): number {
@@ -165,6 +167,7 @@ export function buildMarketCapCandles({
         high,
         low,
         close,
+        volume: candle.volume_base,
       };
     })
     .filter((point) => point.ts > 0 && Number.isFinite(point.close))
@@ -181,6 +184,7 @@ export function buildPriceCandles(candles: TokenCandle[]): TokenCandlePoint[] {
         high: toNumber(candle.high) * quoteUsd,
         low: toNumber(candle.low) * quoteUsd,
         close: toNumber(candle.close) * quoteUsd,
+        volume: candle.volume_base,
       };
     })
     .filter((point) => point.ts > 0 && Number.isFinite(point.close))
