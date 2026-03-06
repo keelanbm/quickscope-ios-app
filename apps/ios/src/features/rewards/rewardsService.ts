@@ -40,6 +40,35 @@ export type EarningsByMintFilter = {
   sort_order?: boolean;
 };
 
+export type ReferralRates = {
+  cashback_rate_bps: number;
+  signup_rate_bps: number;
+  l1_rate_bps: number;
+  l2_rate_bps: number;
+  l3_rate_bps: number;
+  tg_group_rate_bps: number;
+};
+
+export type ClaimInfo = {
+  last_update_ts: number;
+  signature: string;
+  owner_public_key: string;
+  claim_amount: number;
+  gas_reserve: number;
+  status: string;
+};
+
+export type ClaimHistoryFilter = {
+  limit?: number;
+  offset?: number;
+  sort_column?: string;
+  sort_order?: boolean;
+};
+
+/* ── Constants ── */
+
+export const MIN_CLAIMABLE_REWARDS = 0.01;
+
 /* ── API calls ── */
 
 export async function fetchCumulativeEarnings(
@@ -78,4 +107,17 @@ export async function fetchEarningsByMint(
   filter?: EarningsByMintFilter
 ): Promise<EarningsByMint[]> {
   return rpcClient.call<EarningsByMint[]>("private/getEarningsByMint", [filter ?? {}]);
+}
+
+export async function fetchReferralRates(
+  rpcClient: RpcClient
+): Promise<ReferralRates> {
+  return rpcClient.call<ReferralRates>("private/getReferralRates", []);
+}
+
+export async function fetchClaimHistory(
+  rpcClient: RpcClient,
+  filter?: ClaimHistoryFilter
+): Promise<ClaimInfo[]> {
+  return rpcClient.call<ClaimInfo[]>("private/getClaimHistory", [filter ?? {}]);
 }
