@@ -89,7 +89,8 @@ function toOptionalInteger(value: unknown): number | undefined {
 
 export async function fetchDiscoveryTokens(
   rpcClient: RpcClient,
-  tab: DiscoveryTabId
+  tab: DiscoveryTabId,
+  limit = 25,
 ): Promise<DiscoveryResult> {
   const sort = tabSorts[tab];
   const response = await rpcClient.call<DiscoveryTableResponse>("public/filterTokensTable", [
@@ -97,7 +98,7 @@ export async function fetchDiscoveryTokens(
       filter: {
         sort_column: sort.sortColumn,
         sort_order: !sort.sortOrderDescending,
-        row_limit: 20,
+        row_limit: limit,
       },
     },
   ]);

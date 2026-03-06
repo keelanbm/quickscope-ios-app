@@ -59,12 +59,14 @@ function toOptionalInteger(value: unknown): number | undefined {
 }
 
 export async function fetchSearchTokens(rpcClient: RpcClient): Promise<SearchResult> {
+  const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 86400;
   const response = await rpcClient.call<SearchTableResponse>("public/filterTokensTable", [
     {
       filter: {
         sort_column: "one_hour_volume_sol",
         sort_order: false,
         row_limit: 200,
+        column_filters: [{ column: "mint_ts", min: thirtyDaysAgo }],
       },
     },
   ]);

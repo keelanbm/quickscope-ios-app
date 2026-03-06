@@ -5,6 +5,7 @@ import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import React from "react";
 import {
+  ActivityIndicator,
   FlatList,
   type ListRenderItemInfo,
   Linking,
@@ -80,6 +81,8 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [lastUpdatedMs, setLastUpdatedMs] = useState<number | undefined>();
   const [starredMints, setStarredMints] = useState<Record<string, boolean>>({});
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const loadRows = useCallback(
     async (options?: { refreshing?: boolean }) => {
@@ -99,12 +102,13 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
       }
 
       try {
-        const result = await fetchDiscoveryTokens(rpcClient, activeTab);
+        const result = await fetchDiscoveryTokens(rpcClient, activeTab, 25);
         if (requestId !== requestSeqRef.current) {
           return;
         }
 
         setRows(result.rows);
+        setHasMore(result.rows.length >= 25);
         setLastUpdatedMs(result.fetchedAtMs);
         setErrorText(undefined);
         if (__DEV__) {
@@ -149,8 +153,23 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   );
 
   useEffect(() => {
+    setHasMore(true);
     void loadRows();
   }, [loadRows]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isLoadingMore || isInitialLoading) return;
+    setIsLoadingMore(true);
+    try {
+      const result = await fetchDiscoveryTokens(rpcClient, activeTab, 50);
+      setRows(result.rows);
+      setHasMore(false);
+    } catch {
+      // silently fail — user still has the first 25
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [hasMore, isLoadingMore, isInitialLoading, rpcClient, activeTab]);
 
   const selectedTokenAddress = params?.tokenAddress;
 
@@ -354,6 +373,8 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
       windowSize={10}
       maxToRenderPerBatch={10}
       removeClippedSubviews
+      onEndReached={loadMore}
+      onEndReachedThreshold={0.3}
       ListEmptyComponent={
         isInitialLoading ? null : (
           <EmptyState
@@ -363,6 +384,13 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
           />
         )
       }
+      ListFooterComponent={
+        isLoadingMore ? (
+          <View style={styles.footer}>
+            <ActivityIndicator color={qsColors.accent} />
+          </View>
+        ) : null
+      }
     />
   );
 }
@@ -371,6 +399,10 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: qsColors.layer0,
+  },
+  footer: {
+    paddingVertical: qsSpacing.lg,
+    alignItems: "center",
   },
   content: {
     paddingTop: qsSpacing.xs,
