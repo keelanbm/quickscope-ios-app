@@ -176,6 +176,7 @@ export function TradersTab({ rpcClient, tokenAddress }: TradersTabProps) {
         data={traders}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        scrollEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}

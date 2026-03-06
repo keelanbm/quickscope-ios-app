@@ -106,6 +106,6 @@ export async function fetchTokenTraders(
 
   return rpcClient.call<TokenTradersResponse>("public/getTokenTraders", [
     mint,
-    { limit, offset, sort_column: sortColumn },
+    { limit, offset, sort_column: sortColumn, sort_order: false },
   ]);
 }

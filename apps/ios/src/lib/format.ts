@@ -134,15 +134,14 @@ export function formatChartTimestamp(
   const hours = date.getHours();
   const minutes = date.getMinutes().toString().padStart(2, "0");
 
-  if (
-    timeframeId === "1m" ||
-    timeframeId === "5m" ||
-    timeframeId === "15m"
-  ) {
+  if (timeframeId === "1H" || timeframeId === "6H") {
     return `${hours}:${minutes}`;
   }
-  if (timeframeId === "1h") {
+  if (timeframeId === "1D" || timeframeId === "All") {
     return `${date.getMonth() + 1}/${date.getDate()} ${hours}:${minutes}`;
+  }
+  if (timeframeId === "1W") {
+    return `${date.getMonth() + 1}/${date.getDate()}`;
   }
 
   return `${date.getMonth() + 1}/${date.getDate()}`;

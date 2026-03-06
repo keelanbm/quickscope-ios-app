@@ -1,9 +1,9 @@
 import { PropsWithChildren, useEffect, useRef } from "react";
 
-import { useAccounts, useModal } from "@phantom/react-native-sdk";
 import { ActivityIndicator, Button, StyleSheet, Text, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import { qsColors, qsSpacing } from "@/src/theme/tokens";
 import { SectionCard } from "@/src/ui/SectionCard";
 
@@ -14,10 +14,10 @@ type AuthRouteGateProps = PropsWithChildren<{
 
 /**
  * Two-layer gate:
- *  1. Phantom wallet must be connected (isConnected)
+ *  1. Privy must be authenticated (user logged in via Privy)
  *  2. Backend auth session must be established (status === "authenticated")
  *
- * When the wallet is connected but the backend session isn't ready yet,
+ * When Privy is authenticated but the backend session isn't ready yet,
  * this gate auto-triggers `authenticateFromWallet()` and shows a spinner.
  */
 export function AuthRouteGate({
@@ -25,8 +25,7 @@ export function AuthRouteGate({
   subtitle,
   children,
 }: AuthRouteGateProps) {
-  const { isConnected } = useAccounts();
-  const { open } = useModal();
+  const { connected, login } = useWalletCompat();
   const {
     status,
     authenticateFromWallet,
@@ -37,7 +36,7 @@ export function AuthRouteGate({
 
   // Auto-trigger backend auth when wallet is connected but session is not established
   useEffect(() => {
-    if (!isConnected) {
+    if (!connected) {
       authAttemptedRef.current = false;
       return;
     }
@@ -56,7 +55,7 @@ export function AuthRouteGate({
       authAttemptedRef.current = true;
       void authenticateFromWallet();
     }
-  }, [isConnected, status, authenticateFromWallet]);
+  }, [connected, status, authenticateFromWallet]);
 
   // Reset the attempt flag when status changes to allow retries after errors
   useEffect(() => {
@@ -65,15 +64,15 @@ export function AuthRouteGate({
     }
   }, [status]);
 
-  // Layer 1: Wallet must be connected
-  if (!isConnected) {
+  // Layer 1: Must be logged in via Privy
+  if (!connected) {
     return (
       <View style={styles.container}>
         <SectionCard title={`${featureName} is locked`} subtitle={subtitle}>
           <Text style={styles.copy}>
-            Connect your wallet to access this area. This matches the mobile web signed-in flow.
+            Log in to access this area.
           </Text>
-          <Button title="Connect wallet" onPress={open} />
+          <Button title="Log in" onPress={login} />
         </SectionCard>
       </View>
     );

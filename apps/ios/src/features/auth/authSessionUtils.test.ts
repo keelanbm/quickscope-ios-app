@@ -1,5 +1,4 @@
 import {
-  getSolanaAddress,
   isFutureTimestamp,
   parseExpirationToUnixMs,
   shouldInvalidateSessionForWalletChange,
@@ -42,23 +41,6 @@ describe("authSessionUtils", () => {
           skewMs: 30_000,
         })
       ).toBe(false);
-    });
-  });
-
-  describe("getSolanaAddress", () => {
-    it("prefers the first solana address", () => {
-      const value = getSolanaAddress([
-        { addressType: "ethereum", address: "0xabc" },
-        { addressType: "solana", address: "So11111111111111111111111111111111111111112" },
-      ]);
-
-      expect(value).toBe("So11111111111111111111111111111111111111112");
-    });
-
-    it("falls back to first address when no solana address exists", () => {
-      const value = getSolanaAddress([{ addressType: "ethereum", address: "0xabc" }]);
-
-      expect(value).toBe("0xabc");
     });
   });
 

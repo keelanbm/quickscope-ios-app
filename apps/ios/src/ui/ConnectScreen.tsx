@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 
 import { Ionicons } from "@expo/vector-icons";
-import { useConnect } from "@phantom/react-native-sdk";
 import {
   ActivityIndicator,
   Pressable,
@@ -10,9 +9,8 @@ import {
   View,
 } from "react-native";
 
+import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
-
-type ProviderType = "google" | "apple" | "phantom";
 
 function AuthButton({
   label,
@@ -51,32 +49,17 @@ function AuthButton({
 }
 
 export function ConnectScreen() {
-  const { connect, isConnecting } = useConnect();
-  const [activeProvider, setActiveProvider] = useState<ProviderType | null>(null);
+  const { login, connecting } = useWalletCompat();
   const [error, setError] = useState<string | null>(null);
 
-  const isLoading = isConnecting || activeProvider !== null;
-
-  const handleConnect = useCallback(
-    async (provider: ProviderType) => {
-      try {
-        setError(null);
-        setActiveProvider(provider);
-        await connect({ provider });
-      } catch (err) {
-        if (provider === "phantom") {
-          setError(
-            "Phantom app login is not yet available. Please use Google or Apple to sign in."
-          );
-        } else {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      } finally {
-        setActiveProvider(null);
-      }
-    },
-    [connect]
-  );
+  const handleLogin = useCallback(() => {
+    try {
+      setError(null);
+      login();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [login]);
 
   return (
     <View style={styles.container}>
@@ -87,25 +70,11 @@ export function ConnectScreen() {
 
       <View style={styles.buttonGroup}>
         <AuthButton
-          label="Continue with Google"
-          iconName="logo-google"
-          onPress={() => void handleConnect("google")}
-          disabled={isLoading}
-          loading={activeProvider === "google"}
-        />
-        <AuthButton
-          label="Continue with Apple"
-          iconName="logo-apple"
-          onPress={() => void handleConnect("apple")}
-          disabled={isLoading}
-          loading={activeProvider === "apple"}
-        />
-        <AuthButton
-          label="Continue with Phantom"
+          label="Log in or Sign up"
           iconName="wallet-outline"
-          onPress={() => void handleConnect("phantom")}
-          disabled={isLoading}
-          loading={activeProvider === "phantom"}
+          onPress={handleLogin}
+          disabled={connecting}
+          loading={connecting}
         />
       </View>
 
@@ -115,7 +84,7 @@ export function ConnectScreen() {
         </Text>
       ) : null}
 
-      <Text style={styles.footer}>Powered by Phantom</Text>
+      <Text style={styles.footer}>Powered by Privy</Text>
     </View>
   );
 }

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import { useDisconnect, useModal } from "@phantom/react-native-sdk";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
@@ -15,6 +14,7 @@ import {
 } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import type { RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 import { LogOut, Gift, X, Wallet, ArrowUpDown, User } from "@/src/ui/icons";
@@ -37,8 +37,7 @@ type Props = {
 
 export function SlideOutDrawer({ visible, onClose }: Props) {
   const { walletAddress, clearSession } = useAuthSession();
-  const { disconnect } = useDisconnect();
-  const { open: openConnectModal } = useModal();
+  const { disconnect, login } = useWalletCompat();
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
   const translateX = useRef(new Animated.Value(DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -101,9 +100,9 @@ export function SlideOutDrawer({ visible, onClose }: Props) {
   const handleConnect = useCallback(() => {
     handleClose();
     setTimeout(() => {
-      openConnectModal();
+      login();
     }, 300);
-  }, [handleClose, openConnectModal]);
+  }, [handleClose, login]);
 
   const navigateTo = useCallback(
     (screen: keyof RootStack) => {

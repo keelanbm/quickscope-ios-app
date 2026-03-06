@@ -80,12 +80,15 @@ export function ActivityTab({ rpcClient, tokenAddress }: ActivityTabProps) {
         const response = await rpcClient.call<{
           table?: {
             rows?: {
+              type?: string;
               tx_type?: string;
               maker?: string;
+              ts?: number;
               block_ts?: number;
+              amount_quote?: number;
               quote_amount?: number;
               sol_amount?: number;
-              sol_price_usd?: number;
+              quote_asset_price_usd?: number;
             }[];
           };
           sol_price_usd?: number;
@@ -102,12 +105,17 @@ export function ActivityTab({ rpcClient, tokenAddress }: ActivityTabProps) {
 
         const solPriceUsd = Number(response.sol_price_usd) || 0;
         const parsed: ActivityRow[] = (response.table?.rows ?? []).map((row) => {
-          const amountSol = Number(row.sol_amount) || Number(row.quote_amount) || 0;
+          const amountSol =
+            Number(row.amount_quote) || Number(row.sol_amount) || Number(row.quote_amount) || 0;
+          const rawTs = Number(row.ts) || Number(row.block_ts) || 0;
+          const timestampSeconds = rawTs > 10_000_000_000 ? Math.floor(rawTs / 1000) : rawTs;
+          const rowSolPrice = Number(row.quote_asset_price_usd) || solPriceUsd;
+          const txType = row.type ?? row.tx_type;
           return {
-            type: (row.tx_type === "sell" ? "sell" : "buy") as "buy" | "sell",
+            type: (txType === "sell" ? "sell" : "buy") as "buy" | "sell",
             maker: String(row.maker ?? ""),
-            timestampSeconds: Number(row.block_ts) || 0,
-            amountUsd: amountSol * solPriceUsd,
+            timestampSeconds,
+            amountUsd: amountSol * rowSolPrice,
             amountSol,
           };
         });
@@ -259,6 +267,7 @@ export function ActivityTab({ rpcClient, tokenAddress }: ActivityTabProps) {
         data={rows}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        scrollEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}

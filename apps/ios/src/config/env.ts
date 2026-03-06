@@ -2,7 +2,8 @@ export type AppEnv = {
   apiHost: string;
   wsHost: string;
   solanaRpcEndpoint: string;
-  phantomAppId: string;
+  privyAppId: string;
+  privyClientId: string;
   enableSwapExecution: boolean;
   posthogKey?: string;
   posthogHost?: string;
@@ -41,9 +42,13 @@ export function loadEnv(): AppEnv {
       "EXPO_PUBLIC_SOLANA_RPC_ENDPOINT",
       process.env.EXPO_PUBLIC_SOLANA_RPC_ENDPOINT
     ),
-    phantomAppId: getRequiredEnvValue(
-      "EXPO_PUBLIC_PHANTOM_APP_ID",
-      process.env.EXPO_PUBLIC_PHANTOM_APP_ID
+    privyAppId: getRequiredEnvValue(
+      "EXPO_PUBLIC_PRIVY_APP_ID",
+      process.env.EXPO_PUBLIC_PRIVY_APP_ID
+    ),
+    privyClientId: getRequiredEnvValue(
+      "EXPO_PUBLIC_PRIVY_CLIENT_ID",
+      process.env.EXPO_PUBLIC_PRIVY_CLIENT_ID
     ),
     enableSwapExecution: parseBooleanFlag(process.env.EXPO_PUBLIC_ENABLE_SWAP_EXECUTION),
     posthogKey: process.env.EXPO_PUBLIC_POSTHOG_KEY?.trim(),

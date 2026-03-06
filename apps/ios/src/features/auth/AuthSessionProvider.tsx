@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 
-import { useAccounts, useDisconnect, useSolana } from "@phantom/react-native-sdk";
+import { useEmbeddedSolanaWallet } from "@privy-io/expo";
 import bs58 from "bs58";
 import { AppState } from "react-native";
 
@@ -27,11 +27,11 @@ import {
   persistAuthSession,
 } from "@/src/features/auth/sessionStorage";
 import {
-  getSolanaAddress,
   isFutureTimestamp,
   parseExpirationToUnixMs,
   shouldInvalidateSessionForWalletChange,
 } from "@/src/features/auth/authSessionUtils";
+import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import { RpcClient } from "@/src/lib/api/rpcClient";
 
 type AuthSessionStatus =
@@ -66,16 +66,16 @@ export function AuthSessionProvider({
   rpcClient,
   children,
 }: PropsWithChildren<{ rpcClient: RpcClient }>) {
-  const { addresses } = useAccounts();
-  const { disconnect } = useDisconnect();
-  const { solana, isAvailable } = useSolana();
+  const { walletAddress: embeddedWalletAddress, disconnect } = useWalletCompat();
+  const embeddedWallet = useEmbeddedSolanaWallet();
+  const wallets = embeddedWallet.wallets ?? [];
+
   const [status, setStatus] = useState<AuthSessionStatus>("bootstrapping");
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [sessionWalletAddress, setSessionWalletAddress] = useState<string | undefined>();
   const [errorText, setErrorText] = useState<string | undefined>();
   const hasEnsuredAccountRef = useRef(false);
 
-  const embeddedWalletAddress = useMemo(() => getSolanaAddress(addresses), [addresses]);
   const walletAddress = embeddedWalletAddress ?? sessionWalletAddress;
 
   const accessTokenExpiresAt = parseExpirationToUnixMs(tokens?.access_token_expiration);
@@ -175,18 +175,26 @@ export function AuthSessionProvider({
       return;
     }
 
-    if (!isAvailable) {
+    const embeddedWallet = wallets[0];
+    if (!embeddedWallet) {
       setStatus("error");
-      setErrorText("Solana signing is not available.");
+      setErrorText("Embedded wallet not available.");
       return;
     }
 
     await authenticateWithExternalSigner(embeddedWalletAddress, async (challenge) => {
-      const { signature } = await solana.signMessage(challenge);
-      return bs58.encode(signature);
+      const provider = await embeddedWallet.getProvider();
+      const { signature } = await provider.request({
+        method: "signMessage",
+        params: { message: challenge },
+      });
+      return typeof signature === "string"
+        ? signature
+        : bs58.encode(signature);
     });
-  }, [authenticateWithExternalSigner, embeddedWalletAddress, isAvailable, solana]);
+  }, [authenticateWithExternalSigner, embeddedWalletAddress, wallets]);
 
+  // Wallet mismatch detection
   useEffect(() => {
     const currentWallet = embeddedWalletAddress;
     const expectedWallet = sessionWalletAddress;
@@ -203,6 +211,7 @@ export function AuthSessionProvider({
     void markWalletMismatch(currentWallet, expectedWallet);
   }, [markWalletMismatch, sessionWalletAddress, status, walletAddress]);
 
+  // Bootstrap: load stored session
   useEffect(() => {
     let isCanceled = false;
 
@@ -251,6 +260,7 @@ export function AuthSessionProvider({
     };
   }, [clearSession, persistSession, rpcClient]);
 
+  // Refresh on app foreground
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active" || status !== "authenticated") {
@@ -265,6 +275,7 @@ export function AuthSessionProvider({
     return () => subscription.remove();
   }, [hasValidAccessToken, hasValidRefreshToken, refreshSession, status]);
 
+  // Refresh when access token expires while app is active
   useEffect(() => {
     if (status !== "authenticated") {
       return;
