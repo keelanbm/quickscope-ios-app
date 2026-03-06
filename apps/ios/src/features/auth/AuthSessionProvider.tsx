@@ -66,7 +66,7 @@ export function AuthSessionProvider({
   rpcClient,
   children,
 }: PropsWithChildren<{ rpcClient: RpcClient }>) {
-  const { walletAddress: embeddedWalletAddress, disconnect } = useWalletCompat();
+  const { walletAddress: embeddedWalletAddress, disconnect, isPhantomConnected, phantomSignMessage } = useWalletCompat();
   const embeddedWallet = useEmbeddedSolanaWallet();
   const wallets = embeddedWallet.wallets ?? [];
 
@@ -175,6 +175,16 @@ export function AuthSessionProvider({
       return;
     }
 
+    // Phantom-connected: sign via deep link
+    if (isPhantomConnected) {
+      await authenticateWithExternalSigner(embeddedWalletAddress, async (challenge) => {
+        const { signature } = await phantomSignMessage(challenge);
+        return signature;
+      });
+      return;
+    }
+
+    // Privy-embedded wallet
     const embeddedWallet = wallets[0];
     if (!embeddedWallet) {
       setStatus("error");
@@ -192,7 +202,7 @@ export function AuthSessionProvider({
         ? signature
         : bs58.encode(signature);
     });
-  }, [authenticateWithExternalSigner, embeddedWalletAddress, wallets]);
+  }, [authenticateWithExternalSigner, embeddedWalletAddress, isPhantomConnected, phantomSignMessage, wallets]);
 
   // Wallet mismatch detection
   useEffect(() => {

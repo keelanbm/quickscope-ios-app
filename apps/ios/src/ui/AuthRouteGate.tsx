@@ -1,10 +1,10 @@
 import { PropsWithChildren, useEffect, useRef } from "react";
 
-import { ActivityIndicator, Button, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
-import { qsColors, qsSpacing } from "@/src/theme/tokens";
+import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 import { SectionCard } from "@/src/ui/SectionCard";
 
 type AuthRouteGateProps = PropsWithChildren<{
@@ -25,7 +25,7 @@ export function AuthRouteGate({
   subtitle,
   children,
 }: AuthRouteGateProps) {
-  const { connected, login } = useWalletCompat();
+  const { connected, login, connectPhantom } = useWalletCompat();
   const {
     status,
     authenticateFromWallet,
@@ -72,7 +72,24 @@ export function AuthRouteGate({
           <Text style={styles.copy}>
             Log in to access this area.
           </Text>
-          <Button title="Log in" onPress={login} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+            ]}
+            onPress={connectPhantom}
+          >
+            <Text style={styles.primaryButtonText}>Continue with Phantom</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed && styles.secondaryButtonPressed,
+            ]}
+            onPress={login}
+          >
+            <Text style={styles.secondaryButtonText}>Other Login Options</Text>
+          </Pressable>
         </SectionCard>
       </View>
     );
@@ -111,12 +128,18 @@ export function AuthRouteGate({
             {errorText}
           </Text>
         ) : null}
-        <View style={styles.retryRow}>
-          <Button title="Retry sign-in" onPress={() => {
+        <Pressable
+          style={({ pressed }) => [
+            styles.primaryButton,
+            pressed && styles.primaryButtonPressed,
+          ]}
+          onPress={() => {
             authAttemptedRef.current = false;
             void authenticateFromWallet();
-          }} />
-        </View>
+          }}
+        >
+          <Text style={styles.primaryButtonText}>Retry sign-in</Text>
+        </Pressable>
       </SectionCard>
     </View>
   );
@@ -147,7 +170,34 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginBottom: qsSpacing.sm,
   },
-  retryRow: {
+  primaryButton: {
     marginTop: qsSpacing.sm,
+    paddingVertical: 12,
+    borderRadius: qsRadius.md,
+    backgroundColor: qsColors.accent,
+    alignItems: "center",
+  },
+  primaryButtonPressed: {
+    backgroundColor: qsColors.accentDeep,
+  },
+  primaryButtonText: {
+    color: qsColors.textPrimary,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    marginTop: qsSpacing.sm,
+    paddingVertical: 12,
+    borderRadius: qsRadius.md,
+    backgroundColor: qsColors.layer3,
+    alignItems: "center",
+  },
+  secondaryButtonPressed: {
+    backgroundColor: qsColors.layer4,
+  },
+  secondaryButtonText: {
+    color: qsColors.textSecondary,
+    fontSize: 14,
+    fontWeight: "500",
   },
 });
