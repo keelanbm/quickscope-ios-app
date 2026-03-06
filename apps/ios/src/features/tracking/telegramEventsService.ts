@@ -1,66 +1,110 @@
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 
-type RawTelegramEvent = {
-  idx: number;
-  ts: number;
-  event_type?: string;
-  mint?: string;
-  chat_id?: string;
-  user_id?: string;
-  symbol?: string;
-  name?: string;
-  image_uri?: string;
-  initial_price_usd?: number;
-  current_price_usd?: number;
-  peak_return?: number;
-};
+/* ── Chat list (for drawer sidebar) ── */
 
-type TelegramEventsFeedResponse = {
-  events: RawTelegramEvent[];
-};
-
-export type TelegramEvent = {
-  id: number;
-  timestamp: number;
-  eventType: string;
-  mint: string;
-  symbol: string;
-  name: string;
-  imageUri?: string;
+export type TelegramChat = {
   chatId: string;
-  userId: string;
-  initialPriceUsd: number;
-  currentPriceUsd: number;
-  peakReturnPercent: number;
+  name: string;
+  chatType: string;
+  chatImage: string;
+  msgCount: number;
+  lastMsgTs: number;
 };
 
-function toNumber(value: unknown): number {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : 0;
-}
+type RawTelegramChat = {
+  chat_id: number | string;
+  user_id?: number | string;
+  name?: string;
+  chat_type?: string;
+  chat_image?: string;
+  msg_count?: number;
+  last_msg_ts?: number;
+};
 
-export async function fetchTelegramEvents(
-  rpcClient: RpcClient,
-  limit = 30,
-  offset = 0
-): Promise<TelegramEvent[]> {
-  const response = await rpcClient.call<TelegramEventsFeedResponse>(
-    "private/getTelegramEventsFeed",
-    [{ limit, offset, sort_column: "ts", sort_order: false }]
+export async function fetchTelegramChats(
+  rpcClient: RpcClient
+): Promise<TelegramChat[]> {
+  const response = await rpcClient.call<RawTelegramChat[]>(
+    "private/getTelegramChats",
+    [{ limit: 100 }]
   );
 
-  return (response.events ?? []).map((event) => ({
-    id: event.idx,
-    timestamp: toNumber(event.ts),
-    eventType: event.event_type || "scan",
-    mint: event.mint || "",
-    symbol: event.symbol || event.mint?.slice(0, 4) || "???",
-    name: event.name || "Unknown",
-    imageUri: event.image_uri,
-    chatId: event.chat_id || "",
-    userId: event.user_id || "",
-    initialPriceUsd: toNumber(event.initial_price_usd),
-    currentPriceUsd: toNumber(event.current_price_usd),
-    peakReturnPercent: toNumber(event.peak_return) * 100,
+  const chats = Array.isArray(response) ? response : [];
+
+  return chats
+    .filter((c) => c.chat_type !== "private")
+    .map((c) => ({
+      chatId: String(c.chat_id),
+      name: c.name || "Unknown chat",
+      chatType: c.chat_type || "group",
+      chatImage: c.chat_image || "",
+      msgCount: c.msg_count ?? 0,
+      lastMsgTs: c.last_msg_ts ?? 0,
+    }))
+    .sort((a, b) => b.lastMsgTs - a.lastMsgTs);
+}
+
+/* ── Messages for a selected chat ── */
+
+export type TelegramMessage = {
+  id: string;
+  chatId: string;
+  userId: string;
+  username: string;
+  body: string;
+  timestamp: number;
+  tokenMint: string | null;
+  msgType: number; // 0=text, 1=token, 2=tweet
+};
+
+type RawMessage = {
+  msg_id: number | string;
+  chat_id: number | string;
+  user_id: number | string;
+  username?: string;
+  msg_body?: string;
+  ts?: number;
+  token_mint?: string;
+  msg_type?: number;
+  reply_to_message_id?: number;
+};
+
+type AllMessagesResponse = {
+  messages: RawMessage[] | null;
+};
+
+export async function fetchTelegramMessages(
+  rpcClient: RpcClient,
+  chatId: string,
+  options?: { messageTypes?: number[]; limit?: number; offset?: number }
+): Promise<TelegramMessage[]> {
+  const limit = options?.limit ?? 50;
+  const filter: Record<string, unknown> = {
+    chats: [chatId],
+    offset: options?.offset ?? 0,
+  };
+  if (options?.messageTypes && options.messageTypes.length > 0) {
+    filter.message_types = options.messageTypes;
+  }
+
+  const response = await rpcClient.call<AllMessagesResponse>(
+    "private/getAllMessages",
+    [limit, filter]
+  );
+
+  const messages = response?.messages ?? [];
+
+  return messages.map((m) => ({
+    id: String(m.msg_id),
+    chatId: String(m.chat_id),
+    userId: String(m.user_id),
+    username: m.username || "anon",
+    body: m.msg_body || "",
+    timestamp: m.ts ?? 0,
+    tokenMint: m.token_mint && m.token_mint !== "11111111111111111111111111111111" ? m.token_mint : null,
+    msgType: m.msg_type ?? 0,
   }));
 }
+
+/* ── Legacy export kept for backward compat (type only) ── */
+export type TelegramEvent = TelegramMessage;

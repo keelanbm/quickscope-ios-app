@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
@@ -10,7 +10,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -19,7 +18,7 @@ import { formatCompactUsd, formatPercent, formatCompactNumber, formatAgeFromSeco
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { toast } from "@/src/lib/toast";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
-import { TrackingFloatingNav, type TrackingTabId } from "@/src/ui/TrackingFloatingNav";
+import type { TrackingTabId } from "@/src/ui/TrackingFloatingNav";
 import {
   fetchWalletActivity,
   fetchWalletWatchlist,
@@ -29,8 +28,10 @@ import {
   type WalletWatchlist,
 } from "@/src/features/tracking/trackingService";
 import {
-  fetchTelegramEvents,
-  type TelegramEvent,
+  fetchTelegramChats,
+  fetchTelegramMessages,
+  type TelegramChat,
+  type TelegramMessage,
 } from "@/src/features/tracking/telegramEventsService";
 import {
   fetchTokenWatchlists,
@@ -40,10 +41,11 @@ import {
 } from "@/src/features/watchlist/tokenWatchlistService";
 import type { RootStack, RootTabs, TrackingRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Activity, Copy, Eye, Globe, MessageCircle, Search, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
+import { Activity, ChevronDown, Copy, Eye, Globe, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
 import { XIcon, TelegramIcon } from "@/src/ui/icons/BrandIcons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
+import { ListPickerDrawer, type ListPickerItem } from "@/src/ui/ListPickerDrawer";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
 
 /* ─── Types ─── */
@@ -60,6 +62,12 @@ const TAB_TITLES: Record<TrackingTabId, string> = {
   tokens: "Tokens",
   chats: "Chats",
 };
+
+const TABS: { id: TrackingTabId; label: string }[] = [
+  { id: "wallets", label: "Wallets" },
+  { id: "tokens", label: "Tokens" },
+  { id: "chats", label: "Chats" },
+];
 
 /* ─── Wallet activity types ─── */
 
@@ -130,13 +138,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   const requestRef = useRef(0);
 
   const [activeTab, setActiveTab] = useState<TrackingTabId>("wallets");
-  const [navExpanded, setNavExpanded] = useState(false);
-  const scrollOffsetRef = useRef(0);
-
-  // Dynamic header title based on active tab
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: TAB_TITLES[activeTab] });
-  }, [activeTab, navigation]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -155,11 +156,53 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
 
   // ── Wallet activity filters ──
   const [activityActionFilter, setActivityActionFilter] = useState<"all" | "Buy" | "Sell">("all");
-  const [activityWalletFilter, setActivityWalletFilter] = useState<string | null>(null); // walletLabel or null=all
-  const [activitySearch, setActivitySearch] = useState("");
 
   // ── Chats tab state ──
-  const [telegramEvents, setTelegramEvents] = useState<TelegramEvent[]>([]);
+  const [telegramChats, setTelegramChats] = useState<TelegramChat[]>([]);
+  const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+
+  // ── List picker drawer ──
+  const [listDrawerVisible, setListDrawerVisible] = useState(false);
+
+  const drawerTitle = activeTab === "wallets" ? "Wallet Lists" : activeTab === "tokens" ? "Token Lists" : "Chats";
+
+  const drawerItems: ListPickerItem[] = useMemo(() => {
+    if (activeTab === "wallets") {
+      return walletWatchlists.map((wl) => ({ id: wl.list_id.toString(), label: wl.name }));
+    }
+    if (activeTab === "tokens") {
+      return tokenWatchlists.map((wl) => ({
+        id: String(wl.id),
+        label: wl.name,
+        subtitle: `${wl.tokens.length} token${wl.tokens.length !== 1 ? "s" : ""}`,
+      }));
+    }
+    return telegramChats.map((c) => ({ id: c.chatId, label: c.name }));
+  }, [activeTab, walletWatchlists, tokenWatchlists, telegramChats]);
+
+  const activeListId =
+    activeTab === "wallets"
+      ? activeWalletWatchlistId
+      : activeTab === "tokens"
+        ? String(activeTokenWatchlistId)
+        : activeChatId;
+
+  const activeListLabel = drawerItems.find((i) => i.id === activeListId)?.label ?? "Select list";
+
+  const handleDrawerSelect = useCallback(
+    (id: string) => {
+      if (activeTab === "wallets") setActiveWalletWatchlistId(id);
+      else if (activeTab === "tokens") setActiveTokenWatchlistId(Number(id));
+      else if (activeTab === "chats") setActiveChatId(id);
+    },
+    [activeTab]
+  );
+
+  // Dynamic header title based on active tab
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: TAB_TITLES[activeTab] });
+  }, [activeTab, navigation]);
 
   /* ═══ Tokens tab loading ═══ */
 
@@ -238,10 +281,10 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         if (requestId !== requestRef.current) return;
 
         const tokenInfoMap = data.mint_to_token_info ?? {};
-        const mapped = (data.table?.rows ?? []).map((row: AllTransactionsTableRow) => {
+        const mapped = (data.table?.rows ?? []).map((row: AllTransactionsTableRow, idx: number) => {
           const tokenInfo = tokenInfoMap[row.mint]?.token_metadata;
           return {
-            id: row.signature || row.index,
+            id: `${row.signature || row.index}-${idx}`,
             tokenSymbol: tokenInfo?.symbol ?? row.mint.slice(0, 4),
             tokenName: tokenInfo?.name ?? "Unknown token",
             tokenAddress: row.mint,
@@ -277,19 +320,29 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       setErrorText(null);
 
       try {
-        const events = await fetchTelegramEvents(rpcClient);
+        const chats = await fetchTelegramChats(rpcClient);
         if (requestId !== requestRef.current) return;
-        setTelegramEvents(events);
+        setTelegramChats(chats);
+
+        const chatId = activeChatId ?? chats[0]?.chatId ?? null;
+        if (chatId) {
+          setActiveChatId(chatId);
+          const msgs = await fetchTelegramMessages(rpcClient, chatId);
+          if (requestId !== requestRef.current) return;
+          setTelegramMessages(msgs);
+        } else {
+          setTelegramMessages([]);
+        }
       } catch (error) {
         if (requestId !== requestRef.current) return;
-        setErrorText(error instanceof Error ? error.message : "Failed to load chat events.");
+        setErrorText(error instanceof Error ? error.message : "Failed to load chat messages.");
       } finally {
         if (requestId !== requestRef.current) return;
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [rpcClient]
+    [rpcClient, activeChatId]
   );
 
   /* ═══ Tab change / load effect ═══ */
@@ -303,9 +356,11 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     [activeTab, loadTokensTab, loadWalletsTab, loadChatsTab]
   );
 
+  // Only re-load when activeTab changes or the active list within that tab changes
   useEffect(() => {
     void loadCurrentTab();
-  }, [loadCurrentTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeWalletWatchlistId, activeTokenWatchlistId, activeChatId]);
 
   const handleOpenTokenDetail = useCallback(
     (tokenAddress: string, symbol?: string) => {
@@ -332,54 +387,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
 
   /* ═══ Render helpers ═══ */
 
-  /** Watchlist sub-pills (below main tabs) */
-  function renderWatchlistPills() {
-    if (activeTab === "tokens" && tokenWatchlists.length > 0) {
-      return (
-        <View style={styles.watchlistPills}>
-          {tokenWatchlists.map((wl) => {
-            const active = wl.id === activeTokenWatchlistId;
-            return (
-              <Pressable
-                key={wl.id}
-                style={[styles.watchlistPill, active && styles.watchlistPillActive]}
-                onPress={() => setActiveTokenWatchlistId(wl.id)}
-              >
-                <Text style={[styles.watchlistPillText, active && styles.watchlistPillTextActive]}>
-                  {wl.name} ({wl.tokens.length})
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      );
-    }
-
-    if (activeTab === "wallets" && walletWatchlists.length > 0) {
-      return (
-        <View style={styles.watchlistPills}>
-          {walletWatchlists.map((wl) => {
-            const id = wl.list_id.toString();
-            const active = id === activeWalletWatchlistId;
-            return (
-              <Pressable
-                key={wl.list_id}
-                style={[styles.watchlistPill, active && styles.watchlistPillActive]}
-                onPress={() => setActiveWalletWatchlistId(id)}
-              >
-                <Text style={[styles.watchlistPillText, active && styles.watchlistPillTextActive]}>
-                  {wl.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      );
-    }
-
-    return null;
-  }
-
   /** Tab-specific column headers */
   function renderColumnHeaders() {
     if (activeTab === "tokens") {
@@ -392,25 +399,18 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       return null;
     }
 
-    if (activeTab === "chats" && telegramEvents.length > 0) {
-      return (
-        <View style={styles.columnHeaders}>
-          <View style={styles.colHeaderLeft}>
-            <Text style={styles.colHeaderText}>Token</Text>
-          </View>
-          <View style={styles.colHeaderRight}>
-            <Text style={styles.colHeaderText}>Return</Text>
-          </View>
-        </View>
-      );
+    if (activeTab === "chats") {
+      return null;
     }
 
     return null;
   }
 
-  /** Wallet activity filter bar */
-  function renderActivityFilters() {
-    if (activeTab !== "wallets" || activity.length === 0) return null;
+  /** Inline toolbar: list picker trigger (left) + action filter chips (right, wallets only) */
+  function renderToolbar() {
+    const hasLists = drawerItems.length > 0;
+    // Only show toolbar on wallets / tokens tabs (chats has no list concept)
+    if (activeTab === "chats") return null;
 
     const actionOptions: Array<{ label: string; value: "all" | "Buy" | "Sell" }> = [
       { label: "All", value: "all" },
@@ -419,87 +419,44 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     ];
 
     return (
-      <View style={styles.activityFilters}>
-        {/* Search bar */}
-        <View style={styles.activitySearchWrap}>
-          <Search size={14} color={qsColors.textSubtle} />
-          <TextInput
-            style={styles.activitySearchInput}
-            placeholder="Search token…"
-            placeholderTextColor={qsColors.textSubtle}
-            value={activitySearch}
-            onChangeText={setActivitySearch}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-          />
-        </View>
+      <View style={styles.toolbarRow}>
+        {/* List picker trigger */}
+        {hasLists ? (
+          <Pressable
+            onPress={() => setListDrawerVisible(true)}
+            style={styles.listTrigger}
+            hitSlop={6}
+          >
+            <Text numberOfLines={1} style={styles.listTriggerLabel}>
+              {activeListLabel}
+            </Text>
+            <ChevronDown size={14} color={qsColors.textTertiary} />
+          </Pressable>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
 
-        {/* Action filter chips */}
-        <View style={styles.filterChipRow}>
-          {actionOptions.map((opt) => {
-            const active = activityActionFilter === opt.value;
-            return (
-              <Pressable
-                key={opt.value}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                onPress={() => {
-                  haptics.selection();
-                  setActivityActionFilter(opt.value);
-                }}
-              >
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-
-          {/* Wallet filter chips (only if >1 wallet) */}
-          {uniqueWalletLabels.length > 1 ? (
-            <>
-              <View style={styles.filterDivider} />
-              <Pressable
-                style={[styles.filterChip, !activityWalletFilter && styles.filterChipActive]}
-                onPress={() => {
-                  haptics.selection();
-                  setActivityWalletFilter(null);
-                }}
-              >
-                <Text style={[styles.filterChipText, !activityWalletFilter && styles.filterChipTextActive]}>
-                  All wallets
-                </Text>
-              </Pressable>
-              {uniqueWalletLabels.map((label) => {
-                const active = activityWalletFilter === label;
-                return (
-                  <Pressable
-                    key={label}
-                    style={[styles.filterChip, active && styles.filterChipActive]}
-                    onPress={() => {
-                      haptics.selection();
-                      setActivityWalletFilter(active ? null : label);
-                    }}
-                  >
-                    <Wallet size={10} color={active ? qsColors.textPrimary : qsColors.textTertiary} />
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.filterChipText, active && styles.filterChipTextActive]}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </>
-          ) : null}
-        </View>
-
-        {/* Result count when filtered */}
-        {(activityActionFilter !== "all" || activityWalletFilter || activitySearch) ? (
-          <Text style={styles.filterResultCount}>
-            {filteredActivity.length} result{filteredActivity.length !== 1 ? "s" : ""}
-          </Text>
+        {/* Action filter chips — wallets tab only */}
+        {activeTab === "wallets" && activity.length > 0 ? (
+          <View style={styles.actionChipRow}>
+            {actionOptions.map((opt) => {
+              const active = activityActionFilter === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.actionChip, active && styles.actionChipActive]}
+                  onPress={() => {
+                    haptics.selection();
+                    setActivityActionFilter(opt.value);
+                  }}
+                >
+                  <Text style={[styles.actionChipText, active && styles.actionChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         ) : null}
       </View>
     );
@@ -518,12 +475,12 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       );
     }
 
-    if (activeTab === "chats" && telegramEvents.length > 0) {
+    if (activeTab === "chats" && telegramMessages.length > 0) {
       return (
         <View style={styles.summaryRow}>
           <MessageCircle size={14} color={qsColors.textSubtle} />
           <Text style={styles.summaryText}>
-            {telegramEvents.length} recent event{telegramEvents.length !== 1 ? "s" : ""}
+            {telegramMessages.length} message{telegramMessages.length !== 1 ? "s" : ""}
           </Text>
         </View>
       );
@@ -588,7 +545,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     }
 
     if (activeTab === "chats") {
-      if (telegramEvents.length === 0) {
+      if (telegramMessages.length === 0) {
         return (
           <EmptyState
             icon={MessageCircle}
@@ -607,21 +564,13 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   type ListItem =
     | { type: "token"; data: EnrichedWatchlistToken }
     | { type: "activity"; data: ActivityRow }
-    | { type: "chat"; data: TelegramEvent };
+    | { type: "chat"; data: TelegramMessage };
 
   // Apply wallet activity filters
   const filteredActivity = activity.filter((row) => {
     if (activityActionFilter !== "all" && row.action !== activityActionFilter) return false;
-    if (activityWalletFilter && row.walletLabel !== activityWalletFilter) return false;
-    if (activitySearch) {
-      const q = activitySearch.toLowerCase();
-      if (!row.tokenSymbol.toLowerCase().includes(q) && !row.tokenName.toLowerCase().includes(q)) return false;
-    }
     return true;
   });
-
-  // Unique wallet labels for the wallet filter chips
-  const uniqueWalletLabels = [...new Set(activity.map((a) => a.walletLabel))];
 
   let listData: ListItem[] = [];
   if (activeTab === "tokens") {
@@ -629,24 +578,13 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   } else if (activeTab === "wallets") {
     listData = filteredActivity.map((a) => ({ type: "activity" as const, data: a }));
   } else {
-    listData = telegramEvents.map((e) => ({ type: "chat" as const, data: e }));
+    listData = telegramMessages.map((e) => ({ type: "chat" as const, data: e }));
   }
 
   const handleTabChange = (tab: TrackingTabId) => {
+    haptics.selection();
     setActiveTab(tab);
-    // Collapse after a short delay so user sees the switch
-    setTimeout(() => setNavExpanded(false), 300);
   };
-
-  const handleScroll = useCallback((event: { nativeEvent: { contentOffset: { y: number } } }) => {
-    const y = event.nativeEvent.contentOffset.y;
-    scrollOffsetRef.current = y;
-
-    // Collapse popout if user scrolls while expanded
-    if (y > 20 && navExpanded) {
-      setNavExpanded(false);
-    }
-  }, [navExpanded]);
 
   return (
     <View style={styles.page}>
@@ -659,8 +597,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       }}
       contentContainerStyle={styles.content}
       style={{ flex: 1 }}
-      onScroll={handleScroll}
-      scrollEventThrottle={16}
       refreshControl={
         <RefreshControl
           tintColor={qsColors.textMuted}
@@ -704,17 +640,32 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
             </View>
           ) : null}
 
-          {/* ── Watchlist sub-pills ── */}
-          {renderWatchlistPills()}
+          {/* ── Underline tabs ── */}
+          <View style={styles.tabsWrap}>
+            {TABS.map((tab) => {
+              const active = tab.id === activeTab;
+              return (
+                <Pressable
+                  key={tab.id}
+                  onPress={() => handleTabChange(tab.id)}
+                  style={[styles.tabButton, active && styles.tabButtonActive]}
+                >
+                  <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* ── Toolbar: list picker + filters ── */}
+          {renderToolbar()}
 
           {/* ── Summary line ── */}
           {renderSummary()}
 
           {/* ── Column headers ── */}
           {renderColumnHeaders()}
-
-          {/* ── Wallet activity filters ── */}
-          {renderActivityFilters()}
         </View>
       }
       renderItem={({ item }) => {
@@ -839,57 +790,47 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
           );
         }
 
-        /* ── Telegram chat event row ── */
-        const event = item.data;
-        const returnPositive = event.peakReturnPercent >= 0;
+        /* ── Telegram message row ── */
+        const msg = item.data;
+        const msgTypeLabel = msg.msgType === 1 ? "Token" : msg.msgType === 2 ? "Tweet" : "Text";
         return (
           <Pressable
             style={styles.rowItem}
-            onPress={() => handleOpenTokenDetail(event.mint, event.symbol)}
+            onPress={msg.tokenMint ? () => handleOpenTokenDetail(msg.tokenMint!) : undefined}
           >
             <View style={styles.rowMain}>
-              <TokenAvatar uri={event.imageUri} size={36} />
+              <View style={[styles.chatAvatarCircle, { backgroundColor: qsColors.layer3 }]}>
+                <MessageCircle size={16} color={qsColors.textTertiary} />
+              </View>
               <View style={styles.nameColumn}>
                 <Text numberOfLines={1} style={styles.tokenSymbol}>
-                  {event.symbol}
+                  {msg.username}
                 </Text>
-                <Text numberOfLines={1} style={styles.tokenName}>
-                  {event.eventType} · {formatAgeFromSeconds(event.timestamp)}
+                <Text numberOfLines={2} style={styles.tokenName}>
+                  {msg.body || "—"}
                 </Text>
               </View>
               <View style={styles.metricCol}>
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.changeValue,
-                    { color: returnPositive ? qsColors.buyGreen : qsColors.sellRed },
-                  ]}
-                >
-                  {formatPercent(event.peakReturnPercent)}
+                <Text numberOfLines={1} style={styles.metricSub}>
+                  {msgTypeLabel}
                 </Text>
                 <Text numberOfLines={1} style={styles.metricSub}>
-                  peak
+                  {formatAgeFromSeconds(msg.timestamp)}
                 </Text>
               </View>
             </View>
-            {event.chatId ? (
-              <View style={styles.rowFooter}>
-                <MessageCircle size={10} color={qsColors.textSubtle} />
-                <Text numberOfLines={1} style={styles.walletLabel}>
-                  {event.chatId}
-                </Text>
-              </View>
-            ) : null}
           </Pressable>
         );
       }}
       ListEmptyComponent={renderEmptyState()}
     />
-    <TrackingFloatingNav
-      activeTab={activeTab}
-      onTabChange={handleTabChange}
-      expanded={navExpanded}
-      onToggle={() => setNavExpanded((prev) => !prev)}
+    <ListPickerDrawer
+      visible={listDrawerVisible}
+      onClose={() => setListDrawerVisible(false)}
+      title={drawerTitle}
+      items={drawerItems}
+      activeId={activeListId}
+      onSelect={handleDrawerSelect}
     />
     </View>
   );
@@ -904,7 +845,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingTop: qsSpacing.xs,
-    paddingBottom: 140,
+    paddingBottom: 80,
   },
   headerWrap: {
     gap: qsSpacing.md,
@@ -912,27 +853,74 @@ const styles = StyleSheet.create({
     paddingHorizontal: qsSpacing.lg,
   },
 
-  // ── Watchlist sub-pills ──
-  watchlistPills: {
+  // ── Underline tabs ──
+  tabsWrap: {
     flexDirection: "row",
-    gap: qsSpacing.xs,
-    flexWrap: "wrap",
+    gap: qsSpacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: qsColors.borderDefault,
   },
-  watchlistPill: {
-    borderRadius: qsRadius.pill,
+  tabButton: {
+    paddingVertical: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.xs,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  tabButtonActive: {
+    borderBottomColor: qsColors.accent,
+  },
+  tabButtonText: {
+    color: qsColors.textTertiary,
+    fontWeight: qsTypography.weight.semi,
+    fontSize: qsTypography.size.xs,
+  },
+  tabButtonTextActive: {
+    color: qsColors.textPrimary,
+  },
+
+  // ── Toolbar (list picker + action chips) ──
+  toolbarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: qsSpacing.sm,
+  },
+  listTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: qsColors.layer2,
-    paddingVertical: qsSpacing.xs,
+    borderRadius: qsRadius.md,
+    paddingVertical: 8,
     paddingHorizontal: qsSpacing.md,
+    flexShrink: 1,
   },
-  watchlistPillActive: {
+  listTriggerLabel: {
+    color: qsColors.textPrimary,
+    fontSize: 14,
+    fontWeight: qsTypography.weight.semi,
+    flexShrink: 1,
+  },
+  actionChipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  actionChip: {
+    borderRadius: qsRadius.md,
+    backgroundColor: qsColors.layer2,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  actionChipActive: {
     backgroundColor: qsColors.accent,
   },
-  watchlistPillText: {
+  actionChipText: {
     color: qsColors.textTertiary,
-    fontSize: 12,
-    fontWeight: qsTypography.weight.medium,
+    fontSize: 13,
+    fontWeight: qsTypography.weight.semi,
   },
-  watchlistPillTextActive: {
+  actionChipTextActive: {
     color: qsColors.textPrimary,
   },
 
@@ -1050,6 +1038,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
   },
+  chatAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   nameRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1139,65 +1134,6 @@ const styles = StyleSheet.create({
   walletLabel: {
     color: qsColors.textSubtle,
     fontSize: 10,
-    fontWeight: qsTypography.weight.medium,
-  },
-
-  // ── Wallet activity filters ──
-  activityFilters: {
-    gap: qsSpacing.sm,
-  },
-  activitySearchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: qsSpacing.sm,
-    backgroundColor: qsColors.layer2,
-    borderRadius: qsRadius.md,
-    paddingHorizontal: qsSpacing.md,
-    paddingVertical: qsSpacing.xs,
-    height: 36,
-  },
-  activitySearchInput: {
-    flex: 1,
-    color: qsColors.textPrimary,
-    fontSize: 13,
-    fontWeight: qsTypography.weight.medium,
-    padding: 0,
-  },
-  filterChipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: qsRadius.pill,
-    backgroundColor: qsColors.layer2,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  filterChipActive: {
-    backgroundColor: qsColors.accent,
-  },
-  filterChipText: {
-    color: qsColors.textTertiary,
-    fontSize: 11,
-    fontWeight: qsTypography.weight.semi,
-  },
-  filterChipTextActive: {
-    color: qsColors.textPrimary,
-  },
-  filterDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: qsColors.borderDefault,
-    marginHorizontal: 2,
-  },
-  filterResultCount: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
     fontWeight: qsTypography.weight.medium,
   },
 
