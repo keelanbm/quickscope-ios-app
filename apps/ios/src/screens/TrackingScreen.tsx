@@ -18,7 +18,7 @@ import { formatCompactUsd, formatPercent, formatCompactNumber, formatAgeFromSeco
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { toast } from "@/src/lib/toast";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
-import { TrackingFloatingNav, type TrackingTabId } from "@/src/ui/TrackingFloatingNav";
+import type { TrackingTabId } from "@/src/ui/TrackingFloatingNav";
 import {
   fetchWalletActivity,
   fetchWalletWatchlist,
@@ -60,6 +60,12 @@ const TAB_TITLES: Record<TrackingTabId, string> = {
   tokens: "Tokens",
   chats: "Chats",
 };
+
+const TABS: { id: TrackingTabId; label: string }[] = [
+  { id: "wallets", label: "Wallets" },
+  { id: "tokens", label: "Tokens" },
+  { id: "chats", label: "Chats" },
+];
 
 /* ─── Wallet activity types ─── */
 
@@ -130,8 +136,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   const requestRef = useRef(0);
 
   const [activeTab, setActiveTab] = useState<TrackingTabId>("wallets");
-  const [navExpanded, setNavExpanded] = useState(false);
-  const scrollOffsetRef = useRef(0);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -578,20 +582,9 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   }
 
   const handleTabChange = (tab: TrackingTabId) => {
+    haptics.selection();
     setActiveTab(tab);
-    // Collapse after a short delay so user sees the switch
-    setTimeout(() => setNavExpanded(false), 300);
   };
-
-  const handleScroll = useCallback((event: { nativeEvent: { contentOffset: { y: number } } }) => {
-    const y = event.nativeEvent.contentOffset.y;
-    scrollOffsetRef.current = y;
-
-    // Collapse popout if user scrolls while expanded
-    if (y > 20 && navExpanded) {
-      setNavExpanded(false);
-    }
-  }, [navExpanded]);
 
   return (
     <View style={styles.page}>
@@ -604,8 +597,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       }}
       contentContainerStyle={styles.content}
       style={{ flex: 1 }}
-      onScroll={handleScroll}
-      scrollEventThrottle={16}
       refreshControl={
         <RefreshControl
           tintColor={qsColors.textMuted}
@@ -648,6 +639,24 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
               <SkeletonRow />
             </View>
           ) : null}
+
+          {/* ── Underline tabs ── */}
+          <View style={styles.tabsWrap}>
+            {TABS.map((tab) => {
+              const active = tab.id === activeTab;
+              return (
+                <Pressable
+                  key={tab.id}
+                  onPress={() => handleTabChange(tab.id)}
+                  style={[styles.tabButton, active && styles.tabButtonActive]}
+                >
+                  <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
           {/* ── Toolbar: list picker + filters ── */}
           {renderToolbar()}
@@ -827,12 +836,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       }}
       ListEmptyComponent={renderEmptyState()}
     />
-    <TrackingFloatingNav
-      activeTab={activeTab}
-      onTabChange={handleTabChange}
-      expanded={navExpanded}
-      onToggle={() => setNavExpanded((prev) => !prev)}
-    />
     <ListPickerDrawer
       visible={listDrawerVisible}
       onClose={() => setListDrawerVisible(false)}
@@ -854,12 +857,37 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingTop: qsSpacing.xs,
-    paddingBottom: 140,
+    paddingBottom: 80,
   },
   headerWrap: {
     gap: qsSpacing.md,
     marginBottom: qsSpacing.sm,
     paddingHorizontal: qsSpacing.lg,
+  },
+
+  // ── Underline tabs ──
+  tabsWrap: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: qsColors.borderDefault,
+  },
+  tabButton: {
+    paddingVertical: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.xs,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  tabButtonActive: {
+    borderBottomColor: qsColors.accent,
+  },
+  tabButtonText: {
+    color: qsColors.textTertiary,
+    fontWeight: qsTypography.weight.semi,
+    fontSize: qsTypography.size.xs,
+  },
+  tabButtonTextActive: {
+    color: qsColors.textPrimary,
   },
 
   // ── Toolbar (list picker + action chips) ──
