@@ -349,9 +349,11 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     [activeTab, loadTokensTab, loadWalletsTab, loadChatsTab]
   );
 
+  // Only re-load when activeTab changes or the active list within that tab changes
   useEffect(() => {
     void loadCurrentTab();
-  }, [loadCurrentTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeWalletWatchlistId, activeTokenWatchlistId]);
 
   const handleOpenTokenDetail = useCallback(
     (tokenAddress: string, symbol?: string) => {
