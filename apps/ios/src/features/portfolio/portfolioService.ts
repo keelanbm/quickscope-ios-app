@@ -77,6 +77,11 @@ export async function fetchPositionPnl(
 
 /* ── Positions (with full PnL) ── */
 
+export type QuoteAssetInfo = {
+  last_quote_price_usd: number;
+  last_sol_price_usd: number;
+};
+
 export type MinimalTokenInfo = {
   mint?: string;
   name?: string;
@@ -84,7 +89,21 @@ export type MinimalTokenInfo = {
   image_uri?: string;
   platform?: string;
   exchange?: string;
+  quote_asset_info?: QuoteAssetInfo;
 };
+
+/** Convert a quote-denominated value to USD using the position's quote asset info, falling back to global SOL price */
+export function quoteToUsd(
+  quoteValue: number,
+  tokenInfo?: MinimalTokenInfo,
+  fallbackSolPrice?: number
+): number {
+  const quotePriceUsd = tokenInfo?.quote_asset_info?.last_quote_price_usd;
+  if (quotePriceUsd != null && quotePriceUsd > 0) {
+    return quoteValue * quotePriceUsd;
+  }
+  return quoteValue * (fallbackSolPrice ?? 0);
+}
 
 export type Position = {
   token_info?: MinimalTokenInfo;
@@ -99,7 +118,9 @@ export type Position = {
   average_entry_price_quote: number;
   average_exit_price_quote: number;
   bought_quote: number;
+  bought_usd: number;
   sold_quote: number;
+  sold_usd: number;
   first_trade_ts: number;
   last_trade_ts: number;
 };
@@ -114,7 +135,12 @@ export type PositionsResponse = {
 export async function fetchTraderPositions(
   rpcClient: RpcClient,
   account: string,
-  filter?: { limit?: number; offset?: number; sort_column?: string }
+  filter?: {
+    limit?: number;
+    offset?: number;
+    sort_column?: string;
+    include_zero_balances?: boolean;
+  }
 ): Promise<PositionsResponse> {
   return rpcClient.call<PositionsResponse>("public/getTraderPositions", [
     account,
@@ -151,7 +177,6 @@ export async function fetchTransactionHistory(
   limit = 50
 ): Promise<TransactionsResponse> {
   return rpcClient.call<TransactionsResponse>("public/filterAllTransactionsTable", [
-    [account],
     {
       address_filters: [{ column: "maker", addresses: [account] }],
       row_limit: limit,
@@ -159,4 +184,36 @@ export async function fetchTransactionHistory(
       sort_order: false,
     },
   ]);
+}
+
+/* ── Cumulative P&L computation from transaction history ── */
+
+export type PnlDataPoint = {
+  ts: number;
+  pnl: number;
+};
+
+/**
+ * Compute cumulative realized P&L over time from transaction rows.
+ * Buy = money out (negative), Sell = money in (positive).
+ * Running total gives realized P&L curve.
+ */
+export function computeCumulativePnl(
+  rows: TransactionRow[],
+  solPriceUsd: number
+): PnlDataPoint[] {
+  if (rows.length === 0) return [];
+
+  const sorted = [...rows].sort((a, b) => a.ts - b.ts);
+
+  let cumulative = 0;
+  return sorted.map((row) => {
+    const usdValue = row.amount_quote * (row.quote_asset_price_usd || solPriceUsd);
+    if (row.type === "s") {
+      cumulative += usdValue;
+    } else if (row.type === "b") {
+      cumulative -= usdValue;
+    }
+    return { ts: row.ts, pnl: cumulative };
+  });
 }

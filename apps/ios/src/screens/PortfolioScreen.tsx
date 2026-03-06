@@ -33,6 +33,7 @@ import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import {
   fetchTraderOverview,
   fetchTraderPositions,
+  quoteToUsd,
   type TraderOverview,
   type Position,
 } from "@/src/features/portfolio/portfolioService";
@@ -97,17 +98,18 @@ function PositionRowItem({
   const name = meta?.name ?? "Unknown";
   const mint = meta?.mint ?? "";
   const imageUri = meta?.image_uri;
-  const valueUsd = (position.position_value_quote ?? 0) * solPriceUsd;
-  const totalPnlUsd = (position.total_pnl_quote ?? 0) * solPriceUsd;
+  const toUsd = (q: number) => quoteToUsd(q, meta, solPriceUsd);
+  const valueUsd = toUsd(position.position_value_quote ?? 0);
+  const totalPnlUsd = toUsd(position.total_pnl_quote ?? 0);
   const pnlPercent = (position.total_pnl_change_proportion ?? 0) * 100;
   const pnlPositive = totalPnlUsd >= 0;
 
-  const unrealizedUsd = (position.unrealized_pnl_quote ?? 0) * solPriceUsd;
-  const realizedUsd = (position.realized_pnl_quote ?? 0) * solPriceUsd;
-  const avgEntryUsd = (position.average_entry_price_quote ?? 0) * solPriceUsd;
-  const avgExitUsd = (position.average_exit_price_quote ?? 0) * solPriceUsd;
-  const boughtUsd = (position.bought_quote ?? 0) * solPriceUsd;
-  const soldUsd = (position.sold_quote ?? 0) * solPriceUsd;
+  const unrealizedUsd = toUsd(position.unrealized_pnl_quote ?? 0);
+  const realizedUsd = toUsd(position.realized_pnl_quote ?? 0);
+  const avgEntryUsd = toUsd(position.average_entry_price_quote ?? 0);
+  const avgExitUsd = toUsd(position.average_exit_price_quote ?? 0);
+  const boughtUsd = position.bought_usd ?? toUsd(position.bought_quote ?? 0);
+  const soldUsd = position.sold_usd ?? toUsd(position.sold_quote ?? 0);
 
   const handlePress = useCallback(() => onToggleExpand(mint), [onToggleExpand, mint]);
 
@@ -205,7 +207,7 @@ function ListHeader({
 
 export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const { walletAddress } = useAuthSession();
+  const { primaryAccountAddress: walletAddress } = useAuthSession();
   const requestRef = useRef(0);
   const offsetRef2 = useRef(0);
   const [overview, setOverview] = useState<TraderOverview | null>(null);
@@ -304,8 +306,8 @@ export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
 
   const stats = useMemo(() => {
     const balanceUsd = solBalance ? solBalance * solPriceUsd : undefined;
-    const totalPnl = positions.reduce((sum, p) => sum + ((p.total_pnl_quote ?? 0) * solPriceUsd), 0);
-    const unrealizedPnl = positions.reduce((sum, p) => sum + ((p.unrealized_pnl_quote ?? 0) * solPriceUsd), 0);
+    const totalPnl = positions.reduce((sum, p) => sum + quoteToUsd(p.total_pnl_quote ?? 0, p.token_info, solPriceUsd), 0);
+    const unrealizedPnl = positions.reduce((sum, p) => sum + quoteToUsd(p.unrealized_pnl_quote ?? 0, p.token_info, solPriceUsd), 0);
 
     return [
       { label: "Balance", value: formatCompactUsd(balanceUsd) },
