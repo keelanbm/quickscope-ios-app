@@ -19,6 +19,7 @@ describe("fetchSearchTokens", () => {
           sort_column: "one_hour_volume_sol",
           sort_order: false,
           row_limit: 200,
+          column_filters: [{ column: "mint_ts", min: expect.any(Number) }],
         },
       },
     ]);
