@@ -128,11 +128,11 @@ export async function fetchDiscoveryTokens(
     };
   });
 
-  // "trending" tab acts as "New Pairs" — only show tokens minted in the last hour
+  // "trending" tab — only show tokens minted in the last 7 days
   if (tab === "trending") {
-    const oneHourAgo = nowSeconds - 3600;
+    const sevenDaysAgo = nowSeconds - 7 * 86400;
     mappedRows = mappedRows.filter(
-      (row) => row.mintedAtSeconds > 0 && row.mintedAtSeconds >= oneHourAgo
+      (row) => row.mintedAtSeconds > 0 && row.mintedAtSeconds >= sevenDaysAgo
     );
   }
 
