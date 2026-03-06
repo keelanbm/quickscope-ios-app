@@ -2,6 +2,7 @@ import { PropsWithChildren } from "react";
 
 import { PrivyProvider } from "@privy-io/expo";
 import { PrivyElements } from "@privy-io/expo/ui";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AppEnv } from "@/src/config/env";
 
@@ -22,9 +23,11 @@ export function PrivyWalletProvider({ env, children }: PrivyWalletProviderProps)
         },
       }}
     >
-      <PrivyElements>
-        {children}
-      </PrivyElements>
+      <SafeAreaProvider>
+        <PrivyElements>
+          {children}
+        </PrivyElements>
+      </SafeAreaProvider>
     </PrivyProvider>
   );
 }

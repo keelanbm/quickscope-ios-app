@@ -322,7 +322,6 @@ export default function App() {
   const closeDrawer = useCallback(() => setDrawerVisible(false), []);
 
   return (
-    <SafeAreaProvider>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PrivyWalletProvider env={env}>
         <AuthSessionProvider rpcClient={rpcClient}>
@@ -422,6 +421,5 @@ export default function App() {
       </PrivyWalletProvider>
       <Toast config={toastConfig} />
     </GestureHandlerRootView>
-    </SafeAreaProvider>
   );
 }
