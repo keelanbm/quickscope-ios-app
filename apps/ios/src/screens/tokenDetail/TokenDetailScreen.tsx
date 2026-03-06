@@ -40,7 +40,8 @@ import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { fetchPositionPnl, type TraderTokenPosition } from "@/src/features/portfolio/portfolioService";
+import { fetchPositionPnl, fetchAccountTokenHoldings, type TraderTokenPosition } from "@/src/features/portfolio/portfolioService";
+import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import {
   buildChartSeries,
   buildCandleChartSeries,
@@ -79,7 +80,7 @@ import {
 import { requestSwapQuote } from "@/src/features/trade/tradeQuoteService";
 import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
 import { haptics } from "@/src/lib/haptics";
-import { ArrowLeft, Zap } from "@/src/ui/icons";
+import { ArrowLeft, BarChart3, LineChart, Zap } from "@/src/ui/icons";
 
 import { TokenDetailHeader } from "./TokenDetailHeader";
 import { TokenDetailMetrics } from "./TokenDetailMetrics";
@@ -88,6 +89,7 @@ import { TokenDetailTabs } from "./TokenDetailTabs";
 import {
   chartTimeframes,
   type ChartTimeframe,
+  computeResolution,
   formatCompactUsd,
   formatChartTimestamp,
   formatAgeFromSeconds,
@@ -104,8 +106,19 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
   const insets = useSafeAreaInsets();
   const { walletAddress, hasValidAccessToken, authenticateFromWallet } = useAuthSession();
+  const { connected, login, walletAddress: privyWalletAddress } = useWalletCompat();
+  const ensureAuthenticated = useCallback(async () => {
+    if (hasValidAccessToken) return;
+    if (connected) {
+      await authenticateFromWallet();
+      return;
+    }
+    login();
+    throw new Error("Login required");
+  }, [hasValidAccessToken, connected, authenticateFromWallet, login]);
   const chartRequestIdRef = useRef(0);
   const positionRequestIdRef = useRef(0);
+  const balanceRequestIdRef = useRef(0);
   const bottomSheetRef = useRef<BottomSheet>(null);
   const settingsSheetRef = useRef<BottomSheet>(null);
 
@@ -125,7 +138,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
     ],
   }));
 
-  const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(chartTimeframes[2]);
+  const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(chartTimeframes[1]);
   const [liveInfo, setLiveInfo] = useState<LiveTokenInfo | null>(null);
   const [chartData, setChartData] = useState<TokenChartPoint[]>([]);
   const [candleData, setCandleData] = useState<TokenCandlePoint[]>([]);
@@ -135,6 +148,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const [chartError, setChartError] = useState<string | null>(null);
   const [positionInfo, setPositionInfo] = useState<TraderTokenPosition | null>(null);
   const [positionError, setPositionError] = useState<string | null>(null);
+  const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
   const [watchlists, setWatchlists] = useState<TokenWatchlist[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [watchlistError, setWatchlistError] = useState<string | null>(null);
@@ -149,6 +163,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   );
 
   const tokenAddress = params?.tokenAddress ?? "";
+  const mintedAtSeconds = liveInfo?.mint_transaction?.ts ?? params?.mintedAtSeconds;
 
   /* ── Data fetching ── */
 
@@ -163,16 +178,39 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
       try {
         const nowSeconds = Math.floor(Date.now() / 1000);
-        const fromSeconds = nowSeconds - selectedTimeframe.rangeSeconds;
 
-        const [tokenInfo, candlesResponse] = await Promise.all([
+        let effectiveRangeSeconds: number;
+        if (selectedTimeframe.rangeSeconds === null) {
+          // "All" — use token mint timestamp
+          effectiveRangeSeconds =
+            mintedAtSeconds && mintedAtSeconds > 0
+              ? Math.max(nowSeconds - mintedAtSeconds, 300)
+              : 86_400; // fallback 24h
+        } else {
+          effectiveRangeSeconds = selectedTimeframe.rangeSeconds;
+        }
+
+        const candleResolution = computeResolution(effectiveRangeSeconds);
+        const lineResolution = Math.min(candleResolution, 60); // 1m for smooth lines
+        const fromSeconds = nowSeconds - effectiveRangeSeconds;
+
+        const [tokenInfo, candlesResponse, lineResponse] = await Promise.all([
           fetchLiveTokenInfo(rpcClient, tokenAddress),
           fetchTokenCandles(rpcClient, {
             tokenAddress,
             from: fromSeconds,
             to: nowSeconds,
-            resolutionSeconds: selectedTimeframe.resolutionSeconds,
+            resolutionSeconds: candleResolution,
           }),
+          // Fetch fine-grained data for smooth line chart
+          candleResolution > 60
+            ? fetchTokenCandles(rpcClient, {
+                tokenAddress,
+                from: fromSeconds,
+                to: nowSeconds,
+                resolutionSeconds: lineResolution,
+              })
+            : null,
         ]);
 
         if (!isActive || requestId !== chartRequestIdRef.current) return;
@@ -180,10 +218,11 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
         setLiveInfo(tokenInfo ?? null);
 
         const rawCandles = candlesResponse.candles ?? [];
+        const lineCandles = lineResponse?.candles ?? rawCandles;
         const result = buildChartSeries({
-          candles: rawCandles,
+          candles: lineCandles,
           tokenInfo: tokenInfo ?? null,
-          candlesResponse,
+          candlesResponse: lineResponse ?? candlesResponse,
         });
         const candleResult = buildCandleChartSeries({
           candles: rawCandles,
@@ -205,7 +244,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
     void load();
     return () => { isActive = false; };
-  }, [rpcClient, selectedTimeframe, tokenAddress]);
+  }, [rpcClient, selectedTimeframe, tokenAddress, mintedAtSeconds]);
 
   useEffect(() => {
     if (!hasValidAccessToken) {
@@ -251,6 +290,46 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
     return () => { isActive = false; };
   }, [rpcClient, tokenAddress, walletAddress]);
+
+  // Fetch SOL balance for trade panel
+  useEffect(() => {
+    if (!walletAddress) {
+      setSolBalance(undefined);
+      return;
+    }
+
+    let isActive = true;
+    const requestId = ++balanceRequestIdRef.current;
+
+    fetchAccountTokenHoldings(rpcClient, walletAddress)
+      .then((data) => {
+        if (isActive && requestId === balanceRequestIdRef.current) {
+          setSolBalance(data.sol_balance);
+        }
+      })
+      .catch(() => {
+        if (isActive && requestId === balanceRequestIdRef.current) {
+          setSolBalance(undefined);
+        }
+      });
+
+    return () => { isActive = false; };
+  }, [rpcClient, walletAddress]);
+
+  // Refresh balances after a trade
+  const refreshBalances = useCallback(() => {
+    if (!walletAddress) return;
+
+    fetchAccountTokenHoldings(rpcClient, walletAddress)
+      .then((data) => setSolBalance(data.sol_balance))
+      .catch(() => {});
+
+    if (tokenAddress) {
+      fetchPositionPnl(rpcClient, walletAddress, tokenAddress)
+        .then((data) => setPositionInfo(data))
+        .catch(() => {});
+    }
+  }, [rpcClient, walletAddress, tokenAddress]);
 
   // Load trade settings on mount
   useEffect(() => {
@@ -316,7 +395,6 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const marketCapUsd = params?.marketCapUsd;
   const oneHourChange = params?.oneHourChangePercent;
   const platformLabel = (params?.platform || params?.exchange || "unknown").toUpperCase();
-  const mintedAtSeconds = liveInfo?.mint_transaction?.ts ?? params?.mintedAtSeconds;
 
   const socialLinks = useMemo<SocialLink[]>(() => {
     const links: SocialLink[] = [];
@@ -383,21 +461,36 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   ]);
 
   const handleQuickTrade = useCallback(
-    (presetParams: { side: "buy" | "sell"; amount: number }) => {
+    async (presetParams: { side: "buy" | "sell"; amount: number }) => {
+      try {
+        await ensureAuthenticated();
+      } catch {
+        return;
+      }
+
       setTradeSide(presetParams.side);
       bottomSheetRef.current?.snapToIndex(0);
     },
-    []
+    [ensureAuthenticated]
   );
 
-  const handleExpandTrade = useCallback(() => {
+  const handleExpandTrade = useCallback(async () => {
+    try {
+      await ensureAuthenticated();
+    } catch {
+      return;
+    }
     bottomSheetRef.current?.snapToIndex(0);
-  }, []);
+  }, [ensureAuthenticated]);
 
-  const handleLimitPress = useCallback(() => {
-    // Open the bottom sheet (which has the limit mode toggle)
-    bottomSheetRef.current?.snapToIndex(1); // snap to larger size for limit form
-  }, []);
+  const handleLimitPress = useCallback(async () => {
+    try {
+      await ensureAuthenticated();
+    } catch {
+      return;
+    }
+    bottomSheetRef.current?.snapToIndex(1);
+  }, [ensureAuthenticated]);
 
   const handleBottomSheetClose = useCallback(() => {
     bottomSheetRef.current?.close();
@@ -433,8 +526,11 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   const handleMarketQuoteRequest = useCallback(
     async (params2: { side: "buy" | "sell"; amountUi: number; inputMint: string; outputMint: string }) => {
+      if (!walletAddress) {
+        throw new Error("Connect your wallet to get a quote.");
+      }
       const quote = await requestSwapQuote(rpcClient, {
-        walletAddress: walletAddress!,
+        walletAddress,
         inputMint: params2.inputMint,
         outputMint: params2.outputMint,
         amountUi: params2.amountUi,
@@ -447,8 +543,11 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
 
   const handleExecuteSwap = useCallback(
     async (swapParams: { quoteResult: { inputMint: string; outputMint: string; amountAtomic: number; slippageBps: number }; side: "buy" | "sell" }) => {
+      if (!walletAddress) {
+        throw new Error("Connect your wallet to trade.");
+      }
       const result = await requestSwapExecution(rpcClient, {
-        walletAddress: walletAddress!,
+        walletAddress,
         inputMint: swapParams.quoteResult.inputMint,
         outputMint: swapParams.quoteResult.outputMint,
         amountAtomic: swapParams.quoteResult.amountAtomic,
@@ -456,9 +555,15 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
         priorityFeeLamports: currentProfile.priorityLamports,
         jitoTipLamports: currentProfile.tipLamports ?? 0,
       });
+
+      // Refresh balances after successful swap
+      if (result.status !== "error") {
+        setTimeout(refreshBalances, 2000);
+      }
+
       return result;
     },
-    [rpcClient, walletAddress, currentProfile]
+    [rpcClient, walletAddress, currentProfile, refreshBalances]
   );
 
   const handleLimitOrderRequest = useCallback(
@@ -561,56 +666,44 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           scanMentionsOneHour={params?.scanMentionsOneHour}
         />
 
-        {/* ── Timeframe pills + chart type toggle (above chart) ── */}
+        {/* ── Timeframe selector + chart type icons ── */}
         <View style={styles.timeframeRow}>
-          <View style={styles.timeframePills}>
-            {chartTimeframes.map((frame) => {
-              const isActive = frame.id === selectedTimeframe.id;
-              return (
-                <Pressable
-                  key={frame.id}
-                  onPress={() => setSelectedTimeframe(frame)}
-                  style={({ pressed }) => [
-                    styles.timeframePill,
-                    isActive && styles.timeframePillActive,
-                    { opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.timeframeText,
-                      isActive && styles.timeframeTextActive,
-                    ]}
-                  >
-                    {frame.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={styles.chartTypeToggle}>
-            {(["line", "candle"] as const).map((type) => {
-              const isActive = chartType === type;
-              return (
-                <Pressable
-                  key={type}
-                  onPress={() => setChartType(type)}
-                  style={[
-                    styles.chartTypePill,
-                    isActive && styles.chartTypePillActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chartTypeText,
-                      isActive && styles.chartTypeTextActive,
-                    ]}
-                  >
-                    {type === "line" ? "Line" : "Candle"}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          {chartTimeframes.map((frame) => {
+            const isActive = frame.id === selectedTimeframe.id;
+            return (
+              <Pressable
+                key={frame.id}
+                onPress={() => setSelectedTimeframe(frame)}
+                style={[styles.tfItem, isActive && styles.tfItemActive]}
+              >
+                <Text style={[styles.tfText, isActive && styles.tfTextActive]}>
+                  {frame.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          <View style={styles.chartTypeRow}>
+            <Pressable
+              onPress={() => setChartType("line")}
+              hitSlop={6}
+              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+            >
+              <LineChart
+                size={16}
+                color={chartType === "line" ? qsColors.textPrimary : qsColors.textTertiary}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => setChartType("candle")}
+              hitSlop={6}
+              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+            >
+              <BarChart3
+                size={16}
+                color={chartType === "candle" ? qsColors.textPrimary : qsColors.textTertiary}
+              />
+            </Pressable>
           </View>
         </View>
 
@@ -651,6 +744,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
         <TokenDetailTabs
           rpcClient={rpcClient}
           tokenAddress={tokenAddress}
+          tokenDecimals={liveInfo?.mint_info?.decimals}
           walletAddress={walletAddress ?? undefined}
         />
 
@@ -669,7 +763,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
         <QuickTradePanel
           tokenSymbol={tokenMeta.symbol}
           tokenAddress={tokenAddress}
-          walletBalance={positionInfo?.position?.balance}
+          walletBalance={solBalance}
           tokenBalance={positionInfo?.position?.balance}
           currentMarketCapUsd={marketCapUsd}
           onPresetPress={handleQuickTrade}
@@ -691,7 +785,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
         tokenAddress={tokenAddress}
         tokenSymbol={tokenMeta.symbol}
         tokenDecimals={params?.tokenDecimals ?? 9}
-        userBalance={positionInfo?.position?.balance ?? 0}
+        userBalance={solBalance ?? 0}
         onQuoteRequest={handleQuoteRequest}
         onClose={handleBottomSheetClose}
         onSettingsPress={handleOpenSettings}
@@ -800,61 +894,36 @@ const styles = StyleSheet.create({
     marginBottom: qsSpacing.lg,
   },
 
-  /* Timeframe pills */
+  /* Timeframe selector */
   timeframeRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: qsSpacing.lg,
     marginTop: qsSpacing.md,
     marginBottom: qsSpacing.xs,
+    gap: 2,
   },
-  timeframePills: {
-    flexDirection: "row",
-    gap: qsSpacing.sm,
+  tfItem: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: qsRadius.sm,
   },
-  chartTypeToggle: {
-    flexDirection: "row",
-    backgroundColor: qsColors.layer1,
-    borderRadius: qsRadius.md,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    overflow: "hidden",
+  tfItemActive: {
+    backgroundColor: qsColors.layer2,
   },
-  chartTypePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  chartTypePillActive: {
-    backgroundColor: qsColors.layer3,
-  },
-  chartTypeText: {
-    color: qsColors.textTertiary,
-    fontSize: 11,
-    fontWeight: qsTypography.weight.semi,
-  },
-  chartTypeTextActive: {
-    color: qsColors.textPrimary,
-  },
-  timeframePill: {
-    borderRadius: qsRadius.pill,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    backgroundColor: qsColors.layer1,
-  },
-  timeframePillActive: {
-    borderColor: qsColors.accent,
-    backgroundColor: "rgba(119, 102, 247, 0.12)",
-  },
-  timeframeText: {
+  tfText: {
     color: qsColors.textTertiary,
     fontSize: 12,
     fontWeight: qsTypography.weight.semi,
   },
-  timeframeTextActive: {
+  tfTextActive: {
     color: qsColors.textPrimary,
+  },
+  chartTypeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginLeft: "auto",
   },
 
   /* Error */
