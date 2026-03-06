@@ -18,6 +18,8 @@ type HolderRowProps = {
   rank: number;
   /** Total supply used to calculate % */
   totalSupply: number;
+  /** Token decimals for converting raw balance to human-readable */
+  tokenDecimals?: number;
 };
 
 const LABEL_COLORS: Record<string, { bg: string; text: string }> = {
@@ -47,7 +49,9 @@ function getBarColor(pct: number): string {
   return qsColors.buyGreen;
 }
 
-export function HolderRow({ holder, rank, totalSupply }: HolderRowProps) {
+export function HolderRow({ holder, rank, totalSupply, tokenDecimals }: HolderRowProps) {
+  const divisor = tokenDecimals != null ? Math.pow(10, tokenDecimals) : 1;
+  const displayBalance = holder.balance / divisor;
   const pct = totalSupply > 0 ? (holder.balance / totalSupply) * 100 : 0;
   const barWidth = Math.min(pct, 100); // cap at 100%
   const barColor = getBarColor(pct);
@@ -98,12 +102,12 @@ export function HolderRow({ holder, rank, totalSupply }: HolderRowProps) {
         )}
       </View>
 
-      {/* Balance */}
-      <Text style={styles.balance}>{formatBalance(holder.balance)}</Text>
-
-      {/* % bar + text */}
-      <View style={styles.pctCol}>
-        <Text style={styles.pctText}>{pct < 0.01 ? "<0.01" : pct.toFixed(2)}%</Text>
+      {/* Balance + % bar */}
+      <View style={styles.rightCol}>
+        <View style={styles.balancePctRow}>
+          <Text style={styles.balance}>{formatBalance(displayBalance)}</Text>
+          <Text style={styles.pctText}>{pct < 0.01 ? "<0.01" : pct.toFixed(2)}%</Text>
+        </View>
         <View style={styles.barTrack}>
           <View
             style={[
@@ -162,18 +166,20 @@ const styles = StyleSheet.create({
     fontWeight: qsTypography.weight.semi,
     textTransform: "uppercase",
   },
+  rightCol: {
+    width: 120,
+    gap: 3,
+  },
+  balancePctRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   balance: {
-    width: 52,
-    textAlign: "right",
     fontSize: 12,
     fontWeight: qsTypography.weight.medium,
     color: qsColors.textSecondary,
     fontVariant: ["tabular-nums"],
-  },
-  pctCol: {
-    width: 68,
-    alignItems: "flex-end",
-    gap: 3,
   },
   pctText: {
     fontSize: 12,
