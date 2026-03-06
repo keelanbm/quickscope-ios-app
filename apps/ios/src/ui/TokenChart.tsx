@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { LayoutChangeEvent, ScrollView, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Line, Path } from "react-native-svg";
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from "react-native-svg";
 import { GestureDetector } from "react-native-gesture-handler";
 
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
@@ -41,7 +41,6 @@ type ChartPoint = {
   value: number;
 };
 
-const chartFill = "rgba(78, 163, 255, 0.18)";
 const chartStroke = qsColors.accent;
 
 function clamp(value: number, min: number, max: number): number {
@@ -502,8 +501,14 @@ export function TokenChart({
         onLayout={handleLayout}
       >
         <Svg width={layoutWidth} height={height}>
-          {areaPath ? <Path d={areaPath} fill={chartFill} /> : null}
-          {linePath ? <Path d={linePath} stroke={chartStroke} strokeWidth={2} fill="none" /> : null}
+          <Defs>
+            <LinearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={qsColors.accent} stopOpacity={0.25} />
+              <Stop offset="1" stopColor={qsColors.accent} stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
+          {areaPath ? <Path d={areaPath} fill="url(#areaGrad)" /> : null}
+          {linePath ? <Path d={linePath} stroke={chartStroke} strokeWidth={1.5} fill="none" /> : null}
 
           {/* Live price line */}
           {isLive && livePriceY !== null ? (
@@ -604,10 +609,6 @@ export function TokenChart({
 
 const styles = StyleSheet.create({
   chartContainer: {
-    borderRadius: qsRadius.md,
-    backgroundColor: qsColors.layer2,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
     overflow: "hidden",
     justifyContent: "center",
   },

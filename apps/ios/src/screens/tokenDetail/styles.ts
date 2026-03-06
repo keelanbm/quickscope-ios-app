@@ -3,13 +3,28 @@
  */
 
 export const chartTimeframes = [
-  { id: "1m", label: "1m", rangeSeconds: 60 * 60, resolutionSeconds: 60 },
-  { id: "5m", label: "5m", rangeSeconds: 3 * 60 * 60, resolutionSeconds: 5 * 60 },
-  { id: "15m", label: "15m", rangeSeconds: 6 * 60 * 60, resolutionSeconds: 15 * 60 },
-  { id: "1h", label: "1h", rangeSeconds: 24 * 60 * 60, resolutionSeconds: 60 * 60 },
+  { id: "1H",  label: "1H",  rangeSeconds: 3_600 as number | null },
+  { id: "6H",  label: "6H",  rangeSeconds: 21_600 as number | null },
+  { id: "1D",  label: "1D",  rangeSeconds: 86_400 as number | null },
+  { id: "1W",  label: "1W",  rangeSeconds: 604_800 as number | null },
+  { id: "All", label: "All", rangeSeconds: null as number | null },
 ] as const;
 
 export type ChartTimeframe = (typeof chartTimeframes)[number];
+
+const TARGET_CANDLES = 60;
+const RESOLUTION_STEPS = [60, 300, 900, 3600, 14400];
+
+/** Pick the best candle resolution to target ~60 candles for a given time range. */
+export function computeResolution(rangeSeconds: number): number {
+  const ideal = Math.floor(rangeSeconds / TARGET_CANDLES);
+  let best = RESOLUTION_STEPS[0];
+  for (const step of RESOLUTION_STEPS) {
+    if (step <= ideal) best = step;
+    else break;
+  }
+  return best;
+}
 
 export const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
 
