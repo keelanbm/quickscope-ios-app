@@ -88,7 +88,7 @@ export function HoldersTab({ rpcClient, tokenAddress, tokenDecimals }: HoldersTa
     ({ item, index }: { item: TokenHolder; index: number }) => (
       <HolderRow holder={item} rank={index + 1} totalSupply={totalSupply} tokenDecimals={tokenDecimals} />
     ),
-    [totalSupply]
+    [totalSupply, tokenDecimals]
   );
 
   const keyExtractor = useCallback((item: TokenHolder) => item.owner, []);
