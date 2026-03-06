@@ -28,6 +28,8 @@ const TOKEN_TABS: { id: TokenDetailTab; label: string }[] = [
 type TokenDetailTabsProps = {
   rpcClient: RpcClient;
   tokenAddress: string;
+  /** Token decimals for formatting raw balances */
+  tokenDecimals?: number;
   /** Wallet address — required for Orders tab */
   walletAddress?: string;
   /** Resolve token symbol from mint */
@@ -39,6 +41,7 @@ type TokenDetailTabsProps = {
 export function TokenDetailTabs({
   rpcClient,
   tokenAddress,
+  tokenDecimals,
   walletAddress,
   getTokenSymbol,
   getTokenImageUri,
@@ -70,16 +73,16 @@ export function TokenDetailTabs({
         })}
       </View>
 
-      {/* Tab content */}
-      {activeTab === "activity" && (
+      {/* Tab content — keep mounted to preserve scroll position */}
+      <View style={activeTab === "activity" ? undefined : styles.hidden}>
         <ActivityTab rpcClient={rpcClient} tokenAddress={tokenAddress} />
-      )}
-      {activeTab === "traders" && (
+      </View>
+      <View style={activeTab === "traders" ? undefined : styles.hidden}>
         <TradersTab rpcClient={rpcClient} tokenAddress={tokenAddress} />
-      )}
-      {activeTab === "holders" && (
-        <HoldersTab rpcClient={rpcClient} tokenAddress={tokenAddress} />
-      )}
+      </View>
+      <View style={activeTab === "holders" ? undefined : styles.hidden}>
+        <HoldersTab rpcClient={rpcClient} tokenAddress={tokenAddress} tokenDecimals={tokenDecimals} />
+      </View>
       {activeTab === "orders" && walletAddress && (
         <OrdersTab
           rpcClient={rpcClient}
@@ -96,6 +99,9 @@ export function TokenDetailTabs({
 const styles = StyleSheet.create({
   wrap: {
     marginTop: qsSpacing.xs,
+  },
+  hidden: {
+    display: "none",
   },
 
   tabBar: {

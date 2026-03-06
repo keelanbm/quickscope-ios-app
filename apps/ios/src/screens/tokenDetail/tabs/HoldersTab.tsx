@@ -25,9 +25,10 @@ import { haptics } from "@/src/lib/haptics";
 type HoldersTabProps = {
   rpcClient: RpcClient;
   tokenAddress: string;
+  tokenDecimals?: number;
 };
 
-export function HoldersTab({ rpcClient, tokenAddress }: HoldersTabProps) {
+export function HoldersTab({ rpcClient, tokenAddress, tokenDecimals }: HoldersTabProps) {
   const [holders, setHolders] = useState<TokenHolder[]>([]);
   const [holderCount, setHolderCount] = useState(0);
   const [totalSupply, setTotalSupply] = useState(0);
@@ -85,7 +86,7 @@ export function HoldersTab({ rpcClient, tokenAddress }: HoldersTabProps) {
 
   const renderItem = useCallback(
     ({ item, index }: { item: TokenHolder; index: number }) => (
-      <HolderRow holder={item} rank={index + 1} totalSupply={totalSupply} />
+      <HolderRow holder={item} rank={index + 1} totalSupply={totalSupply} tokenDecimals={tokenDecimals} />
     ),
     [totalSupply]
   );
@@ -142,6 +143,7 @@ export function HoldersTab({ rpcClient, tokenAddress }: HoldersTabProps) {
         data={holders}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
+        scrollEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
