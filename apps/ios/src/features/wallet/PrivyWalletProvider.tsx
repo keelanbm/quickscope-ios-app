@@ -24,9 +24,8 @@ export function PrivyWalletProvider({ env, children }: PrivyWalletProviderProps)
       }}
     >
       <SafeAreaProvider>
-        <PrivyElements>
-          {children}
-        </PrivyElements>
+        {children}
+        <PrivyElements />
       </SafeAreaProvider>
     </PrivyProvider>
   );
