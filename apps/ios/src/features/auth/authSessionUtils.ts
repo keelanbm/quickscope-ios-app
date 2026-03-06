@@ -1,8 +1,3 @@
-export type WalletAddressEntry = {
-  addressType: unknown;
-  address: string;
-};
-
 export function parseExpirationToUnixMs(raw: string | undefined): number | undefined {
   if (!raw) {
     return undefined;
@@ -29,18 +24,6 @@ export function isFutureTimestamp(
   const skewMs = options?.skewMs ?? 0;
 
   return unixMs > nowMs + skewMs;
-}
-
-export function getSolanaAddress(addresses: WalletAddressEntry[]): string | undefined {
-  const firstSolanaAddress = addresses.find((entry) =>
-    String(entry.addressType).toLowerCase().includes("solana")
-  );
-
-  if (firstSolanaAddress?.address) {
-    return firstSolanaAddress.address;
-  }
-
-  return addresses[0]?.address;
 }
 
 export function shouldInvalidateSessionForWalletChange(

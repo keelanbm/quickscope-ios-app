@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
 
-import { useDisconnect, useModal } from "@phantom/react-native-sdk";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
@@ -15,6 +14,7 @@ import {
 } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import type { RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 import { LogOut, Gift, X, Wallet, ArrowUpDown, User } from "@/src/ui/icons";
@@ -37,8 +37,7 @@ type Props = {
 
 export function SlideOutDrawer({ visible, onClose }: Props) {
   const { walletAddress, clearSession } = useAuthSession();
-  const { disconnect } = useDisconnect();
-  const { open: openConnectModal } = useModal();
+  const { disconnect, login, connectPhantom } = useWalletCompat();
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
   const translateX = useRef(new Animated.Value(DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -101,9 +100,16 @@ export function SlideOutDrawer({ visible, onClose }: Props) {
   const handleConnect = useCallback(() => {
     handleClose();
     setTimeout(() => {
-      openConnectModal();
+      login();
     }, 300);
-  }, [handleClose, openConnectModal]);
+  }, [handleClose, login]);
+
+  const handleConnectPhantom = useCallback(() => {
+    handleClose();
+    setTimeout(() => {
+      connectPhantom();
+    }, 300);
+  }, [handleClose, connectPhantom]);
 
   const navigateTo = useCallback(
     (screen: keyof RootStack) => {
@@ -198,10 +204,19 @@ export function SlideOutDrawer({ visible, onClose }: Props) {
                     styles.connectButton,
                     pressed && styles.connectButtonPressed,
                   ]}
-                  onPress={handleConnect}
+                  onPress={handleConnectPhantom}
                 >
                   <Wallet size={16} color={qsColors.textPrimary} />
-                  <Text style={styles.connectButtonText}>Connect wallet</Text>
+                  <Text style={styles.connectButtonText}>Continue with Phantom</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.otherLoginButton,
+                    pressed && styles.otherLoginButtonPressed,
+                  ]}
+                  onPress={handleConnect}
+                >
+                  <Text style={styles.otherLoginButtonText}>Other Login Options</Text>
                 </Pressable>
               </View>
             )}
@@ -392,6 +407,22 @@ const styles = StyleSheet.create({
   signOutLabel: {
     fontSize: 16,
     color: qsColors.sellRed,
+    fontWeight: qsTypography.weight.medium,
+  },
+  otherLoginButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+    paddingVertical: 10,
+    borderRadius: qsRadius.md,
+    backgroundColor: qsColors.layer3,
+  },
+  otherLoginButtonPressed: {
+    backgroundColor: qsColors.layer4,
+  },
+  otherLoginButtonText: {
+    fontSize: 14,
+    color: qsColors.textSecondary,
     fontWeight: qsTypography.weight.medium,
   },
 });

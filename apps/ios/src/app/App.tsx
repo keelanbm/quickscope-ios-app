@@ -1,12 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  AddressType,
-  darkTheme,
-  PhantomProvider,
-  type PhantomSDKConfig,
-} from "@phantom/react-native-sdk";
-import {
   createNavigationContainerRef,
   NavigationContainer,
   DefaultTheme,
@@ -23,6 +17,7 @@ import { toastConfig } from "@/src/ui/toast/toastConfig";
 
 import { loadEnv } from "@/src/config/env";
 import { AuthSessionProvider } from "@/src/features/auth/AuthSessionProvider";
+import { PrivyWalletProvider } from "@/src/features/wallet/PrivyWalletProvider";
 import { RpcClient } from "@/src/lib/api/rpcClient";
 import {
   parseQuickscopeDeepLink,
@@ -65,7 +60,8 @@ import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
 import { SlideOutDrawer } from "@/src/ui/SlideOutDrawer";
-import { QSLogoIcon, Compass, Crosshair, Search, Activity, Wallet, Menu } from "@/src/ui/icons";
+import { QSLogoIcon, Menu } from "@/src/ui/icons";
+import { SymbolView } from "expo-symbols";
 
 function LazyFallback() {
   return (
@@ -202,28 +198,28 @@ function MainTabsNavigator({
               ),
       })}
     >
-      <Tabs.Screen name="Discovery" options={{ title: "Discover", tabBarLabel: "Discover", tabBarIcon: ({ color, size }) => <Compass size={size} color={color} /> }}>
+      <Tabs.Screen name="Discovery" options={{ title: "Discover", tabBarLabel: "Discover", tabBarIcon: ({ color, size, focused }) => <SymbolView name={focused ? "flame.fill" : "flame"} size={size} tintColor={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Discovery">
             <DiscoveryScreen rpcClient={rpcClient} params={route.params} />
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>
-      <Tabs.Screen name="Scope" options={{ title: "Scope", tabBarIcon: ({ color, size }) => <Crosshair size={size} color={color} /> }}>
+      <Tabs.Screen name="Scope" options={{ title: "Scope", tabBarIcon: ({ color, size, focused }) => <SymbolView name={focused ? "scope" : "scope"} size={size} tintColor={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Scope">
             <ScopeScreen rpcClient={rpcClient} params={route.params} />
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>
-      <Tabs.Screen name="Trade" options={{ title: "Search", tabBarLabel: "Search", tabBarIcon: ({ color, size }) => <Search size={size} color={color} /> }}>
+      <Tabs.Screen name="Trade" options={{ title: "Search", tabBarLabel: "Search", tabBarIcon: ({ color, size, focused }) => <SymbolView name={focused ? "magnifyingglass.circle.fill" : "magnifyingglass"} size={size} tintColor={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Trade">
             <SearchScreen rpcClient={rpcClient} params={route.params} />
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>
-      <Tabs.Screen name="Tracking" options={{ title: "Tracking", tabBarIcon: ({ color, size }) => <Activity size={size} color={color} /> }}>
+      <Tabs.Screen name="Tracking" options={{ title: "Tracking", tabBarIcon: ({ color, size, focused }) => <SymbolView name={focused ? "chart.line.uptrend.xyaxis.circle.fill" : "chart.line.uptrend.xyaxis"} size={size} tintColor={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Tracking">
             <AuthRouteGate
@@ -237,7 +233,7 @@ function MainTabsNavigator({
           </RouteErrorBoundary>
         )}
       </Tabs.Screen>
-      <Tabs.Screen name="Portfolio" options={{ title: "Portfolio", tabBarIcon: ({ color, size }) => <Wallet size={size} color={color} /> }}>
+      <Tabs.Screen name="Portfolio" options={{ title: "Portfolio", tabBarIcon: ({ color, size, focused }) => <SymbolView name={focused ? "wallet.bifold.fill" : "wallet.bifold"} size={size} tintColor={color} /> }}>
         {({ route }) => (
           <RouteErrorBoundary routeName="Portfolio">
             <AuthRouteGate
@@ -289,19 +285,6 @@ export default function App() {
   );
   const [drawerVisible, setDrawerVisible] = useState(false);
 
-  const phantomConfig = useMemo<PhantomSDKConfig>(
-    () => ({
-      providers: ["google", "apple", "phantom"],
-      appId: env.phantomAppId,
-      scheme: "quickscope",
-      addressTypes: [AddressType.solana],
-      authOptions: {
-        redirectUrl: "quickscope://phantom-auth-callback",
-      },
-    }),
-    [env.phantomAppId]
-  );
-
   const navigateFromDeepLink = useCallback(
     (rawUrl: string) => {
       const target = parseQuickscopeDeepLink(rawUrl);
@@ -339,12 +322,7 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <PhantomProvider
-        config={phantomConfig}
-        theme={darkTheme}
-        appName="Quickscope"
-        appIcon="https://app.quickscope.gg/favicon.ico"
-      >
+      <PrivyWalletProvider env={env}>
         <AuthSessionProvider rpcClient={rpcClient}>
           <NavigationContainer
             ref={navigationRef}
@@ -439,7 +417,7 @@ export default function App() {
             <SlideOutDrawer visible={drawerVisible} onClose={closeDrawer} />
           </NavigationContainer>
         </AuthSessionProvider>
-      </PhantomProvider>
+      </PrivyWalletProvider>
       <Toast config={toastConfig} />
     </GestureHandlerRootView>
   );

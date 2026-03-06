@@ -39,6 +39,8 @@
     ],
     "extra": {
       "projectName": "quickscope-ios-app",
+      "privyAppId": "cmip3swbs0061l50d06fdtjhk",
+      "privyClientId": "client-WY6TP7bXRg8BP5johqPKj9oN4ybb8h5yXsRY4JM9QXdbM",
       "eas": {
         "projectId": "432c9fe0-204a-4b76-9e33-fde84aba4946"
       }

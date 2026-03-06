@@ -313,10 +313,11 @@ export function parseQuickscopeDeepLink(rawUrl: string): ParsedDeepLinkTarget {
   const [first, second, third] = segments;
   const firstSegment = first.toLowerCase();
 
+  // Privy / Phantom callback — let SDKs handle it, don't navigate
   if (
-    firstSegment === "phantom-auth-callback" ||
-    firstSegment === "phantom-connect-callback" ||
-    firstSegment === "phantom-sign-callback"
+    firstSegment === "privy" ||
+    firstSegment === "auth-callback" ||
+    firstSegment.startsWith("phantom-")
   ) {
     return { screen: null };
   }

@@ -1,15 +1,10 @@
 import { useMemo, useState } from "react";
 
-import {
-  useAccounts,
-  useDisconnect,
-  useModal,
-  useSolana,
-} from "@phantom/react-native-sdk";
+import { useEmbeddedSolanaWallet } from "@privy-io/expo";
 import { Button, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
-import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
+import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import { requestAuthChallenge } from "@/src/features/auth/authService";
 import {
   ParityCheckResult,
@@ -45,10 +40,9 @@ function connectionTone(status: string): string {
 }
 
 export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProps) {
-  const { open, isOpened } = useModal();
-  const { addresses, isConnected } = useAccounts();
-  const { disconnect } = useDisconnect();
-  const { solana, isAvailable } = useSolana();
+  const { connected, walletAddress: connectedAddress, login, disconnect } = useWalletCompat();
+  const embeddedWallet = useEmbeddedSolanaWallet();
+  const wallets = embeddedWallet.wallets ?? [];
   const {
     status: backendAuthStatus,
     tokens,
@@ -56,31 +50,17 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
     sessionWalletAddress,
     hasValidAccessToken,
     hasValidRefreshToken,
+    authenticateFromWallet,
     refreshSession,
     clearSession,
   } = useAuthSession();
-  const { ensureAuthenticated } = useWalletConnect();
   const { state: wsState, connect: connectWs, disconnect: disconnectWs } =
     useSlotTradeUpdatesSpike(wsHost);
   const [challengePreview, setChallengePreview] = useState<string>("");
   const [parityChecks, setParityChecks] = useState<ParityCheckResult[]>([]);
   const [isLoadingParity, setIsLoadingParity] = useState(false);
 
-  const walletAddress = useMemo(() => {
-    const solanaAddress = addresses.find(
-      (address) => String(address.addressType).toLowerCase() === "solana"
-    );
-
-    if (solanaAddress?.address) {
-      return solanaAddress.address;
-    }
-
-    if (addresses.length > 0 && addresses[0].address) {
-      return addresses[0].address;
-    }
-
-    return fallbackAddress;
-  }, [addresses]);
+  const walletAddress = connectedAddress ?? fallbackAddress;
 
   const handleChallenge = async () => {
     try {
@@ -94,8 +74,8 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
 
   const handleDisconnect = async () => {
     try {
-      await disconnect();
       await clearSession();
+      await disconnect();
       toast.success("Disconnected", "Wallet session ended.");
     } catch (error) {
       toast.error("Disconnect failed", String(error));
@@ -103,19 +83,26 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
   };
 
   const handleSignMessage = async () => {
-    if (!isConnected || !isAvailable) {
-      toast.warn("Wallet unavailable", "Connect a Solana wallet before signing.");
+    if (!connected || !wallets[0]) {
+      toast.warn("Wallet unavailable", "Log in before signing.");
       return;
     }
 
     try {
-      const { signature } = await solana.signMessage("quickscope-ios-mvp");
-      const signaturePreview = Array.from(signature)
-        .slice(0, 12)
-        .map((value) => value.toString(16).padStart(2, "0"))
-        .join("");
+      const provider = await wallets[0].getProvider();
+      const { signature } = await provider.request({
+        method: "signMessage",
+        params: { message: "quickscope-ios-mvp" },
+      });
 
-      toast.success("Message signed", `${signaturePreview}...`);
+      const sigStr = typeof signature === "string"
+        ? signature.slice(0, 24)
+        : Array.from(signature as Uint8Array)
+            .slice(0, 12)
+            .map((value) => value.toString(16).padStart(2, "0"))
+            .join("");
+
+      toast.success("Message signed", `${sigStr}...`);
     } catch (error) {
       toast.error("Sign failed", String(error));
     }
@@ -132,7 +119,11 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
   };
 
   const handleAuthenticateSession = async () => {
-    await ensureAuthenticated();
+    if (!connected) {
+      login();
+      return;
+    }
+    await authenticateFromWallet();
   };
 
   const handleRefreshSession = async () => {
@@ -146,21 +137,18 @@ export function SpikeConsoleScreen({ rpcClient, wsHost }: SpikeConsoleScreenProp
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Week 1 Spike Console</Text>
+      <Text style={styles.title}>Dev Console</Text>
       <Text style={styles.subtitle}>
         Use this screen to validate wallet/auth/API behavior while we build the product shell.
       </Text>
 
-      <SectionCard title="Wallet state" subtitle="Phantom-first integration path">
-        <Text style={styles.meta}>Connected: {isConnected ? "yes" : "no"}</Text>
-        <Text style={styles.meta}>Modal open: {isOpened ? "yes" : "no"}</Text>
+      <SectionCard title="Wallet state" subtitle="Privy integration">
+        <Text style={styles.meta}>Connected: {connected ? "yes" : "no"}</Text>
         <Text style={styles.meta}>Address: {walletAddress}</Text>
-        {!isConnected ? (
-          <Button title="Connect wallet" onPress={open} />
+        {!connected ? (
+          <Button title="Log in" onPress={login} />
         ) : (
           <>
-            <Button title="Manage wallet" onPress={open} />
-            <View style={styles.spacer} />
             <Button title="Disconnect" onPress={handleDisconnect} />
           </>
         )}

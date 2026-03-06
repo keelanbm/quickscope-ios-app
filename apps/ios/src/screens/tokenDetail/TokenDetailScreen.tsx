@@ -41,7 +41,7 @@ import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 import { fetchPositionPnl, fetchAccountTokenHoldings, type TraderTokenPosition } from "@/src/features/portfolio/portfolioService";
-import { useWalletConnect } from "@/src/features/wallet/WalletConnectProvider";
+import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import {
   buildChartSeries,
   buildCandleChartSeries,
@@ -106,7 +106,16 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
   const insets = useSafeAreaInsets();
   const { walletAddress, hasValidAccessToken, authenticateFromWallet } = useAuthSession();
-  const { ensureAuthenticated } = useWalletConnect();
+  const { connected, login, walletAddress: privyWalletAddress } = useWalletCompat();
+  const ensureAuthenticated = useCallback(async () => {
+    if (hasValidAccessToken) return;
+    if (connected) {
+      await authenticateFromWallet();
+      return;
+    }
+    login();
+    throw new Error("Login required");
+  }, [hasValidAccessToken, connected, authenticateFromWallet, login]);
   const chartRequestIdRef = useRef(0);
   const positionRequestIdRef = useRef(0);
   const balanceRequestIdRef = useRef(0);
