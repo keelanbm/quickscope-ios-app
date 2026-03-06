@@ -20,7 +20,7 @@ import {
   submitAuthSolution,
   revokeAuthSession,
 } from "@/src/features/auth/authService";
-import { ensurePrimaryAccount } from "@/src/features/account/accountService";
+import { ensurePrimaryAccount, fetchPrimaryAccountPublicKey } from "@/src/features/account/accountService";
 import {
   clearStoredAuthSession,
   loadStoredAuthSession,
@@ -48,6 +48,7 @@ type AuthSessionContextValue = {
   errorText?: string;
   walletAddress?: string;
   sessionWalletAddress?: string;
+  primaryAccountAddress?: string;
   hasValidAccessToken: boolean;
   hasValidRefreshToken: boolean;
   authenticateFromWallet: () => Promise<void>;
@@ -74,6 +75,7 @@ export function AuthSessionProvider({
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [sessionWalletAddress, setSessionWalletAddress] = useState<string | undefined>();
   const [errorText, setErrorText] = useState<string | undefined>();
+  const [primaryAccountAddress, setPrimaryAccountAddress] = useState<string | undefined>();
   const hasEnsuredAccountRef = useRef(false);
 
   const walletAddress = embeddedWalletAddress ?? sessionWalletAddress;
@@ -88,6 +90,8 @@ export function AuthSessionProvider({
     rpcClient.clearCookies();
     setTokens(null);
     setSessionWalletAddress(undefined);
+    setPrimaryAccountAddress(undefined);
+    hasEnsuredAccountRef.current = false;
     setErrorText(undefined);
     setStatus("unauthenticated");
   }, [rpcClient]);
@@ -117,7 +121,8 @@ export function AuthSessionProvider({
     if (!hasEnsuredAccountRef.current) {
       hasEnsuredAccountRef.current = true;
       try {
-        await ensurePrimaryAccount(rpcClient);
+        const primaryKey = await ensurePrimaryAccount(rpcClient);
+        if (primaryKey) setPrimaryAccountAddress(primaryKey);
       } catch (error) {
         hasEnsuredAccountRef.current = false;
         setErrorText(
@@ -285,6 +290,14 @@ export function AuthSessionProvider({
     return () => subscription.remove();
   }, [hasValidAccessToken, hasValidRefreshToken, refreshSession, status]);
 
+  // Fetch primary account address when authenticated (covers bootstrap restore)
+  useEffect(() => {
+    if (status !== "authenticated" || primaryAccountAddress) return;
+    fetchPrimaryAccountPublicKey(rpcClient)
+      .then((key) => { if (key) setPrimaryAccountAddress(key); })
+      .catch(() => {});
+  }, [status, primaryAccountAddress, rpcClient]);
+
   // Refresh when access token expires while app is active
   useEffect(() => {
     if (status !== "authenticated") {
@@ -303,6 +316,7 @@ export function AuthSessionProvider({
       errorText,
       walletAddress,
       sessionWalletAddress,
+      primaryAccountAddress,
       hasValidAccessToken,
       hasValidRefreshToken,
       authenticateFromWallet,
@@ -319,6 +333,7 @@ export function AuthSessionProvider({
       hasValidAccessToken,
       hasValidRefreshToken,
       logout,
+      primaryAccountAddress,
       refreshSession,
       sessionWalletAddress,
       status,
