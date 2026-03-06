@@ -284,10 +284,10 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         if (requestId !== requestRef.current) return;
 
         const tokenInfoMap = data.mint_to_token_info ?? {};
-        const mapped = (data.table?.rows ?? []).map((row: AllTransactionsTableRow) => {
+        const mapped = (data.table?.rows ?? []).map((row: AllTransactionsTableRow, idx: number) => {
           const tokenInfo = tokenInfoMap[row.mint]?.token_metadata;
           return {
-            id: row.signature || row.index,
+            id: `${row.signature || row.index}-${idx}`,
             tokenSymbol: tokenInfo?.symbol ?? row.mint.slice(0, 4),
             tokenName: tokenInfo?.name ?? "Unknown token",
             tokenAddress: row.mint,
