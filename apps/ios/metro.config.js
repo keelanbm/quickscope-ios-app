@@ -9,7 +9,7 @@ global.Buffer = require("buffer").Buffer;
 config.resolver = {
   ...config.resolver,
   // sourceExts: [...config.resolver.sourceExts, 'cjs'],
-  unstable_conditionNames: ["browser", "require", "import"],
+  unstable_conditionNames: ["react-native", "browser", "require"],
   extraNodeModules: {
     ...config.resolver.extraNodeModules,
     "@noble/ed25519": require.resolve("@noble/ed25519"),
