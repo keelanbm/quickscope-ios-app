@@ -1,6 +1,7 @@
 import { PropsWithChildren } from "react";
 
 import { PrivyProvider } from "@privy-io/expo";
+import { PrivyElements } from "@privy-io/expo/ui";
 
 import { AppEnv } from "@/src/config/env";
 
@@ -21,7 +22,9 @@ export function PrivyWalletProvider({ env, children }: PrivyWalletProviderProps)
         },
       }}
     >
-      {children}
+      <PrivyElements>
+        {children}
+      </PrivyElements>
     </PrivyProvider>
   );
 }
