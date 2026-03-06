@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
@@ -10,7 +10,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
@@ -40,10 +39,11 @@ import {
 } from "@/src/features/watchlist/tokenWatchlistService";
 import type { RootStack, RootTabs, TrackingRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Activity, Copy, Eye, Globe, MessageCircle, Search, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
+import { Activity, ChevronDown, Copy, Eye, Globe, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
 import { XIcon, TelegramIcon } from "@/src/ui/icons/BrandIcons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
+import { ListPickerDrawer, type ListPickerItem } from "@/src/ui/ListPickerDrawer";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
 
 /* ─── Types ─── */
@@ -133,11 +133,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   const [navExpanded, setNavExpanded] = useState(false);
   const scrollOffsetRef = useRef(0);
 
-  // Dynamic header title based on active tab
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: TAB_TITLES[activeTab] });
-  }, [activeTab, navigation]);
-
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -155,11 +150,58 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
 
   // ── Wallet activity filters ──
   const [activityActionFilter, setActivityActionFilter] = useState<"all" | "Buy" | "Sell">("all");
-  const [activityWalletFilter, setActivityWalletFilter] = useState<string | null>(null); // walletLabel or null=all
-  const [activitySearch, setActivitySearch] = useState("");
 
   // ── Chats tab state ──
   const [telegramEvents, setTelegramEvents] = useState<TelegramEvent[]>([]);
+
+  // ── List picker drawer ──
+  const [listDrawerVisible, setListDrawerVisible] = useState(false);
+
+  const drawerTitle = activeTab === "wallets" ? "Wallet Lists" : activeTab === "tokens" ? "Token Lists" : "Chats";
+
+  const drawerItems: ListPickerItem[] = useMemo(() => {
+    if (activeTab === "wallets") {
+      return walletWatchlists.map((wl) => ({ id: wl.list_id.toString(), label: wl.name }));
+    }
+    if (activeTab === "tokens") {
+      return tokenWatchlists.map((wl) => ({
+        id: String(wl.id),
+        label: wl.name,
+        subtitle: `${wl.tokens.length} token${wl.tokens.length !== 1 ? "s" : ""}`,
+      }));
+    }
+    // Derive unique chats from events
+    const chatMap = new Map<string, string>();
+    for (const e of telegramEvents) {
+      if (e.chatId && !chatMap.has(e.chatId)) {
+        chatMap.set(e.chatId, e.chatId);
+      }
+    }
+    return Array.from(chatMap, ([id, label]) => ({ id, label }));
+  }, [activeTab, walletWatchlists, tokenWatchlists, telegramEvents]);
+
+  const activeListId =
+    activeTab === "wallets"
+      ? activeWalletWatchlistId
+      : activeTab === "tokens"
+        ? String(activeTokenWatchlistId)
+        : null;
+
+  const activeListLabel = drawerItems.find((i) => i.id === activeListId)?.label ?? "Select list";
+
+  const handleDrawerSelect = useCallback(
+    (id: string) => {
+      if (activeTab === "wallets") setActiveWalletWatchlistId(id);
+      else if (activeTab === "tokens") setActiveTokenWatchlistId(Number(id));
+      // Chats tab: no active selection currently
+    },
+    [activeTab]
+  );
+
+  // Dynamic header title based on active tab
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: TAB_TITLES[activeTab] });
+  }, [activeTab, navigation]);
 
   /* ═══ Tokens tab loading ═══ */
 
@@ -332,54 +374,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
 
   /* ═══ Render helpers ═══ */
 
-  /** Watchlist sub-pills (below main tabs) */
-  function renderWatchlistPills() {
-    if (activeTab === "tokens" && tokenWatchlists.length > 0) {
-      return (
-        <View style={styles.watchlistPills}>
-          {tokenWatchlists.map((wl) => {
-            const active = wl.id === activeTokenWatchlistId;
-            return (
-              <Pressable
-                key={wl.id}
-                style={[styles.watchlistPill, active && styles.watchlistPillActive]}
-                onPress={() => setActiveTokenWatchlistId(wl.id)}
-              >
-                <Text style={[styles.watchlistPillText, active && styles.watchlistPillTextActive]}>
-                  {wl.name} ({wl.tokens.length})
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      );
-    }
-
-    if (activeTab === "wallets" && walletWatchlists.length > 0) {
-      return (
-        <View style={styles.watchlistPills}>
-          {walletWatchlists.map((wl) => {
-            const id = wl.list_id.toString();
-            const active = id === activeWalletWatchlistId;
-            return (
-              <Pressable
-                key={wl.list_id}
-                style={[styles.watchlistPill, active && styles.watchlistPillActive]}
-                onPress={() => setActiveWalletWatchlistId(id)}
-              >
-                <Text style={[styles.watchlistPillText, active && styles.watchlistPillTextActive]}>
-                  {wl.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      );
-    }
-
-    return null;
-  }
-
   /** Tab-specific column headers */
   function renderColumnHeaders() {
     if (activeTab === "tokens") {
@@ -408,9 +402,11 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     return null;
   }
 
-  /** Wallet activity filter bar */
-  function renderActivityFilters() {
-    if (activeTab !== "wallets" || activity.length === 0) return null;
+  /** Inline toolbar: list picker trigger (left) + action filter chips (right, wallets only) */
+  function renderToolbar() {
+    const hasLists = drawerItems.length > 0;
+    // Only show toolbar on wallets / tokens tabs (chats has no list concept)
+    if (activeTab === "chats") return null;
 
     const actionOptions: Array<{ label: string; value: "all" | "Buy" | "Sell" }> = [
       { label: "All", value: "all" },
@@ -419,87 +415,44 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     ];
 
     return (
-      <View style={styles.activityFilters}>
-        {/* Search bar */}
-        <View style={styles.activitySearchWrap}>
-          <Search size={14} color={qsColors.textSubtle} />
-          <TextInput
-            style={styles.activitySearchInput}
-            placeholder="Search token…"
-            placeholderTextColor={qsColors.textSubtle}
-            value={activitySearch}
-            onChangeText={setActivitySearch}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-          />
-        </View>
+      <View style={styles.toolbarRow}>
+        {/* List picker trigger */}
+        {hasLists ? (
+          <Pressable
+            onPress={() => setListDrawerVisible(true)}
+            style={styles.listTrigger}
+            hitSlop={6}
+          >
+            <Text numberOfLines={1} style={styles.listTriggerLabel}>
+              {activeListLabel}
+            </Text>
+            <ChevronDown size={14} color={qsColors.textTertiary} />
+          </Pressable>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
 
-        {/* Action filter chips */}
-        <View style={styles.filterChipRow}>
-          {actionOptions.map((opt) => {
-            const active = activityActionFilter === opt.value;
-            return (
-              <Pressable
-                key={opt.value}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                onPress={() => {
-                  haptics.selection();
-                  setActivityActionFilter(opt.value);
-                }}
-              >
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {opt.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-
-          {/* Wallet filter chips (only if >1 wallet) */}
-          {uniqueWalletLabels.length > 1 ? (
-            <>
-              <View style={styles.filterDivider} />
-              <Pressable
-                style={[styles.filterChip, !activityWalletFilter && styles.filterChipActive]}
-                onPress={() => {
-                  haptics.selection();
-                  setActivityWalletFilter(null);
-                }}
-              >
-                <Text style={[styles.filterChipText, !activityWalletFilter && styles.filterChipTextActive]}>
-                  All wallets
-                </Text>
-              </Pressable>
-              {uniqueWalletLabels.map((label) => {
-                const active = activityWalletFilter === label;
-                return (
-                  <Pressable
-                    key={label}
-                    style={[styles.filterChip, active && styles.filterChipActive]}
-                    onPress={() => {
-                      haptics.selection();
-                      setActivityWalletFilter(active ? null : label);
-                    }}
-                  >
-                    <Wallet size={10} color={active ? qsColors.textPrimary : qsColors.textTertiary} />
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.filterChipText, active && styles.filterChipTextActive]}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </>
-          ) : null}
-        </View>
-
-        {/* Result count when filtered */}
-        {(activityActionFilter !== "all" || activityWalletFilter || activitySearch) ? (
-          <Text style={styles.filterResultCount}>
-            {filteredActivity.length} result{filteredActivity.length !== 1 ? "s" : ""}
-          </Text>
+        {/* Action filter chips — wallets tab only */}
+        {activeTab === "wallets" && activity.length > 0 ? (
+          <View style={styles.actionChipRow}>
+            {actionOptions.map((opt) => {
+              const active = activityActionFilter === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.actionChip, active && styles.actionChipActive]}
+                  onPress={() => {
+                    haptics.selection();
+                    setActivityActionFilter(opt.value);
+                  }}
+                >
+                  <Text style={[styles.actionChipText, active && styles.actionChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         ) : null}
       </View>
     );
@@ -612,16 +565,8 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   // Apply wallet activity filters
   const filteredActivity = activity.filter((row) => {
     if (activityActionFilter !== "all" && row.action !== activityActionFilter) return false;
-    if (activityWalletFilter && row.walletLabel !== activityWalletFilter) return false;
-    if (activitySearch) {
-      const q = activitySearch.toLowerCase();
-      if (!row.tokenSymbol.toLowerCase().includes(q) && !row.tokenName.toLowerCase().includes(q)) return false;
-    }
     return true;
   });
-
-  // Unique wallet labels for the wallet filter chips
-  const uniqueWalletLabels = [...new Set(activity.map((a) => a.walletLabel))];
 
   let listData: ListItem[] = [];
   if (activeTab === "tokens") {
@@ -704,17 +649,14 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
             </View>
           ) : null}
 
-          {/* ── Watchlist sub-pills ── */}
-          {renderWatchlistPills()}
+          {/* ── Toolbar: list picker + filters ── */}
+          {renderToolbar()}
 
           {/* ── Summary line ── */}
           {renderSummary()}
 
           {/* ── Column headers ── */}
           {renderColumnHeaders()}
-
-          {/* ── Wallet activity filters ── */}
-          {renderActivityFilters()}
         </View>
       }
       renderItem={({ item }) => {
@@ -891,6 +833,14 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       expanded={navExpanded}
       onToggle={() => setNavExpanded((prev) => !prev)}
     />
+    <ListPickerDrawer
+      visible={listDrawerVisible}
+      onClose={() => setListDrawerVisible(false)}
+      title={drawerTitle}
+      items={drawerItems}
+      activeId={activeListId}
+      onSelect={handleDrawerSelect}
+    />
     </View>
   );
 }
@@ -912,27 +862,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: qsSpacing.lg,
   },
 
-  // ── Watchlist sub-pills ──
-  watchlistPills: {
+  // ── Toolbar (list picker + action chips) ──
+  toolbarRow: {
     flexDirection: "row",
-    gap: qsSpacing.xs,
-    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: qsSpacing.sm,
   },
-  watchlistPill: {
-    borderRadius: qsRadius.pill,
+  listTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: qsColors.layer2,
-    paddingVertical: qsSpacing.xs,
+    borderRadius: qsRadius.md,
+    paddingVertical: 8,
     paddingHorizontal: qsSpacing.md,
+    flexShrink: 1,
   },
-  watchlistPillActive: {
+  listTriggerLabel: {
+    color: qsColors.textPrimary,
+    fontSize: 14,
+    fontWeight: qsTypography.weight.semi,
+    flexShrink: 1,
+  },
+  actionChipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  actionChip: {
+    borderRadius: qsRadius.md,
+    backgroundColor: qsColors.layer2,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  actionChipActive: {
     backgroundColor: qsColors.accent,
   },
-  watchlistPillText: {
+  actionChipText: {
     color: qsColors.textTertiary,
-    fontSize: 12,
-    fontWeight: qsTypography.weight.medium,
+    fontSize: 13,
+    fontWeight: qsTypography.weight.semi,
   },
-  watchlistPillTextActive: {
+  actionChipTextActive: {
     color: qsColors.textPrimary,
   },
 
@@ -1139,65 +1111,6 @@ const styles = StyleSheet.create({
   walletLabel: {
     color: qsColors.textSubtle,
     fontSize: 10,
-    fontWeight: qsTypography.weight.medium,
-  },
-
-  // ── Wallet activity filters ──
-  activityFilters: {
-    gap: qsSpacing.sm,
-  },
-  activitySearchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: qsSpacing.sm,
-    backgroundColor: qsColors.layer2,
-    borderRadius: qsRadius.md,
-    paddingHorizontal: qsSpacing.md,
-    paddingVertical: qsSpacing.xs,
-    height: 36,
-  },
-  activitySearchInput: {
-    flex: 1,
-    color: qsColors.textPrimary,
-    fontSize: 13,
-    fontWeight: qsTypography.weight.medium,
-    padding: 0,
-  },
-  filterChipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flexWrap: "wrap",
-  },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: qsRadius.pill,
-    backgroundColor: qsColors.layer2,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  filterChipActive: {
-    backgroundColor: qsColors.accent,
-  },
-  filterChipText: {
-    color: qsColors.textTertiary,
-    fontSize: 11,
-    fontWeight: qsTypography.weight.semi,
-  },
-  filterChipTextActive: {
-    color: qsColors.textPrimary,
-  },
-  filterDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: qsColors.borderDefault,
-    marginHorizontal: 2,
-  },
-  filterResultCount: {
-    color: qsColors.textSubtle,
-    fontSize: 11,
     fontWeight: qsTypography.weight.medium,
   },
 
