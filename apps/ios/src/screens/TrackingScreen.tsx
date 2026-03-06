@@ -28,8 +28,10 @@ import {
   type WalletWatchlist,
 } from "@/src/features/tracking/trackingService";
 import {
-  fetchTelegramEvents,
-  type TelegramEvent,
+  fetchTelegramChats,
+  fetchTelegramMessages,
+  type TelegramChat,
+  type TelegramMessage,
 } from "@/src/features/tracking/telegramEventsService";
 import {
   fetchTokenWatchlists,
@@ -156,7 +158,9 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   const [activityActionFilter, setActivityActionFilter] = useState<"all" | "Buy" | "Sell">("all");
 
   // ── Chats tab state ──
-  const [telegramEvents, setTelegramEvents] = useState<TelegramEvent[]>([]);
+  const [telegramChats, setTelegramChats] = useState<TelegramChat[]>([]);
+  const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
   // ── List picker drawer ──
   const [listDrawerVisible, setListDrawerVisible] = useState(false);
@@ -174,22 +178,15 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         subtitle: `${wl.tokens.length} token${wl.tokens.length !== 1 ? "s" : ""}`,
       }));
     }
-    // Derive unique chats from events
-    const chatMap = new Map<string, string>();
-    for (const e of telegramEvents) {
-      if (e.chatId && !chatMap.has(e.chatId)) {
-        chatMap.set(e.chatId, e.chatId);
-      }
-    }
-    return Array.from(chatMap, ([id, label]) => ({ id, label }));
-  }, [activeTab, walletWatchlists, tokenWatchlists, telegramEvents]);
+    return telegramChats.map((c) => ({ id: c.chatId, label: c.name }));
+  }, [activeTab, walletWatchlists, tokenWatchlists, telegramChats]);
 
   const activeListId =
     activeTab === "wallets"
       ? activeWalletWatchlistId
       : activeTab === "tokens"
         ? String(activeTokenWatchlistId)
-        : null;
+        : activeChatId;
 
   const activeListLabel = drawerItems.find((i) => i.id === activeListId)?.label ?? "Select list";
 
@@ -197,7 +194,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     (id: string) => {
       if (activeTab === "wallets") setActiveWalletWatchlistId(id);
       else if (activeTab === "tokens") setActiveTokenWatchlistId(Number(id));
-      // Chats tab: no active selection currently
+      else if (activeTab === "chats") setActiveChatId(id);
     },
     [activeTab]
   );
@@ -323,19 +320,29 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       setErrorText(null);
 
       try {
-        const events = await fetchTelegramEvents(rpcClient);
+        const chats = await fetchTelegramChats(rpcClient);
         if (requestId !== requestRef.current) return;
-        setTelegramEvents(events);
+        setTelegramChats(chats);
+
+        const chatId = activeChatId ?? chats[0]?.chatId ?? null;
+        if (chatId) {
+          setActiveChatId(chatId);
+          const msgs = await fetchTelegramMessages(rpcClient, chatId);
+          if (requestId !== requestRef.current) return;
+          setTelegramMessages(msgs);
+        } else {
+          setTelegramMessages([]);
+        }
       } catch (error) {
         if (requestId !== requestRef.current) return;
-        setErrorText(error instanceof Error ? error.message : "Failed to load chat events.");
+        setErrorText(error instanceof Error ? error.message : "Failed to load chat messages.");
       } finally {
         if (requestId !== requestRef.current) return;
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [rpcClient]
+    [rpcClient, activeChatId]
   );
 
   /* ═══ Tab change / load effect ═══ */
@@ -353,7 +360,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   useEffect(() => {
     void loadCurrentTab();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, activeWalletWatchlistId, activeTokenWatchlistId]);
+  }, [activeTab, activeWalletWatchlistId, activeTokenWatchlistId, activeChatId]);
 
   const handleOpenTokenDetail = useCallback(
     (tokenAddress: string, symbol?: string) => {
@@ -392,17 +399,8 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       return null;
     }
 
-    if (activeTab === "chats" && telegramEvents.length > 0) {
-      return (
-        <View style={styles.columnHeaders}>
-          <View style={styles.colHeaderLeft}>
-            <Text style={styles.colHeaderText}>Token</Text>
-          </View>
-          <View style={styles.colHeaderRight}>
-            <Text style={styles.colHeaderText}>Return</Text>
-          </View>
-        </View>
-      );
+    if (activeTab === "chats") {
+      return null;
     }
 
     return null;
@@ -477,12 +475,12 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
       );
     }
 
-    if (activeTab === "chats" && telegramEvents.length > 0) {
+    if (activeTab === "chats" && telegramMessages.length > 0) {
       return (
         <View style={styles.summaryRow}>
           <MessageCircle size={14} color={qsColors.textSubtle} />
           <Text style={styles.summaryText}>
-            {telegramEvents.length} recent event{telegramEvents.length !== 1 ? "s" : ""}
+            {telegramMessages.length} message{telegramMessages.length !== 1 ? "s" : ""}
           </Text>
         </View>
       );
@@ -547,7 +545,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
     }
 
     if (activeTab === "chats") {
-      if (telegramEvents.length === 0) {
+      if (telegramMessages.length === 0) {
         return (
           <EmptyState
             icon={MessageCircle}
@@ -566,7 +564,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   type ListItem =
     | { type: "token"; data: EnrichedWatchlistToken }
     | { type: "activity"; data: ActivityRow }
-    | { type: "chat"; data: TelegramEvent };
+    | { type: "chat"; data: TelegramMessage };
 
   // Apply wallet activity filters
   const filteredActivity = activity.filter((row) => {
@@ -580,7 +578,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   } else if (activeTab === "wallets") {
     listData = filteredActivity.map((a) => ({ type: "activity" as const, data: a }));
   } else {
-    listData = telegramEvents.map((e) => ({ type: "chat" as const, data: e }));
+    listData = telegramMessages.map((e) => ({ type: "chat" as const, data: e }));
   }
 
   const handleTabChange = (tab: TrackingTabId) => {
@@ -792,47 +790,35 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
           );
         }
 
-        /* ── Telegram chat event row ── */
-        const event = item.data;
-        const returnPositive = event.peakReturnPercent >= 0;
+        /* ── Telegram message row ── */
+        const msg = item.data;
+        const msgTypeLabel = msg.msgType === 1 ? "Token" : msg.msgType === 2 ? "Tweet" : "Text";
         return (
           <Pressable
             style={styles.rowItem}
-            onPress={() => handleOpenTokenDetail(event.mint, event.symbol)}
+            onPress={msg.tokenMint ? () => handleOpenTokenDetail(msg.tokenMint!) : undefined}
           >
             <View style={styles.rowMain}>
-              <TokenAvatar uri={event.imageUri} size={36} />
+              <View style={[styles.chatAvatarCircle, { backgroundColor: qsColors.layer3 }]}>
+                <MessageCircle size={16} color={qsColors.textTertiary} />
+              </View>
               <View style={styles.nameColumn}>
                 <Text numberOfLines={1} style={styles.tokenSymbol}>
-                  {event.symbol}
+                  {msg.username}
                 </Text>
-                <Text numberOfLines={1} style={styles.tokenName}>
-                  {event.eventType} · {formatAgeFromSeconds(event.timestamp)}
+                <Text numberOfLines={2} style={styles.tokenName}>
+                  {msg.body || "—"}
                 </Text>
               </View>
               <View style={styles.metricCol}>
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.changeValue,
-                    { color: returnPositive ? qsColors.buyGreen : qsColors.sellRed },
-                  ]}
-                >
-                  {formatPercent(event.peakReturnPercent)}
+                <Text numberOfLines={1} style={styles.metricSub}>
+                  {msgTypeLabel}
                 </Text>
                 <Text numberOfLines={1} style={styles.metricSub}>
-                  peak
+                  {formatAgeFromSeconds(msg.timestamp)}
                 </Text>
               </View>
             </View>
-            {event.chatId ? (
-              <View style={styles.rowFooter}>
-                <MessageCircle size={10} color={qsColors.textSubtle} />
-                <Text numberOfLines={1} style={styles.walletLabel}>
-                  {event.chatId}
-                </Text>
-              </View>
-            ) : null}
           </Pressable>
         );
       }}
@@ -1051,6 +1037,13 @@ const styles = StyleSheet.create({
   nameColumn: {
     flex: 1,
     gap: 1,
+  },
+  chatAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
   nameRow: {
     flexDirection: "row",
