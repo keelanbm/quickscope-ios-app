@@ -11,17 +11,34 @@
         "simulator": false
       }
     },
+    "development-simulator": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
     "preview": {
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://api.quickscope.gg",
         "EXPO_PUBLIC_WS_HOST": "wss://api.quickscope.gg",
         "EXPO_PUBLIC_SOLANA_RPC_ENDPOINT": "https://attentive-muddy-hill.solana-mainnet.quiknode.pro/5a7216128203735da3e15af0d63bc96fcee73218",
-        "EXPO_PUBLIC_PHANTOM_APP_ID": "f5173baa-c0dc-4189-b9d9-4dc3592f85ca"
+        "EXPO_PUBLIC_PRIVY_APP_ID": "cmip3swbs0061l50d06fdtjhk",
+        "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6TP7bXRg8BP5johqPKj9oN4ybb8h5yXsRY4JM9QXdbM",
+        "EXPO_PUBLIC_ENABLE_SWAP_EXECUTION": "true"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_HOST": "https://api.quickscope.gg",
+        "EXPO_PUBLIC_WS_HOST": "wss://api.quickscope.gg",
+        "EXPO_PUBLIC_SOLANA_RPC_ENDPOINT": "https://attentive-muddy-hill.solana-mainnet.quiknode.pro/5a7216128203735da3e15af0d63bc96fcee73218",
+        "EXPO_PUBLIC_PRIVY_APP_ID": "cmip3swbs0061l50d06fdtjhk",
+        "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6TP7bXRg8BP5johqPKj9oN4ybb8h5yXsRY4JM9QXdbM",
+        "EXPO_PUBLIC_ENABLE_SWAP_EXECUTION": "true"
+      }
     }
   }
 }
