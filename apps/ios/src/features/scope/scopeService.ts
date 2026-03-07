@@ -124,11 +124,28 @@ type ScopeTokenRow = {
   exchange?: string;
   mint_ts: number;
   market_cap_sol: number;
-  one_hour_tx_count: number;
-  one_hour_volume_sol: number;
-  one_hour_change: number;
-  telegram_mentions_1h: number;
+  sol_price_usd: number;
+  // Memescope volume/tx fields
+  total_tx: number;
+  sol_volume_cumulative: number;
+  day_volume_quote: number;
+  quote_price_usd: number;
+  last_price: number;
+  // May still come from regular endpoint
+  one_hour_tx_count?: number;
+  one_hour_volume_sol?: number;
+  one_hour_change?: number;
+  telegram_mentions_1h?: number;
   decimals?: number;
+  // Holder analytics (from filterTokensTableMemescope)
+  holders?: number;
+  dev_holdings_proportion?: number;
+  top_25_holdings_proportion?: number;
+  bonding_curve_progress?: number;
+  bot_holders?: number;
+  sniper_holders?: number;
+  bundler_holders?: number;
+  insider_count?: number;
 };
 
 type ScopeTableResponse = {
@@ -152,6 +169,13 @@ export type ScopeToken = {
   oneHourChangePercent: number;
   scanMentionsOneHour: number;
   tokenDecimals?: number;
+  // Holder analytics
+  holderCount?: number;
+  devHoldingsPct?: number;
+  top25Pct?: number;
+  bondingCurvePct?: number;
+  botCount?: number;
+  insiderCount?: number;
 };
 
 type ScopeResult = {
@@ -263,7 +287,7 @@ export async function fetchScopeTokens(
   const numeric_filters = buildNumericFilters(filters);
   const string_filters = buildStringFilters(config.defaultStringFilters, filters);
 
-  const response = await rpcClient.call<ScopeTableResponse>("public/filterTokensTable", [
+  const response = await rpcClient.call<ScopeTableResponse>("public/filterTokensTableMemescope", [
     {
       filter: {
         sort_column: config.sortColumn,
@@ -275,13 +299,20 @@ export async function fetchScopeTokens(
     },
   ]);
 
-  const solPriceUsd = toNumber(response.sol_price_usd);
+  // Memescope endpoint includes sol_price_usd per row; fall back to response-level
+  const fallbackSolPrice = toNumber(response.sol_price_usd);
 
+  const seen = new Set<string>();
   return {
     tab,
     fetchedAtMs: Date.now(),
-    rows: (response.table?.rows ?? []).map((row) => {
+    rows: (response.table?.rows ?? []).filter((row) => {
+      if (seen.has(row.mint)) return false;
+      seen.add(row.mint);
+      return true;
+    }).map((row) => {
       const tokenDecimals = toOptionalInteger(row.decimals);
+      const solPriceUsd = toNumber(row.sol_price_usd) || fallbackSolPrice;
 
       return {
         mint: row.mint,
@@ -292,11 +323,18 @@ export async function fetchScopeTokens(
         exchange: row.exchange,
         mintedAtSeconds: toNumber(row.mint_ts),
         marketCapUsd: toNumber(row.market_cap_sol) * solPriceUsd,
-        oneHourTxCount: toNumber(row.one_hour_tx_count),
-        oneHourVolumeUsd: toNumber(row.one_hour_volume_sol) * solPriceUsd,
+        oneHourTxCount: toNumber(row.total_tx) || toNumber(row.one_hour_tx_count),
+        oneHourVolumeUsd: (toNumber(row.sol_volume_cumulative) * solPriceUsd) || (toNumber(row.one_hour_volume_sol) * solPriceUsd),
         oneHourChangePercent: toNumber(row.one_hour_change) * 100,
         scanMentionsOneHour: toNumber(row.telegram_mentions_1h),
         ...(tokenDecimals !== undefined ? { tokenDecimals } : null),
+        // Holder analytics from memescope endpoint
+        holderCount: toOptionalInteger(row.holders),
+        devHoldingsPct: row.dev_holdings_proportion != null ? toNumber(row.dev_holdings_proportion) : undefined,
+        top25Pct: row.top_25_holdings_proportion != null ? toNumber(row.top_25_holdings_proportion) : undefined,
+        bondingCurvePct: row.bonding_curve_progress != null ? toNumber(row.bonding_curve_progress) : undefined,
+        botCount: toOptionalInteger(row.bot_holders),
+        insiderCount: toOptionalInteger(row.bundler_holders),
       };
     }),
   };

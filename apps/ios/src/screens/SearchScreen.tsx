@@ -34,6 +34,7 @@ import {
 } from "react-native";
 
 import { toast } from "@/src/lib/toast";
+import { TokenAvatar } from "@/src/ui/TokenAvatar";
 import {
   addRecentSearch,
   clearRecentSearches,
@@ -62,7 +63,6 @@ type SearchScreenProps = {
 // ────────────────────────────────────────────────────────────────
 //  Constants
 // ────────────────────────────────────────────────────────────────
-const fallbackTokenImage = "https://app.quickscope.gg/favicon.ico";
 const SOLANA_ADDRESS_MIN_LENGTH = 32;
 const TRENDING_LIMIT = 8;
 const RESULT_LIMIT = 80;
@@ -71,20 +71,6 @@ const SKELETON_COUNT = 6;
 // ────────────────────────────────────────────────────────────────
 //  Helpers (pure)
 // ────────────────────────────────────────────────────────────────
-function launchpadLabel(platform?: string, exchange?: string): string | null {
-  const raw = (platform || exchange || "").toLowerCase();
-  if (!raw) return null;
-  if (raw.includes("pump")) return "Pump";
-  if (raw.includes("meteora")) return "Met";
-  if (raw.includes("raydium")) return "Ray";
-  if (raw.includes("orca")) return "Orca";
-  if (raw.includes("bonk")) return "Bonk";
-  if (raw.includes("believe")) return "Blv";
-  if (raw.includes("moonshot")) return "Moon";
-  if (raw.includes("jupiter") || raw.includes("jup")) return "Jup";
-  return raw.charAt(0).toUpperCase() + raw.slice(1, 4);
-}
-
 function initialQueryFromParams(params?: TradeRouteParams): string {
   if (!params) return "";
   return params.tokenAddress || params.inputMint || params.outputMint || "";
@@ -338,7 +324,6 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
   // ── Token row renderer (shared between trending & results) ──
   const renderTokenRow = useCallback(
     (item: SearchToken) => {
-      const badge = launchpadLabel(item.platform, item.exchange);
       const isPositive = item.oneHourChangePercent >= 0;
 
       return (
@@ -349,17 +334,7 @@ export function SearchScreen({ rpcClient, params }: SearchScreenProps) {
         >
           <View style={styles.rowMain}>
             {/* Token image with launchpad badge */}
-            <View style={styles.imageWrap}>
-              <Image
-                source={{ uri: item.imageUri || fallbackTokenImage }}
-                style={styles.tokenImage}
-              />
-              {badge ? (
-                <View style={styles.launchBadge}>
-                  <Text style={styles.launchBadgeText}>{badge}</Text>
-                </View>
-              ) : null}
-            </View>
+            <TokenAvatar uri={item.imageUri} size={40} platform={item.platform} />
 
             {/* Name column with copy */}
             <View style={styles.nameColumn}>
@@ -827,31 +802,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: qsSpacing.sm,
-  },
-  imageWrap: {
-    width: 40,
-    height: 40,
-    position: "relative",
-  },
-  tokenImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: qsColors.layer3,
-  },
-  launchBadge: {
-    position: "absolute",
-    top: -3,
-    left: -5,
-    backgroundColor: qsColors.layer1,
-    borderRadius: qsRadius.xs,
-    paddingHorizontal: qsSpacing.xxs,
-    paddingVertical: 1,
-  },
-  launchBadgeText: {
-    fontSize: 8,
-    fontWeight: qsTypography.weight.bold,
-    color: qsColors.textSecondary,
   },
   nameColumn: {
     flex: 1,
