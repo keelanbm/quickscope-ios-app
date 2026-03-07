@@ -1,6 +1,13 @@
 import React, { useCallback, useMemo, useState } from "react";
 
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -15,7 +22,7 @@ import {
   type ScopeFilters,
 } from "@/src/features/scope/scopeService";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Check, X } from "@/src/ui/icons";
+import { Check, RefreshCw, X } from "@/src/ui/icons";
 
 // ── Platform options ──
 
@@ -35,69 +42,20 @@ const PLATFORM_OPTIONS: PlatformOption[] = [
   { code: EXCHANGES.PumpSwap, label: "PumpSwap" },
 ];
 
-// ── Preset definitions ──
+// ── Category definitions ──
 
-type FilterPreset = { label: string; min?: number; max?: number };
+type FilterCategoryId = "launchpads" | "metrics" | "audit" | "socials";
 
-const MCAP_PRESETS: FilterPreset[] = [
-  { label: "<$10K", max: 10_000 },
-  { label: "$10K–$100K", min: 10_000, max: 100_000 },
-  { label: "$100K–$1M", min: 100_000, max: 1_000_000 },
-  { label: "$1M+", min: 1_000_000 },
-];
+type FilterCategoryDef = {
+  id: FilterCategoryId;
+  label: string;
+};
 
-const VOLUME_PRESETS: FilterPreset[] = [
-  { label: ">$1K", min: 1_000 },
-  { label: ">$10K", min: 10_000 },
-  { label: ">$50K", min: 50_000 },
-  { label: ">$100K", min: 100_000 },
-];
-
-const AGE_PRESETS: FilterPreset[] = [
-  { label: "<5m", max: 5 * 60 },
-  { label: "<30m", max: 30 * 60 },
-  { label: "<1h", max: 3600 },
-  { label: "<6h", max: 6 * 3600 },
-  { label: "<24h", max: 24 * 3600 },
-];
-
-const TX_PRESETS: FilterPreset[] = [
-  { label: ">10", min: 10 },
-  { label: ">50", min: 50 },
-  { label: ">100", min: 100 },
-  { label: ">500", min: 500 },
-];
-
-const HOLDER_PRESETS: FilterPreset[] = [
-  { label: ">50", min: 50 },
-  { label: ">100", min: 100 },
-  { label: ">500", min: 500 },
-  { label: ">1K", min: 1_000 },
-];
-
-const TOP25_PRESETS: FilterPreset[] = [
-  { label: "<25%", max: 0.25 },
-  { label: "<50%", max: 0.5 },
-  { label: "<75%", max: 0.75 },
-];
-
-const DEV_PRESETS: FilterPreset[] = [
-  { label: "<5%", max: 0.05 },
-  { label: "<10%", max: 0.1 },
-  { label: "<25%", max: 0.25 },
-];
-
-const BONDING_CURVE_PRESETS: FilterPreset[] = [
-  { label: "<25%", max: 0.25 },
-  { label: "25–50%", min: 0.25, max: 0.5 },
-  { label: "50–75%", min: 0.5, max: 0.75 },
-  { label: ">75%", min: 0.75 },
-];
-
-const TWITTER_FOLLOWER_PRESETS: FilterPreset[] = [
-  { label: ">100", min: 100 },
-  { label: ">1K", min: 1_000 },
-  { label: ">10K", min: 10_000 },
+const FILTER_CATEGORIES: FilterCategoryDef[] = [
+  { id: "launchpads", label: "Launchpads" },
+  { id: "audit", label: "Audit" },
+  { id: "metrics", label: "$ Metrics" },
+  { id: "socials", label: "Socials" },
 ];
 
 // ── Helpers ──
@@ -116,6 +74,34 @@ export function getExchangeLabel(filters: ScopeFilters): string {
   return `${filters.exchanges.length} Platforms`;
 }
 
+function countCategoryFilters(filters: ScopeFilters, category: FilterCategoryId): number {
+  let count = 0;
+  switch (category) {
+    case "launchpads":
+      if (filters.exchanges && filters.exchanges.length > 0) count++;
+      break;
+    case "metrics":
+      if (filters.minMarketCapSol !== undefined || filters.maxMarketCapSol !== undefined) count++;
+      if (filters.minVolumeSol !== undefined || filters.maxVolumeSol !== undefined) count++;
+      if (filters.minAgeSec !== undefined || filters.maxAgeSec !== undefined) count++;
+      if (filters.minTxCount !== undefined || filters.maxTxCount !== undefined) count++;
+      if (filters.minHolderCount !== undefined || filters.maxHolderCount !== undefined) count++;
+      break;
+    case "audit":
+      if (filters.minTop25Pct !== undefined || filters.maxTop25Pct !== undefined) count++;
+      if (filters.minDevPct !== undefined || filters.maxDevPct !== undefined) count++;
+      if (filters.minBondingCurvePct !== undefined || filters.maxBondingCurvePct !== undefined) count++;
+      break;
+    case "socials":
+      if (filters.minTwitterFollowers !== undefined || filters.maxTwitterFollowers !== undefined) count++;
+      if (filters.hasTwitter) count++;
+      if (filters.hasTelegram) count++;
+      if (filters.hasWebsite) count++;
+      break;
+  }
+  return count;
+}
+
 // ── Component ──
 
 type TokenFilterSheetProps = {
@@ -126,12 +112,14 @@ type TokenFilterSheetProps = {
 
 export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterSheetProps) {
   const [draft, setDraft] = useState<ScopeFilters>({});
-  const snapPoints = useMemo(() => ["65%", "90%"], []);
+  const [activeCategory, setActiveCategory] = useState<FilterCategoryId>("launchpads");
+  const snapPoints = useMemo(() => ["75%"], []);
 
   const handleSheetChange = useCallback(
     (index: number) => {
       if (index >= 0) {
         setDraft({ ...filters });
+        setActiveCategory("launchpads");
       }
     },
     [filters],
@@ -145,8 +133,44 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
 
   const handleReset = useCallback(() => {
     haptics.light();
-    setDraft({});
-  }, []);
+    // Reset only current category
+    setDraft((prev) => {
+      const next = { ...prev };
+      switch (activeCategory) {
+        case "launchpads":
+          next.exchanges = undefined;
+          break;
+        case "metrics":
+          next.minMarketCapSol = undefined;
+          next.maxMarketCapSol = undefined;
+          next.minVolumeSol = undefined;
+          next.maxVolumeSol = undefined;
+          next.minAgeSec = undefined;
+          next.maxAgeSec = undefined;
+          next.minTxCount = undefined;
+          next.maxTxCount = undefined;
+          next.minHolderCount = undefined;
+          next.maxHolderCount = undefined;
+          break;
+        case "audit":
+          next.minTop25Pct = undefined;
+          next.maxTop25Pct = undefined;
+          next.minDevPct = undefined;
+          next.maxDevPct = undefined;
+          next.minBondingCurvePct = undefined;
+          next.maxBondingCurvePct = undefined;
+          break;
+        case "socials":
+          next.minTwitterFollowers = undefined;
+          next.maxTwitterFollowers = undefined;
+          next.hasTwitter = undefined;
+          next.hasTelegram = undefined;
+          next.hasWebsite = undefined;
+          break;
+      }
+      return next;
+    });
+  }, [activeCategory]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -166,12 +190,23 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
     });
   }, []);
 
-  const setPreset = useCallback(
-    (minKey: keyof ScopeFilters, maxKey: keyof ScopeFilters) =>
-      (preset: FilterPreset | null) => {
-        haptics.light();
-        setDraft((prev) => ({ ...prev, [minKey]: preset?.min, [maxKey]: preset?.max }));
-      },
+  const toggleAllExchanges = useCallback(() => {
+    haptics.light();
+    setDraft((prev) => {
+      const allSelected = prev.exchanges === undefined || prev.exchanges.length === 0;
+      // If currently showing all (no filter), select none. If some selected, select all (clear filter).
+      if (!allSelected) {
+        return { ...prev, exchanges: undefined };
+      }
+      // "Unselect All" = empty array = filter to nothing
+      return { ...prev, exchanges: [] };
+    });
+  }, []);
+
+  const setNumericFilter = useCallback(
+    (minKey: keyof ScopeFilters, maxKey: keyof ScopeFilters, min: number | undefined, max: number | undefined) => {
+      setDraft((prev) => ({ ...prev, [minKey]: min, [maxKey]: max }));
+    },
     [],
   );
 
@@ -180,15 +215,23 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
     setDraft((prev) => ({ ...prev, [key]: prev[key] ? undefined : true }));
   }, []);
 
-  const setMcap = setPreset("minMarketCapSol", "maxMarketCapSol");
-  const setVolume = setPreset("minVolumeSol", "maxVolumeSol");
-  const setAge = setPreset("minAgeSec", "maxAgeSec");
-  const setTx = setPreset("minTxCount", "maxTxCount");
-  const setHolder = setPreset("minHolderCount", "maxHolderCount");
-  const setTop25 = setPreset("minTop25Pct", "maxTop25Pct");
-  const setDev = setPreset("minDevPct", "maxDevPct");
-  const setBondingCurve = setPreset("minBondingCurvePct", "maxBondingCurvePct");
-  const setTwitterFollowers = setPreset("minTwitterFollowers", "maxTwitterFollowers");
+  // Category badge counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<FilterCategoryId, number> = {
+      launchpads: 0,
+      metrics: 0,
+      audit: 0,
+      socials: 0,
+    };
+    for (const cat of FILTER_CATEGORIES) {
+      counts[cat.id] = countCategoryFilters(draft, cat.id);
+    }
+    return counts;
+  }, [draft]);
+
+  const totalActive = Object.values(categoryCounts).reduce((a, b) => a + b, 0);
+
+  const allExchangesSelected = draft.exchanges === undefined || draft.exchanges.length === 0;
 
   return (
     <BottomSheet
@@ -201,55 +244,170 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
       handleIndicatorStyle={styles.handleIndicator}
       onChange={handleSheetChange}
     >
-      <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
-        {/* Header */}
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Filters</Text>
-          <View style={styles.sheetHeaderActions}>
-            <Pressable onPress={handleReset} style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}>
-              <Text style={styles.resetText}>Reset All</Text>
-            </Pressable>
-            <Pressable onPress={() => sheetRef.current?.close()} hitSlop={8}>
-              <X size={20} color={qsColors.textSecondary} />
-            </Pressable>
-          </View>
-        </View>
-
-        <FilterSection label="Platform">
-          {PLATFORM_OPTIONS.map((opt) => (
-            <FilterChip
-              key={opt.code}
-              label={opt.label}
-              active={draft.exchanges?.includes(opt.code) ?? false}
-              onPress={() => toggleExchange(opt.code)}
-            />
-          ))}
-        </FilterSection>
-
-        <PresetSection label="Market Cap" presets={MCAP_PRESETS} currentMin={draft.minMarketCapSol} currentMax={draft.maxMarketCapSol} onSelect={setMcap} />
-        <PresetSection label="Volume (1h)" presets={VOLUME_PRESETS} currentMin={draft.minVolumeSol} currentMax={draft.maxVolumeSol} onSelect={setVolume} />
-        <PresetSection label="Age" presets={AGE_PRESETS} currentMin={draft.minAgeSec} currentMax={draft.maxAgeSec} onSelect={setAge} />
-        <PresetSection label="Transactions (1h)" presets={TX_PRESETS} currentMin={draft.minTxCount} currentMax={draft.maxTxCount} onSelect={setTx} />
-        <PresetSection label="Holders" presets={HOLDER_PRESETS} currentMin={draft.minHolderCount} currentMax={draft.maxHolderCount} onSelect={setHolder} />
-        <PresetSection label="Top 25 Holdings" presets={TOP25_PRESETS} currentMin={draft.minTop25Pct} currentMax={draft.maxTop25Pct} onSelect={setTop25} />
-        <PresetSection label="Dev Holdings" presets={DEV_PRESETS} currentMin={draft.minDevPct} currentMax={draft.maxDevPct} onSelect={setDev} />
-        <PresetSection label="Bonding Curve" presets={BONDING_CURVE_PRESETS} currentMin={draft.minBondingCurvePct} currentMax={draft.maxBondingCurvePct} onSelect={setBondingCurve} />
-        <PresetSection label="Twitter Followers" presets={TWITTER_FOLLOWER_PRESETS} currentMin={draft.minTwitterFollowers} currentMax={draft.maxTwitterFollowers} onSelect={setTwitterFollowers} />
-
-        <View style={styles.filterSection}>
-          <Text style={styles.filterSectionLabel}>Socials</Text>
-          <BoolToggle label="Has Twitter" value={draft.hasTwitter} onToggle={() => toggleBool("hasTwitter")} />
-          <BoolToggle label="Has Telegram" value={draft.hasTelegram} onToggle={() => toggleBool("hasTelegram")} />
-          <BoolToggle label="Has Website" value={draft.hasWebsite} onToggle={() => toggleBool("hasWebsite")} />
-        </View>
-
-        <Pressable
-          onPress={handleApply}
-          style={({ pressed }) => [styles.applyButton, { opacity: pressed ? 0.8 : 1 }]}
-        >
-          <Check size={16} color={qsColors.layer0} />
-          <Text style={styles.applyButtonText}>Apply Filters</Text>
+      {/* Header */}
+      <View style={styles.sheetHeader}>
+        <Text style={styles.sheetTitle}>Filters</Text>
+        <Pressable onPress={() => sheetRef.current?.close()} hitSlop={8}>
+          <X size={20} color={qsColors.textSecondary} />
         </Pressable>
+      </View>
+
+      {/* Category tabs */}
+      <View style={styles.categoryRow}>
+        {FILTER_CATEGORIES.map((cat) => {
+          const isActive = activeCategory === cat.id;
+          const count = categoryCounts[cat.id];
+          return (
+            <Pressable
+              key={`cat-${cat.id}`}
+              onPress={() => {
+                haptics.selection();
+                setActiveCategory(cat.id);
+              }}
+              style={[styles.categoryTab, isActive && styles.categoryTabActive]}
+            >
+              <Text style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}>
+                {cat.label}
+              </Text>
+              {count > 0 ? (
+                <View style={[styles.categoryBadge, isActive && styles.categoryBadgeActive]}>
+                  <Text style={[styles.categoryBadgeText, isActive && styles.categoryBadgeTextActive]}>
+                    {count}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Category content */}
+      <BottomSheetScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
+        {activeCategory === "launchpads" && (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionLabel}>Launchpads</Text>
+              <Pressable onPress={toggleAllExchanges} hitSlop={8}>
+                <Text style={styles.selectAllText}>
+                  {allExchangesSelected ? "Unselect All" : "Select All"}
+                </Text>
+              </Pressable>
+            </View>
+            <View style={styles.platformGrid}>
+              {PLATFORM_OPTIONS.map((opt) => {
+                const isSelected = allExchangesSelected || (draft.exchanges?.includes(opt.code) ?? false);
+                return (
+                  <Pressable
+                    key={`plat-${opt.code}`}
+                    onPress={() => toggleExchange(opt.code)}
+                    style={[styles.platformChip, isSelected && styles.platformChipActive]}
+                  >
+                    <Text style={[styles.platformChipText, isSelected && styles.platformChipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {activeCategory === "metrics" && (
+          <View style={styles.sectionGap}>
+            <NumericFilterRow
+              label="Market Cap"
+              unit="USD"
+              currentMin={draft.minMarketCapSol}
+              currentMax={draft.maxMarketCapSol}
+              onChange={(min, max) => setNumericFilter("minMarketCapSol", "maxMarketCapSol", min, max)}
+            />
+            <NumericFilterRow
+              label="Volume (1h)"
+              unit="USD"
+              currentMin={draft.minVolumeSol}
+              currentMax={draft.maxVolumeSol}
+              onChange={(min, max) => setNumericFilter("minVolumeSol", "maxVolumeSol", min, max)}
+            />
+            <NumericFilterRow
+              label="Age"
+              unit="sec"
+              currentMin={draft.minAgeSec}
+              currentMax={draft.maxAgeSec}
+              onChange={(min, max) => setNumericFilter("minAgeSec", "maxAgeSec", min, max)}
+            />
+            <NumericFilterRow
+              label="Transactions (1h)"
+              currentMin={draft.minTxCount}
+              currentMax={draft.maxTxCount}
+              onChange={(min, max) => setNumericFilter("minTxCount", "maxTxCount", min, max)}
+            />
+            <NumericFilterRow
+              label="Holders"
+              currentMin={draft.minHolderCount}
+              currentMax={draft.maxHolderCount}
+              onChange={(min, max) => setNumericFilter("minHolderCount", "maxHolderCount", min, max)}
+            />
+          </View>
+        )}
+
+        {activeCategory === "audit" && (
+          <View style={styles.sectionGap}>
+            <NumericFilterRow
+              label="Top 25 Holdings"
+              unit="%"
+              currentMin={draft.minTop25Pct}
+              currentMax={draft.maxTop25Pct}
+              onChange={(min, max) => setNumericFilter("minTop25Pct", "maxTop25Pct", min, max)}
+            />
+            <NumericFilterRow
+              label="Dev Holdings"
+              unit="%"
+              currentMin={draft.minDevPct}
+              currentMax={draft.maxDevPct}
+              onChange={(min, max) => setNumericFilter("minDevPct", "maxDevPct", min, max)}
+            />
+            <NumericFilterRow
+              label="Bonding Curve"
+              unit="%"
+              currentMin={draft.minBondingCurvePct}
+              currentMax={draft.maxBondingCurvePct}
+              onChange={(min, max) => setNumericFilter("minBondingCurvePct", "maxBondingCurvePct", min, max)}
+            />
+          </View>
+        )}
+
+        {activeCategory === "socials" && (
+          <View style={styles.sectionGap}>
+            <NumericFilterRow
+              label="Twitter Followers"
+              currentMin={draft.minTwitterFollowers}
+              currentMax={draft.maxTwitterFollowers}
+              onChange={(min, max) => setNumericFilter("minTwitterFollowers", "maxTwitterFollowers", min, max)}
+            />
+            <BoolToggle label="Has Twitter" value={draft.hasTwitter} onToggle={() => toggleBool("hasTwitter")} />
+            <BoolToggle label="Has Telegram" value={draft.hasTelegram} onToggle={() => toggleBool("hasTelegram")} />
+            <BoolToggle label="Has Website" value={draft.hasWebsite} onToggle={() => toggleBool("hasWebsite")} />
+          </View>
+        )}
+
+        {/* Footer buttons — inline */}
+        <View style={styles.footer}>
+          <Pressable
+            onPress={handleReset}
+            style={({ pressed }) => [styles.resetButton, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <RefreshCw size={14} color={qsColors.textSecondary} />
+            <Text style={styles.resetButtonText}>Reset</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleApply}
+            style={({ pressed }) => [styles.applyButton, { opacity: pressed ? 0.8 : 1 }]}
+          >
+            <Text style={styles.applyButtonText}>
+              Apply All{totalActive > 0 ? ` (${totalActive})` : ""}
+            </Text>
+          </Pressable>
+        </View>
       </BottomSheetScrollView>
     </BottomSheet>
   );
@@ -257,57 +415,63 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
 
 // ── Sub-components ──
 
-function FilterSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.filterSection}>
-      <Text style={styles.filterSectionLabel}>{label}</Text>
-      <View style={styles.chipRow}>{children}</View>
-    </View>
-  );
-}
-
-function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.filterChip, active && styles.filterChipActive]}>
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function PresetSection({
+function NumericFilterRow({
   label,
-  presets,
+  unit,
   currentMin,
   currentMax,
-  onSelect,
+  onChange,
 }: {
   label: string;
-  presets: FilterPreset[];
+  unit?: string;
   currentMin?: number;
   currentMax?: number;
-  onSelect: (preset: FilterPreset | null) => void;
+  onChange: (min: number | undefined, max: number | undefined) => void;
 }) {
+  const hasActive = currentMin !== undefined || currentMax !== undefined;
+
+  const parseNum = (text: string): number | undefined => {
+    const n = Number(text.replace(/,/g, ""));
+    return Number.isNaN(n) || text.trim() === "" ? undefined : n;
+  };
+
   return (
-    <FilterSection label={label}>
-      {presets.map((preset) => {
-        const isActive = currentMin === preset.min && currentMax === preset.max;
-        return (
-          <FilterChip
-            key={preset.label}
-            label={preset.label}
-            active={isActive}
-            onPress={() => onSelect(isActive ? null : preset)}
+    <View style={styles.numericSection}>
+      <Text style={[styles.numericLabel, hasActive && styles.numericLabelActive]}>{label}</Text>
+      <View style={styles.numericInputRow}>
+        <View style={styles.numericInputWrap}>
+          <TextInput
+            style={styles.numericInput}
+            placeholder="Min"
+            placeholderTextColor={qsColors.textSubtle}
+            keyboardType="numeric"
+            returnKeyType="done"
+            value={currentMin != null ? String(currentMin) : ""}
+            onChangeText={(text) => onChange(parseNum(text), currentMax)}
           />
-        );
-      })}
-    </FilterSection>
+          {unit ? <Text style={styles.numericUnit}>{unit}</Text> : null}
+        </View>
+        <View style={styles.numericInputWrap}>
+          <TextInput
+            style={styles.numericInput}
+            placeholder="Max"
+            placeholderTextColor={qsColors.textSubtle}
+            keyboardType="numeric"
+            returnKeyType="done"
+            value={currentMax != null ? String(currentMax) : ""}
+            onChangeText={(text) => onChange(currentMin, parseNum(text))}
+          />
+          {unit ? <Text style={styles.numericUnit}>{unit}</Text> : null}
+        </View>
+      </View>
+    </View>
   );
 }
 
 function BoolToggle({ label, value, onToggle }: { label: string; value?: boolean; onToggle: () => void }) {
   return (
     <Pressable onPress={onToggle} style={styles.boolRow}>
-      <Text style={styles.boolLabel}>{label}</Text>
+      <Text style={[styles.boolLabel, value && styles.boolLabelActive]}>{label}</Text>
       <Switch
         value={Boolean(value)}
         onValueChange={onToggle}
@@ -332,90 +496,215 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
   },
-  sheetContent: {
-    paddingHorizontal: qsSpacing.lg,
-    paddingBottom: qsSpacing.xxxl,
-  },
+
+  // Header
   sheetHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: qsSpacing.xl,
+    paddingHorizontal: qsSpacing.lg,
+    paddingBottom: qsSpacing.sm,
   },
   sheetTitle: {
     fontSize: qsTypography.size.lg,
     fontWeight: qsTypography.weight.bold,
     color: qsColors.textPrimary,
   },
-  sheetHeaderActions: {
+
+  // Category tabs
+  categoryRow: {
+    flexDirection: "row",
+    gap: qsSpacing.xs,
+    paddingHorizontal: qsSpacing.lg,
+    paddingBottom: qsSpacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: qsColors.borderDefault,
+  },
+  categoryTab: {
     flexDirection: "row",
     alignItems: "center",
-    gap: qsSpacing.md,
+    gap: qsSpacing.xs,
+    paddingHorizontal: qsSpacing.md,
+    paddingVertical: qsSpacing.xs,
+    borderRadius: qsRadius.md,
   },
-  resetText: {
-    fontSize: qsTypography.size.xs,
-    fontWeight: qsTypography.weight.semi,
-    color: qsColors.accent,
+  categoryTabActive: {
+    backgroundColor: qsColors.layer3,
   },
-  filterSection: {
-    marginBottom: qsSpacing.xl,
-  },
-  filterSectionLabel: {
+  categoryTabText: {
     fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.semi,
     color: qsColors.textSecondary,
-    marginBottom: qsSpacing.sm,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
-  chipRow: {
+  categoryTabTextActive: {
+    color: qsColors.textPrimary,
+  },
+  categoryBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: qsColors.layer3,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: qsSpacing.xxs,
+  },
+  categoryBadgeActive: {
+    backgroundColor: qsColors.accent,
+  },
+  categoryBadgeText: {
+    fontSize: qsTypography.size.xxxs,
+    fontWeight: qsTypography.weight.bold,
+    color: qsColors.textSecondary,
+  },
+  categoryBadgeTextActive: {
+    color: qsColors.layer0,
+  },
+
+  // Content area
+  sheetContent: {
+    paddingHorizontal: qsSpacing.lg,
+    paddingTop: qsSpacing.md,
+    paddingBottom: 100, // clear tab bar
+  },
+
+  // Section header with Select All
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: qsSpacing.sm,
+  },
+  sectionLabel: {
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textSecondary,
+  },
+  selectAllText: {
+    fontSize: qsTypography.size.xxs,
+    color: qsColors.textTertiary,
+  },
+
+  // Platform grid — 3 columns
+  platformGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: qsSpacing.sm,
   },
-  filterChip: {
-    paddingHorizontal: qsSpacing.md,
+  platformChip: {
+    width: "31%",
     paddingVertical: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.sm,
     borderRadius: qsRadius.md,
     borderWidth: 1,
     borderColor: qsColors.borderDefault,
     backgroundColor: qsColors.layer2,
+    alignItems: "center",
   },
-  filterChipActive: {
+  platformChipActive: {
     borderColor: qsColors.accent,
     backgroundColor: "rgba(119, 102, 247, 0.1)",
   },
-  filterChipText: {
+  platformChipText: {
+    fontSize: qsTypography.size.xxs,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textTertiary,
+  },
+  platformChipTextActive: {
+    color: qsColors.accent,
+  },
+
+  // Numeric filter sections
+  sectionGap: {
+    gap: qsSpacing.lg,
+  },
+  numericSection: {
+    gap: qsSpacing.xxs,
+  },
+  numericLabel: {
     fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.semi,
     color: qsColors.textSecondary,
   },
-  filterChipTextActive: {
-    color: qsColors.accent,
+  numericLabelActive: {
+    color: qsColors.textPrimary,
   },
+  numericInputRow: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+  },
+  numericInputWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: qsRadius.sm,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    backgroundColor: qsColors.layer2,
+    paddingRight: qsSpacing.sm,
+  },
+  numericInput: {
+    flex: 1,
+    height: 36,
+    paddingHorizontal: qsSpacing.sm,
+    fontSize: qsTypography.size.xs,
+    color: qsColors.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  numericUnit: {
+    fontSize: qsTypography.size.xxxs,
+    color: qsColors.textTertiary,
+    fontWeight: qsTypography.weight.semi,
+  },
+
+  // Bool toggles
   boolRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: qsSpacing.sm,
+    paddingVertical: qsSpacing.xs,
   },
   boolLabel: {
-    fontSize: qsTypography.size.sm,
-    fontWeight: qsTypography.weight.medium,
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.semi,
     color: qsColors.textSecondary,
+  },
+  boolLabelActive: {
+    color: qsColors.textPrimary,
   },
   boolSwitch: {
     transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
   },
+
+  // Sticky footer
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.md,
+    marginTop: qsSpacing.xl,
+    paddingTop: qsSpacing.md,
+    borderTopWidth: 1,
+    borderTopColor: qsColors.borderDefault,
+  },
+  resetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.xs,
+    paddingVertical: qsSpacing.sm,
+    paddingHorizontal: qsSpacing.md,
+  },
+  resetButtonText: {
+    fontSize: qsTypography.size.sm,
+    fontWeight: qsTypography.weight.semi,
+    color: qsColors.textSecondary,
+  },
   applyButton: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: qsSpacing.sm,
     height: 48,
     borderRadius: qsRadius.lg,
     backgroundColor: qsColors.accent,
-    marginTop: qsSpacing.md,
   },
   applyButtonText: {
     fontSize: qsTypography.size.sm,
