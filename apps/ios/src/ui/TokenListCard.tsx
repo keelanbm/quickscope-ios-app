@@ -26,6 +26,7 @@ type TokenListCardProps = {
   oneHourChangePercent: number;
 
   // Badge / label
+  platform?: string;
   platformLabel?: string;
 
   // Social links
@@ -54,6 +55,7 @@ function TokenListCardInner({
   oneHourVolumeUsd,
   oneHourTxCount,
   oneHourChangePercent,
+  platform,
   platformLabel,
   twitterUrl,
   telegramUrl,
@@ -94,7 +96,7 @@ function TokenListCardInner({
       <View style={styles.mainRow}>
         {/* Token Image */}
         <View style={styles.imageContainer}>
-          <TokenAvatar uri={imageUri} size={36} />
+          <TokenAvatar uri={imageUri} size={36} platform={platform} />
         </View>
 
         {/* Token Info */}

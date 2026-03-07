@@ -652,6 +652,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
           name={tokenMeta.name}
           tokenAddress={tokenAddress}
           age={formatAgeFromSeconds(mintedAtSeconds)}
+          platform={params?.platform}
           platformLabel={platformLabel}
           socialLinks={socialLinks}
           marketCapUsd={marketCapUsd}

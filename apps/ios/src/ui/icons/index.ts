@@ -71,6 +71,10 @@ export {
   User,
   Users,
   HelpCircle,
+  Shield,
+  Bot,
+  UserPlus,
+  ArrowUp,
 } from "lucide-react-native";
 
 // ── Brand / social SVGs ──
