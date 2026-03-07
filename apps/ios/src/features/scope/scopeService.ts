@@ -4,25 +4,32 @@ import type { RpcClient } from "@/src/lib/api/rpcClient";
 
 export type ScopeTabId = "new" | "graduating" | "graduated" | "scans";
 
-/** User-configurable filters (per-tab). All fields optional — omitted = no filter. */
 export type ScopeFilters = {
-  /** Exchange/launchpad codes to include (e.g. ['p','b']). Overrides tab default when set. */
   exchanges?: string[];
-  /** Market cap range in SOL */
   minMarketCapSol?: number;
   maxMarketCapSol?: number;
-  /** 1h volume range in SOL */
   minVolumeSol?: number;
   maxVolumeSol?: number;
-  /** Age range in seconds (mint_ts) */
   minAgeSec?: number;
   maxAgeSec?: number;
-  /** 1h transaction count range */
   minTxCount?: number;
   maxTxCount?: number;
+  minHolderCount?: number;
+  maxHolderCount?: number;
+  minTop25Pct?: number;
+  maxTop25Pct?: number;
+  minDevPct?: number;
+  maxDevPct?: number;
+  minBondingCurvePct?: number;
+  maxBondingCurvePct?: number;
+  minTwitterFollowers?: number;
+  maxTwitterFollowers?: number;
+  hasTwitter?: boolean;
+  hasTelegram?: boolean;
+  hasWebsite?: boolean;
 };
 
-// ── Exchange / launchpad constants (from web terminal types/exchanges.ts) ──
+// ── Exchange / launchpad constants ──
 
 export const LAUNCHPADS = {
   Pumpfun: "p",
@@ -61,16 +68,13 @@ export const LAUNCHPAD_LABELS: Record<string, string> = {
   e: "Damm",
 };
 
-/** Default exchange filter for most tabs (matches web terminal) */
 const DEFAULT_EXCHANGES = ["p", "b"];
 
 // ── Tab configuration ──
 
 type TabConfig = {
   sortColumn: string;
-  /** true = we want descending order */
   sortOrderDescending: boolean;
-  /** Default string_filters baked into the tab (exchange + bonding status) */
   defaultStringFilters: Array<{ column: string; values: string[] }>;
 };
 
@@ -168,12 +172,12 @@ function toOptionalInteger(value: unknown): number | undefined {
   if (!Number.isInteger(numeric) || numeric < 0) {
     return undefined;
   }
-
   return numeric;
 }
 
-/** Build the numeric_filters array from user-configurable ScopeFilters */
-function buildNumericFilters(filters?: ScopeFilters): NumericFilter[] | undefined {
+export function buildNumericFilters(
+  filters?: ScopeFilters,
+): NumericFilter[] | undefined {
   if (!filters) return undefined;
 
   const result: NumericFilter[] = [];
@@ -185,9 +189,6 @@ function buildNumericFilters(filters?: ScopeFilters): NumericFilter[] | undefine
     result.push({ column: "one_hour_volume_sol", min: filters.minVolumeSol, max: filters.maxVolumeSol });
   }
   if (filters.minAgeSec !== undefined || filters.maxAgeSec !== undefined) {
-    // Convert age constraints to mint_ts range:
-    // minAgeSec → max mint_ts (newer than X seconds ago)
-    // maxAgeSec → min mint_ts (older than X seconds ago)
     const now = Math.floor(Date.now() / 1000);
     result.push({
       column: "mint_ts",
@@ -198,18 +199,31 @@ function buildNumericFilters(filters?: ScopeFilters): NumericFilter[] | undefine
   if (filters.minTxCount !== undefined || filters.maxTxCount !== undefined) {
     result.push({ column: "one_hour_tx_count", min: filters.minTxCount, max: filters.maxTxCount });
   }
+  if (filters.minHolderCount !== undefined || filters.maxHolderCount !== undefined) {
+    result.push({ column: "holder_count", min: filters.minHolderCount, max: filters.maxHolderCount });
+  }
+  if (filters.minTop25Pct !== undefined || filters.maxTop25Pct !== undefined) {
+    result.push({ column: "top_25_holdings_proportion", min: filters.minTop25Pct, max: filters.maxTop25Pct });
+  }
+  if (filters.minDevPct !== undefined || filters.maxDevPct !== undefined) {
+    result.push({ column: "dev_holdings_proportion", min: filters.minDevPct, max: filters.maxDevPct });
+  }
+  if (filters.minBondingCurvePct !== undefined || filters.maxBondingCurvePct !== undefined) {
+    result.push({ column: "bonding_curve_progress", min: filters.minBondingCurvePct, max: filters.maxBondingCurvePct });
+  }
+  if (filters.minTwitterFollowers !== undefined || filters.maxTwitterFollowers !== undefined) {
+    result.push({ column: "twitter_followers", min: filters.minTwitterFollowers, max: filters.maxTwitterFollowers });
+  }
 
   return result.length > 0 ? result : undefined;
 }
 
-/** Build the string_filters array, merging tab defaults with user overrides */
-function buildStringFilters(
+export function buildStringFilters(
   tabDefaults: StringFilter[],
-  filters?: ScopeFilters
+  filters?: ScopeFilters,
 ): StringFilter[] | undefined {
   const result: StringFilter[] = [];
 
-  // Exchange filter: user override or tab default
   if (filters?.exchanges && filters.exchanges.length > 0) {
     result.push({ column: "exchange", values: filters.exchanges });
   } else {
@@ -219,10 +233,19 @@ function buildStringFilters(
     }
   }
 
-  // Status filter: always from tab defaults (not user-configurable)
   const statusDefault = tabDefaults.find((f) => f.column === "status");
   if (statusDefault) {
     result.push(statusDefault);
+  }
+
+  if (filters?.hasTwitter) {
+    result.push({ column: "has_twitter", values: ["true"] });
+  }
+  if (filters?.hasTelegram) {
+    result.push({ column: "has_telegram", values: ["true"] });
+  }
+  if (filters?.hasWebsite) {
+    result.push({ column: "has_website", values: ["true"] });
   }
 
   return result.length > 0 ? result : undefined;
@@ -233,14 +256,13 @@ function buildStringFilters(
 export async function fetchScopeTokens(
   rpcClient: RpcClient,
   tab: ScopeTabId,
-  filters?: ScopeFilters
+  filters?: ScopeFilters,
 ): Promise<ScopeResult> {
   const config = tabConfigs[tab];
 
   const numeric_filters = buildNumericFilters(filters);
   const string_filters = buildStringFilters(config.defaultStringFilters, filters);
 
-  // sort_order: true = ascending, false = descending (confirmed from web terminal)
   const response = await rpcClient.call<ScopeTableResponse>("public/filterTokensTable", [
     {
       filter: {

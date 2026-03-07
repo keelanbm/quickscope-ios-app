@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
@@ -12,11 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
-import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetScrollView,
-} from "@gorhom/bottom-sheet";
-import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
+import type BottomSheet from "@gorhom/bottom-sheet";
 
 import { haptics } from "@/src/lib/haptics";
 import { formatCompactUsd, formatPercent, formatCompactNumber, formatAgeFromSeconds } from "@/src/lib/format";
@@ -24,8 +20,6 @@ import { toast } from "@/src/lib/toast";
 import {
   fetchScopeTokens,
   LAUNCHPAD_LABELS,
-  LAUNCHPADS,
-  EXCHANGES,
   type ScopeTabId,
   type ScopeToken,
   type ScopeFilters,
@@ -33,10 +27,11 @@ import {
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack, RootTabs, ScopeRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { ChevronDown, Copy, Crosshair, Globe, MessageCircle, SlidersHorizontal, Star, Zap, SolanaIcon, X, Check, XIcon, TelegramIcon } from "@/src/ui/icons";
+import { ChevronDown, Copy, Crosshair, Globe, MessageCircle, SlidersHorizontal, Star, Zap, SolanaIcon, XIcon, TelegramIcon } from "@/src/ui/icons";
 import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRow } from "@/src/ui/Skeleton";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
+import { TokenFilterSheet, hasActiveFilters, getExchangeLabel } from "@/src/ui/TokenFilterSheet";
 
 type ScopeScreenProps = {
   rpcClient: RpcClient;
@@ -55,98 +50,8 @@ const tabs: ScopeTab[] = [
   { id: "scans", label: "Scans" },
 ];
 
-/* ─── Platform filter options ─── */
-
-type PlatformOption = {
-  code: string;
-  label: string;
-};
-
-const PLATFORM_OPTIONS: PlatformOption[] = [
-  { code: LAUNCHPADS.Pumpfun, label: "Pump" },
-  { code: LAUNCHPADS.Bonkfun, label: "Bonk" },
-  { code: LAUNCHPADS.Believe, label: "Believe" },
-  { code: LAUNCHPADS.Heaven, label: "Heaven" },
-  { code: LAUNCHPADS.Moonshot, label: "Moonshot" },
-  { code: LAUNCHPADS.JupStudio, label: "Jup Studio" },
-  { code: LAUNCHPADS.Bags, label: "Bags" },
-  { code: LAUNCHPADS.LaunchLab, label: "LaunchLab" },
-  { code: LAUNCHPADS.DBC, label: "DBC" },
-  { code: EXCHANGES.Raydium, label: "Raydium" },
-  { code: EXCHANGES.PumpSwap, label: "PumpSwap" },
-];
-
-/* ─── Filter preset definitions ─── */
-
-type FilterPreset = {
-  label: string;
-  min?: number;
-  max?: number;
-};
-
-const MCAP_PRESETS: FilterPreset[] = [
-  { label: "<$10K", max: 10_000 },
-  { label: "$10K–$100K", min: 10_000, max: 100_000 },
-  { label: "$100K–$1M", min: 100_000, max: 1_000_000 },
-  { label: "$1M+", min: 1_000_000 },
-];
-
-const VOLUME_PRESETS: FilterPreset[] = [
-  { label: ">$1K", min: 1_000 },
-  { label: ">$10K", min: 10_000 },
-  { label: ">$50K", min: 50_000 },
-  { label: ">$100K", min: 100_000 },
-];
-
-const AGE_PRESETS: FilterPreset[] = [
-  { label: "<5m", max: 5 * 60 },
-  { label: "<30m", max: 30 * 60 },
-  { label: "<1h", max: 3600 },
-  { label: "<6h", max: 6 * 3600 },
-  { label: "<24h", max: 24 * 3600 },
-];
-
-const TX_PRESETS: FilterPreset[] = [
-  { label: ">10", min: 10 },
-  { label: ">50", min: 50 },
-  { label: ">100", min: 100 },
-  { label: ">500", min: 500 },
-];
-
-/** Initial empty filters for all tabs */
-const EMPTY_FILTERS: ScopeFilters = {};
-
 function createInitialFilters(): Record<ScopeTabId, ScopeFilters> {
-  return {
-    new: { ...EMPTY_FILTERS },
-    graduating: { ...EMPTY_FILTERS },
-    graduated: { ...EMPTY_FILTERS },
-    scans: { ...EMPTY_FILTERS },
-  };
-}
-
-/** Check if a tab has any active user-set filters */
-function hasActiveFilters(filters: ScopeFilters): boolean {
-  return (
-    (filters.exchanges !== undefined && filters.exchanges.length > 0) ||
-    filters.minMarketCapSol !== undefined ||
-    filters.maxMarketCapSol !== undefined ||
-    filters.minVolumeSol !== undefined ||
-    filters.maxVolumeSol !== undefined ||
-    filters.minAgeSec !== undefined ||
-    filters.maxAgeSec !== undefined ||
-    filters.minTxCount !== undefined ||
-    filters.maxTxCount !== undefined
-  );
-}
-
-/** Get label for current exchange filter state */
-function getExchangeLabel(filters: ScopeFilters): string {
-  if (!filters.exchanges || filters.exchanges.length === 0) return "All Launchpads";
-  if (filters.exchanges.length === 1) {
-    return LAUNCHPAD_LABELS[filters.exchanges[0]] ?? "1 Platform";
-  }
-  return `${filters.exchanges.length} Platforms`;
+  return { new: {}, graduating: {}, graduated: {}, scans: {} };
 }
 
 
@@ -425,8 +330,6 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
 
   // Per-tab filter state
   const [tabFilters, setTabFilters] = useState<Record<ScopeTabId, ScopeFilters>>(createInitialFilters);
-  // Draft filters for the sheet (applied on "Apply")
-  const [draftFilters, setDraftFilters] = useState<ScopeFilters>({});
 
   const currentFilters = tabFilters[activeTab];
   const filtersActive = hasActiveFilters(currentFilters);
@@ -555,90 +458,15 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
 
   const handleOpenFilterSheet = useCallback(() => {
     haptics.light();
-    setDraftFilters({ ...currentFilters });
     filterSheetRef.current?.snapToIndex(0);
-  }, [currentFilters]);
-
-  const handleCloseFilterSheet = useCallback(() => {
-    filterSheetRef.current?.close();
   }, []);
 
-  const handleApplyFilters = useCallback(() => {
-    haptics.selection();
-    setTabFilters((prev) => ({
-      ...prev,
-      [activeTab]: { ...draftFilters },
-    }));
-    filterSheetRef.current?.close();
-  }, [activeTab, draftFilters]);
-
-  const handleResetFilters = useCallback(() => {
-    haptics.light();
-    setDraftFilters({});
-  }, []);
-
-  const handleToggleDraftExchange = useCallback((code: string) => {
-    haptics.light();
-    setDraftFilters((prev) => {
-      const current = prev.exchanges ?? [];
-      const next = current.includes(code)
-        ? current.filter((c) => c !== code)
-        : [...current, code];
-      return { ...prev, exchanges: next.length > 0 ? next : undefined };
-    });
-  }, []);
-
-  const handleSetDraftMcap = useCallback((preset: FilterPreset | null) => {
-    haptics.light();
-    setDraftFilters((prev) => ({
-      ...prev,
-      minMarketCapSol: preset?.min,
-      maxMarketCapSol: preset?.max,
-    }));
-  }, []);
-
-  const handleSetDraftVolume = useCallback((preset: FilterPreset | null) => {
-    haptics.light();
-    setDraftFilters((prev) => ({
-      ...prev,
-      minVolumeSol: preset?.min,
-      maxVolumeSol: preset?.max,
-    }));
-  }, []);
-
-  const handleSetDraftAge = useCallback((preset: FilterPreset | null) => {
-    haptics.light();
-    setDraftFilters((prev) => ({
-      ...prev,
-      minAgeSec: preset?.min,
-      maxAgeSec: preset?.max,
-    }));
-  }, []);
-
-  const handleSetDraftTx = useCallback((preset: FilterPreset | null) => {
-    haptics.light();
-    setDraftFilters((prev) => ({
-      ...prev,
-      minTxCount: preset?.min,
-      maxTxCount: preset?.max,
-    }));
-  }, []);
-
-  // Bottom sheet backdrop
-  const renderFilterBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.5}
-        pressBehavior="close"
-      />
-    ),
-    []
+  const handleApplyFilters = useCallback(
+    (newFilters: ScopeFilters) => {
+      setTabFilters((prev) => ({ ...prev, [activeTab]: newFilters }));
+    },
+    [activeTab],
   );
-
-  const filterSnapPoints = useMemo(() => ["60%", "85%"], []);
 
   const renderItem = useCallback(
     ({ item }: { item: ScopeToken }) => (
@@ -787,156 +615,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
       }
     />
 
-    {/* ── Filter Bottom Sheet ── */}
-    <BottomSheet
-      ref={filterSheetRef}
-      snapPoints={filterSnapPoints}
-      index={-1}
-      enablePanDownToClose
-      backdropComponent={renderFilterBackdrop}
-      backgroundStyle={styles.sheetBackground}
-      handleIndicatorStyle={styles.handleIndicator}
-    >
-      <BottomSheetScrollView contentContainerStyle={styles.sheetContent}>
-        {/* Sheet header */}
-        <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Filters</Text>
-          <View style={styles.sheetHeaderActions}>
-            <Pressable onPress={handleResetFilters} style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}>
-              <Text style={styles.resetText}>Reset All</Text>
-            </Pressable>
-            <Pressable onPress={handleCloseFilterSheet} hitSlop={8}>
-              <X size={20} color={qsColors.textSecondary} />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Platform / Exchange */}
-        <View style={styles.filterSection}>
-          <Text style={styles.filterSectionLabel}>Platform</Text>
-          <View style={styles.chipRow}>
-            {PLATFORM_OPTIONS.map((opt) => {
-              const isActive = draftFilters.exchanges?.includes(opt.code) ?? false;
-              return (
-                <Pressable
-                  key={opt.code}
-                  onPress={() => handleToggleDraftExchange(opt.code)}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Market Cap */}
-        <View style={styles.filterSection}>
-          <Text style={styles.filterSectionLabel}>Market Cap</Text>
-          <View style={styles.chipRow}>
-            {MCAP_PRESETS.map((preset) => {
-              const isActive =
-                draftFilters.minMarketCapSol === preset.min &&
-                draftFilters.maxMarketCapSol === preset.max;
-              return (
-                <Pressable
-                  key={preset.label}
-                  onPress={() => handleSetDraftMcap(isActive ? null : preset)}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                    {preset.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Volume 1H */}
-        <View style={styles.filterSection}>
-          <Text style={styles.filterSectionLabel}>Volume (1h)</Text>
-          <View style={styles.chipRow}>
-            {VOLUME_PRESETS.map((preset) => {
-              const isActive =
-                draftFilters.minVolumeSol === preset.min &&
-                draftFilters.maxVolumeSol === preset.max;
-              return (
-                <Pressable
-                  key={preset.label}
-                  onPress={() => handleSetDraftVolume(isActive ? null : preset)}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                    {preset.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Age */}
-        <View style={styles.filterSection}>
-          <Text style={styles.filterSectionLabel}>Age</Text>
-          <View style={styles.chipRow}>
-            {AGE_PRESETS.map((preset) => {
-              const isActive =
-                draftFilters.minAgeSec === preset.min &&
-                draftFilters.maxAgeSec === preset.max;
-              return (
-                <Pressable
-                  key={preset.label}
-                  onPress={() => handleSetDraftAge(isActive ? null : preset)}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                    {preset.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Transactions */}
-        <View style={styles.filterSection}>
-          <Text style={styles.filterSectionLabel}>Transactions (1h)</Text>
-          <View style={styles.chipRow}>
-            {TX_PRESETS.map((preset) => {
-              const isActive =
-                draftFilters.minTxCount === preset.min &&
-                draftFilters.maxTxCount === preset.max;
-              return (
-                <Pressable
-                  key={preset.label}
-                  onPress={() => handleSetDraftTx(isActive ? null : preset)}
-                  style={[styles.filterChip, isActive && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                    {preset.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Apply button */}
-        <Pressable
-          onPress={handleApplyFilters}
-          style={({ pressed }) => [
-            styles.applyButton,
-            { opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <Check size={16} color={qsColors.layer0} />
-          <Text style={styles.applyButtonText}>Apply Filters</Text>
-        </Pressable>
-      </BottomSheetScrollView>
-    </BottomSheet>
+    <TokenFilterSheet sheetRef={filterSheetRef} filters={currentFilters} onApply={handleApplyFilters} />
     </View>
   );
 }
@@ -1044,7 +723,7 @@ const styles = StyleSheet.create({
   },
   filterChipActive: {
     borderColor: qsColors.accent,
-    backgroundColor: qsColors.hoverOverlay,
+    backgroundColor: "rgba(119, 102, 247, 0.1)",
   },
   filterChipTextActive: {
     color: qsColors.accent,
@@ -1318,88 +997,4 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
 
-  // ── Filter Bottom Sheet ──
-  sheetBackground: {
-    backgroundColor: qsColors.layer1,
-    borderTopLeftRadius: qsRadius.lg,
-    borderTopRightRadius: qsRadius.lg,
-  },
-  handleIndicator: {
-    backgroundColor: qsColors.layer3,
-    width: 40,
-    height: 4,
-  },
-  sheetContent: {
-    paddingHorizontal: qsSpacing.lg,
-    paddingBottom: qsSpacing.xxxl,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: qsSpacing.xl,
-  },
-  sheetTitle: {
-    fontSize: qsTypography.size.lg,
-    fontWeight: qsTypography.weight.bold,
-    color: qsColors.textPrimary,
-  },
-  sheetHeaderActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: qsSpacing.md,
-  },
-  resetText: {
-    fontSize: qsTypography.size.xs,
-    fontWeight: qsTypography.weight.semi,
-    color: qsColors.accent,
-  },
-
-  // Filter sections
-  filterSection: {
-    marginBottom: qsSpacing.xl,
-  },
-  filterSectionLabel: {
-    fontSize: qsTypography.size.xs,
-    fontWeight: qsTypography.weight.semi,
-    color: qsColors.textSecondary,
-    marginBottom: qsSpacing.sm,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: qsSpacing.sm,
-  },
-  filterChip: {
-    paddingHorizontal: qsSpacing.md,
-    paddingVertical: qsSpacing.sm,
-    borderRadius: qsRadius.md,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    backgroundColor: qsColors.layer2,
-  },
-  filterChipText: {
-    fontSize: qsTypography.size.xs,
-    fontWeight: qsTypography.weight.semi,
-    color: qsColors.textSecondary,
-  },
-
-  // Apply button
-  applyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: qsSpacing.sm,
-    height: 48,
-    borderRadius: qsRadius.lg,
-    backgroundColor: qsColors.accent,
-    marginTop: qsSpacing.md,
-  },
-  applyButtonText: {
-    fontSize: qsTypography.size.sm,
-    fontWeight: qsTypography.weight.bold,
-    color: qsColors.layer0,
-  },
 });

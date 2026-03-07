@@ -15,6 +15,7 @@ import {
   Text,
   View,
 } from "react-native";
+import type BottomSheet from "@gorhom/bottom-sheet";
 
 import { haptics } from "@/src/lib/haptics";
 import { formatCompactUsd, formatPercent } from "@/src/lib/format";
@@ -23,6 +24,7 @@ import {
   type DiscoveryTabId,
   type DiscoveryToken,
 } from "@/src/features/discovery/discoveryService";
+import type { ScopeFilters } from "@/src/features/scope/scopeService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { toast } from "@/src/lib/toast";
 import type { DiscoveryRouteParams, RootStack, RootTabs } from "@/src/navigation/types";
@@ -33,6 +35,7 @@ import { EmptyState } from "@/src/ui/EmptyState";
 import { SkeletonRows } from "@/src/ui/Skeleton";
 import { TokenAvatar } from "@/src/ui/TokenAvatar";
 import { TokenListCard } from "@/src/ui/TokenListCard";
+import { TokenFilterSheet, hasActiveFilters } from "@/src/ui/TokenFilterSheet";
 
 type DiscoveryScreenProps = {
   rpcClient: RpcClient;
@@ -83,6 +86,9 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   const [starredMints, setStarredMints] = useState<Record<string, boolean>>({});
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const filterSheetRef = useRef<BottomSheet>(null);
+  const [filters, setFilters] = useState<ScopeFilters>({});
+  const filtersActive = hasActiveFilters(filters);
 
   const loadRows = useCallback(
     async (options?: { refreshing?: boolean }) => {
@@ -102,7 +108,8 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
       }
 
       try {
-        const result = await fetchDiscoveryTokens(rpcClient, activeTab, 25);
+        const activeFilters = hasActiveFilters(filters) ? filters : undefined;
+        const result = await fetchDiscoveryTokens(rpcClient, activeTab, 25, activeFilters);
         if (requestId !== requestSeqRef.current) {
           return;
         }
@@ -149,7 +156,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         setIsRefreshing(false);
       }
     },
-    [activeTab, rpcClient]
+    [activeTab, rpcClient, filters]
   );
 
   useEffect(() => {
@@ -161,7 +168,8 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
     if (!hasMore || isLoadingMore || isInitialLoading) return;
     setIsLoadingMore(true);
     try {
-      const result = await fetchDiscoveryTokens(rpcClient, activeTab, 50);
+      const activeFilters = hasActiveFilters(filters) ? filters : undefined;
+      const result = await fetchDiscoveryTokens(rpcClient, activeTab, 50, activeFilters);
       setRows(result.rows);
       setHasMore(false);
     } catch {
@@ -169,7 +177,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [hasMore, isLoadingMore, isInitialLoading, rpcClient, activeTab]);
+  }, [hasMore, isLoadingMore, isInitialLoading, rpcClient, activeTab, filters]);
 
   const selectedTokenAddress = params?.tokenAddress;
 
@@ -253,15 +261,21 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   );
 
   const handleFilterPress = useCallback(() => {
-    toast.info("Filters", "Filter preferences coming soon.");
+    haptics.light();
+    filterSheetRef.current?.snapToIndex(0);
+  }, []);
+
+  const handleApplyFilters = useCallback((newFilters: ScopeFilters) => {
+    setFilters(newFilters);
   }, []);
 
   return (
+    <View style={styles.page}>
     <FlatList
       data={rows}
       keyExtractor={(item) => item.mint}
       contentContainerStyle={styles.content}
-      style={styles.page}
+      style={styles.listFlex}
       refreshControl={
         <RefreshControl
           tintColor={qsColors.textMuted}
@@ -363,8 +377,9 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                 );
               })}
             </View>
-            <AnimatedPressable onPress={handleFilterPress} style={styles.filterButton} hitSlop={8}>
-              <SlidersHorizontal size={18} color={qsColors.textSecondary} />
+            <AnimatedPressable onPress={handleFilterPress} style={[styles.filterButton, filtersActive && styles.filterButtonActive]} hitSlop={8}>
+              <SlidersHorizontal size={18} color={filtersActive ? qsColors.accent : qsColors.textSecondary} />
+              {filtersActive ? <View style={styles.filterBadge} /> : null}
             </AnimatedPressable>
           </View>
         </View>
@@ -392,6 +407,8 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         ) : null
       }
     />
+    <TokenFilterSheet sheetRef={filterSheetRef} filters={filters} onApply={handleApplyFilters} />
+    </View>
   );
 }
 
@@ -442,6 +459,9 @@ const styles = StyleSheet.create({
   tabButtonTextActive: {
     color: qsColors.textPrimary,
   },
+  listFlex: {
+    flex: 1,
+  },
   filterButton: {
     width: 44,
     height: 44,
@@ -449,6 +469,20 @@ const styles = StyleSheet.create({
     backgroundColor: qsColors.layer2,
     alignItems: "center",
     justifyContent: "center",
+    position: "relative" as const,
+  },
+  filterButtonActive: {
+    borderWidth: 1,
+    borderColor: qsColors.accent,
+  },
+  filterBadge: {
+    position: "absolute" as const,
+    top: 8,
+    right: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: qsColors.accent,
   },
 
   // ── Deep link / error / loading ──
