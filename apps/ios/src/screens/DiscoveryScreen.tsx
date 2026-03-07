@@ -247,6 +247,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
         oneHourVolumeUsd={item.oneHourVolumeUsd}
         oneHourTxCount={item.oneHourTxCount}
         oneHourChangePercent={item.oneHourChangePercent}
+        platform={item.platform}
         platformLabel={launchpadLabel(item.platform, item.exchange) ?? undefined}
         twitterUrl={item.twitterUrl}
         telegramUrl={item.telegramUrl}

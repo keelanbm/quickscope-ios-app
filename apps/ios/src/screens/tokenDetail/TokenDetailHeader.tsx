@@ -24,6 +24,7 @@ type TokenDetailHeaderProps = {
   name: string;
   tokenAddress: string;
   age: string;
+  platform?: string;
   platformLabel: string;
   socialLinks: SocialLink[];
   marketCapUsd: number | undefined;
@@ -44,6 +45,7 @@ export function TokenDetailHeader({
   name,
   tokenAddress,
   age,
+  platform,
   platformLabel,
   socialLinks,
   marketCapUsd,
@@ -71,7 +73,7 @@ export function TokenDetailHeader({
 
       {/* Identity row: image + symbol + age + actions */}
       <View style={styles.identityRow}>
-        <TokenAvatar uri={imageUri} size={40} />
+        <TokenAvatar uri={imageUri} size={40} platform={platform} />
         <View style={styles.identityInfo}>
           {/* Top: Symbol + age + copy + star */}
           <View style={styles.symbolRow}>
