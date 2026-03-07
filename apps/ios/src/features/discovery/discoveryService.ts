@@ -1,4 +1,9 @@
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import {
+  buildNumericFilters,
+  buildStringFilters,
+  type ScopeFilters,
+} from "@/src/features/scope/scopeService";
 
 export type DiscoveryTabId = "trending" | "scan-feed" | "gainers";
 
@@ -83,7 +88,6 @@ function toOptionalInteger(value: unknown): number | undefined {
   if (!Number.isInteger(numeric) || numeric < 0) {
     return undefined;
   }
-
   return numeric;
 }
 
@@ -91,14 +95,20 @@ export async function fetchDiscoveryTokens(
   rpcClient: RpcClient,
   tab: DiscoveryTabId,
   limit = 25,
+  filters?: ScopeFilters,
 ): Promise<DiscoveryResult> {
   const sort = tabSorts[tab];
+  const numeric_filters = buildNumericFilters(filters);
+  const string_filters = buildStringFilters([], filters);
+
   const response = await rpcClient.call<DiscoveryTableResponse>("public/filterTokensTable", [
     {
       filter: {
         sort_column: sort.sortColumn,
         sort_order: !sort.sortOrderDescending,
         row_limit: limit,
+        ...(numeric_filters ? { numeric_filters } : null),
+        ...(string_filters ? { string_filters } : null),
       },
     },
   ]);
@@ -129,11 +139,10 @@ export async function fetchDiscoveryTokens(
     };
   });
 
-  // "trending" tab — only show tokens minted in the last 7 days
   if (tab === "trending") {
     const sevenDaysAgo = nowSeconds - 7 * 86400;
     mappedRows = mappedRows.filter(
-      (row) => row.mintedAtSeconds > 0 && row.mintedAtSeconds >= sevenDaysAgo
+      (row) => row.mintedAtSeconds > 0 && row.mintedAtSeconds >= sevenDaysAgo,
     );
   }
 
