@@ -34,6 +34,48 @@ export type SwapExecutionResult = {
   raw: unknown;
 };
 
+export type SwapByPercentageRequest = {
+  walletAddress: string;
+  inputMint: string;
+  outputMint: string;
+  percentageBps: number;
+  slippageBps: number;
+  priorityFeeLamports: number;
+  jitoTipLamports: number;
+};
+
+export async function requestSwapByPercentage(
+  rpcClient: RpcClient,
+  input: SwapByPercentageRequest
+): Promise<SwapExecutionResult> {
+  const raw = await rpcClient.call<TxSwapResponse>("tx/swapBalancePercentage", [
+    input.walletAddress,
+    input.inputMint,
+    input.outputMint,
+    input.percentageBps,
+    input.slippageBps,
+    {
+      priority_fee_lamports: input.priorityFeeLamports,
+      tip_amount_lamports: input.jitoTipLamports,
+    },
+  ]);
+
+  const execution = raw.execution_result;
+  const errorPreview =
+    execution?.err === undefined ? undefined : JSON.stringify(execution.err).slice(0, 240);
+
+  return {
+    requestedAtMs: Date.now(),
+    status: execution?.status,
+    signature: execution?.signature,
+    executionId: execution?.id,
+    creationTime: execution?.creation_time,
+    executionTime: execution?.execution_time,
+    errorPreview,
+    raw,
+  };
+}
+
 export async function requestSwapExecution(
   rpcClient: RpcClient,
   input: SwapExecutionRequest

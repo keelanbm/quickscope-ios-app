@@ -59,6 +59,9 @@ const WalletDetailScreen = React.lazy(() =>
 const SettingsScreen = React.lazy(() =>
   import("@/src/screens/SettingsScreen").then((m) => ({ default: m.SettingsScreen }))
 );
+const TransferScreen = React.lazy(() =>
+  import("@/src/screens/TransferScreen").then((m) => ({ default: m.TransferScreen }))
+);
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
@@ -427,8 +430,28 @@ export default function App() {
                   </RouteErrorBoundary>
                 )}
               />
+              <Stack.Screen
+                name="Transfer"
+                options={{ title: "Transfer", headerBackButtonDisplayMode: "minimal" }}
+                children={({ route, navigation }) => (
+                  <RouteErrorBoundary routeName="Transfer">
+                    <AuthRouteGate
+                      featureName="Transfer"
+                      subtitle="Connect to transfer SOL between wallets."
+                    >
+                      <Suspense fallback={<LazyFallback />}>
+                        <TransferScreen
+                          rpcClient={rpcClient}
+                          params={route.params}
+                          onGoBack={() => navigation.goBack()}
+                        />
+                      </Suspense>
+                    </AuthRouteGate>
+                  </RouteErrorBoundary>
+                )}
+              />
             </Stack.Navigator>
-            <SlideOutDrawer visible={drawerVisible} onClose={closeDrawer} />
+            <SlideOutDrawer visible={drawerVisible} onClose={closeDrawer} rpcClient={rpcClient} />
           </NavigationContainer>
         </AuthSessionProvider>
       </PrivyWalletProvider>

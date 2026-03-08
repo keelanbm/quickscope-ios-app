@@ -72,6 +72,10 @@ export type RootTabs = {
   Dev: undefined;
 };
 
+export type TransferRouteParams = {
+  senderWallet?: string;
+};
+
 export type RootStack = {
   MainTabs: NavigatorScreenParams<RootTabs>;
   TokenDetail: TokenDetailRouteParams;
@@ -79,4 +83,5 @@ export type RootStack = {
   Rewards: undefined;
   Deposit: undefined;
   Settings: undefined;
+  Transfer: TransferRouteParams | undefined;
 };
