@@ -103,6 +103,8 @@ type TradeBottomSheetProps = {
   onExecuteSwap?: (params: {
     quoteResult: QuoteResult;
     side: "buy" | "sell";
+    /** For multi-wallet sells: percentage in bps (e.g. 5000 = 50%). Undefined for custom amounts. */
+    sellPercentageBps?: number;
   }) => Promise<SwapExecutionResult>;
 };
 
@@ -332,7 +334,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
               outputMint,
             });
             if (!quote) throw new Error("Quote unavailable");
-            const result = await onExecuteSwap({ quoteResult: quote, side: activeTab });
+            const result = await onExecuteSwap({ quoteResult: quote, side: activeTab, sellPercentageBps: activeSellPercentageBps });
             if (result?.signature) {
               setExecResult(result);
               setExecPhase("success");
@@ -433,6 +435,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
         const result = await onExecuteSwap?.({
           quoteResult,
           side: activeTab,
+          sellPercentageBps: activeSellPercentageBps,
         });
         if (result?.signature) {
           setExecResult(result ?? null);
@@ -526,6 +529,12 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
       value,
       index,
     }));
+
+    // Derive sell percentage bps from active preset (for multi-wallet sells)
+    const activeSellPercentageBps: number | undefined =
+      activeTab === "sell" && activePreset != null && sellPresets[activePreset] != null
+        ? Math.round(sellPresets[activePreset] * 10000)
+        : undefined;
 
     // Build sell preset buttons (as fractions of balance)
     const sellPresetButtons = sellPresets.map((fraction, index) => ({

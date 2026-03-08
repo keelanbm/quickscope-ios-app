@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Modal,
@@ -14,10 +15,20 @@ import {
 } from "react-native";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import {
+  type UserWalletInfo,
+  fetchActiveWallets,
+  fetchWalletSolBalances,
+  selectWallets,
+  unselectWallets,
+  truncateAddress,
+} from "@/src/features/account/walletService";
 import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
+import { haptics } from "@/src/lib/haptics";
+import type { RpcClient } from "@/src/lib/api/rpcClient";
 import type { RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { LogOut, Gift, X, Wallet, ArrowUpDown, User, Settings } from "@/src/ui/icons";
+import { LogOut, Gift, X, Wallet, ArrowUpDown, User, Settings, ChevronDown, ChevronUp, Check } from "@/src/ui/icons";
 
 const DRAWER_WIDTH = Dimensions.get("window").width * 0.8;
 const ANIMATION_DURATION = 250;
@@ -30,17 +41,26 @@ type MenuItem = {
   destructive?: boolean;
 };
 
+type WalletWithBalance = UserWalletInfo & { solBalance?: number };
+
 type Props = {
   visible: boolean;
   onClose: () => void;
+  rpcClient: RpcClient;
 };
 
-export function SlideOutDrawer({ visible, onClose }: Props) {
-  const { walletAddress, clearSession } = useAuthSession();
+export function SlideOutDrawer({ visible, onClose, rpcClient }: Props) {
+  const { walletAddress, clearSession, hasValidAccessToken } = useAuthSession();
   const { disconnect, login, connectPhantom } = useWalletCompat();
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
   const translateX = useRef(new Animated.Value(DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  // ── Wallet selection state ──
+  const [walletsExpanded, setWalletsExpanded] = useState(false);
+  const [wallets, setWallets] = useState<WalletWithBalance[]>([]);
+  const [walletsLoading, setWalletsLoading] = useState(false);
+  const [togglingKeys, setTogglingKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (visible) {
@@ -71,6 +91,77 @@ export function SlideOutDrawer({ visible, onClose }: Props) {
       ]).start();
     }
   }, [visible, translateX, backdropOpacity]);
+
+  // Fetch wallets when drawer opens and user is authenticated
+  useEffect(() => {
+    if (!visible || !hasValidAccessToken) {
+      return;
+    }
+
+    let cancelled = false;
+    setWalletsLoading(true);
+
+    (async () => {
+      try {
+        const { wallets: active } = await fetchActiveWallets(rpcClient);
+        if (cancelled) return;
+
+        const keys = active.map((w) => w.public_key);
+        const balances = await fetchWalletSolBalances(rpcClient, keys);
+        if (cancelled) return;
+
+        setWallets(
+          active.map((w) => ({ ...w, solBalance: balances[w.public_key] ?? 0 }))
+        );
+      } catch {
+        // Silently fail — wallet card still shows primary address
+      } finally {
+        if (!cancelled) setWalletsLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [visible, hasValidAccessToken, rpcClient]);
+
+  const handleToggleWallet = useCallback(
+    async (wallet: WalletWithBalance) => {
+      const key = wallet.public_key;
+      if (togglingKeys.has(key)) return;
+
+      haptics.selection();
+      setTogglingKeys((prev) => new Set(prev).add(key));
+
+      try {
+        if (wallet.selected) {
+          await unselectWallets(rpcClient, [key]);
+        } else {
+          await selectWallets(rpcClient, [key]);
+        }
+
+        setWallets((prev) =>
+          prev.map((w) =>
+            w.public_key === key ? { ...w, selected: !w.selected } : w
+          )
+        );
+      } catch {
+        // Toggle failed — state stays as-is
+      } finally {
+        setTogglingKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      }
+    },
+    [rpcClient, togglingKeys]
+  );
+
+  const handleToggleExpand = useCallback(() => {
+    haptics.selection();
+    setWalletsExpanded((prev) => !prev);
+  }, []);
+
+  const selectedCount = wallets.filter((w) => w.selected).length;
 
   const handleClose = useCallback(() => {
     Animated.parallel([
@@ -137,8 +228,8 @@ export function SlideOutDrawer({ visible, onClose }: Props) {
     {
       icon: <ArrowUpDown size={20} color={qsColors.textSecondary} />,
       label: "Transfer",
-      subtitle: "Coming soon",
-      onPress: () => {},
+      subtitle: "Send SOL between wallets",
+      onPress: () => navigateTo("Transfer"),
     },
     {
       icon: <Settings size={20} color={qsColors.textSecondary} />,
@@ -192,15 +283,84 @@ export function SlideOutDrawer({ visible, onClose }: Props) {
             {/* Wallet card */}
             {walletAddress ? (
               <View style={styles.walletCard}>
-                <View style={styles.walletHeader}>
-                  <View style={styles.walletStatusRow}>
-                    <View style={styles.connectedDot} />
-                    <Text style={styles.connectedText}>Connected</Text>
+                {/* Collapsible header */}
+                <Pressable
+                  style={styles.walletHeader}
+                  onPress={wallets.length > 1 ? handleToggleExpand : undefined}
+                >
+                  <View style={styles.walletHeaderLeft}>
+                    <View style={styles.walletStatusRow}>
+                      <View style={styles.connectedDot} />
+                      <Text style={styles.connectedText}>Connected</Text>
+                    </View>
+                    <Text style={styles.walletAddress} numberOfLines={1}>
+                      {walletAddress.slice(0, 4)}...{walletAddress.slice(-4)}
+                    </Text>
                   </View>
-                </View>
-                <Text style={styles.walletAddress} numberOfLines={1}>
-                  {walletAddress.slice(0, 4)}...{walletAddress.slice(-4)}
-                </Text>
+                  {wallets.length > 1 && (
+                    <View style={styles.walletExpandHint}>
+                      <Text style={styles.walletCountBadge}>
+                        {selectedCount}/{wallets.length}
+                      </Text>
+                      {walletsExpanded ? (
+                        <ChevronUp size={16} color={qsColors.textTertiary} />
+                      ) : (
+                        <ChevronDown size={16} color={qsColors.textTertiary} />
+                      )}
+                    </View>
+                  )}
+                </Pressable>
+
+                {/* Expanded wallet list */}
+                {walletsExpanded && (
+                  <View style={styles.walletList}>
+                    {walletsLoading ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={qsColors.accent}
+                        style={{ paddingVertical: 12 }}
+                      />
+                    ) : (
+                      wallets.map((w) => {
+                        const isToggling = togglingKeys.has(w.public_key);
+                        return (
+                          <Pressable
+                            key={w.public_key}
+                            style={({ pressed }) => [
+                              styles.walletListRow,
+                              pressed && styles.walletListRowPressed,
+                            ]}
+                            onPress={() => handleToggleWallet(w)}
+                            disabled={isToggling}
+                          >
+                            <View
+                              style={[
+                                styles.walletCheckbox,
+                                w.selected && styles.walletCheckboxActive,
+                              ]}
+                            >
+                              {w.selected && (
+                                <Check size={12} color={qsColors.textPrimary} />
+                              )}
+                            </View>
+                            <View style={styles.walletListInfo}>
+                              <Text style={styles.walletListName} numberOfLines={1}>
+                                {w.name}
+                                {w.is_primary ? " (primary)" : ""}
+                              </Text>
+                              <Text style={styles.walletListKey}>
+                                {truncateAddress(w.public_key)}
+                              </Text>
+                            </View>
+                            <Text style={styles.walletListBalance}>
+                              {(w.solBalance ?? 0).toFixed(4)} SOL
+                            </Text>
+                          </Pressable>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
               </View>
             ) : (
               <View style={styles.walletCard}>
@@ -328,6 +488,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  walletHeaderLeft: {
+    flex: 1,
+    gap: 4,
+  },
   walletStatusRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -348,6 +512,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: qsColors.textPrimary,
     fontWeight: qsTypography.weight.bold,
+    fontVariant: ["tabular-nums"],
+  },
+  walletExpandHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  walletCountBadge: {
+    fontSize: 11,
+    color: qsColors.textTertiary,
+    fontWeight: qsTypography.weight.semi,
+    fontVariant: ["tabular-nums"],
+  },
+  walletList: {
+    marginTop: qsSpacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: qsColors.borderDefault,
+    paddingTop: qsSpacing.sm,
+    gap: 2,
+  },
+  walletListRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: qsRadius.sm,
+  },
+  walletListRowPressed: {
+    backgroundColor: qsColors.pressedOverlay,
+  },
+  walletCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: qsRadius.xs,
+    borderWidth: 1.5,
+    borderColor: qsColors.layer3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  walletCheckboxActive: {
+    backgroundColor: qsColors.accent,
+    borderColor: qsColors.accent,
+  },
+  walletListInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  walletListName: {
+    fontSize: 13,
+    color: qsColors.textPrimary,
+    fontWeight: qsTypography.weight.medium,
+  },
+  walletListKey: {
+    fontSize: 11,
+    color: qsColors.textTertiary,
+    fontVariant: ["tabular-nums"],
+  },
+  walletListBalance: {
+    fontSize: 12,
+    color: qsColors.textSecondary,
+    fontWeight: qsTypography.weight.medium,
     fontVariant: ["tabular-nums"],
   },
   disconnectedText: {

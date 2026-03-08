@@ -44,6 +44,12 @@ import {
   type TraderOverview,
   type Position,
 } from "@/src/features/portfolio/portfolioService";
+import {
+  fetchActiveWallets,
+  truncateAddress,
+  type UserWalletInfo,
+} from "@/src/features/account/walletService";
+import { haptics } from "@/src/lib/haptics";
 import type { PortfolioRouteParams, RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 
@@ -266,12 +272,22 @@ function PositionRowItem({
 
 function ListHeader({
   walletAddress,
+  walletLabel,
+  wallets,
+  showWalletPicker,
+  onToggleWalletPicker,
+  onSelectWallet,
   stats,
   pnlData,
   activeTab,
   onTabPress,
 }: {
   walletAddress: string | null;
+  walletLabel: string;
+  wallets: UserWalletInfo[];
+  showWalletPicker: boolean;
+  onToggleWalletPicker: () => void;
+  onSelectWallet: (key: string | null) => void;
   stats: { label: string; value: string; color?: string; icon?: React.ReactNode }[];
   pnlData: PnlDataPoint[];
   activeTab: TabId;
@@ -281,15 +297,55 @@ function ListHeader({
 
   return (
     <View style={styles.listHeader}>
-      <View style={styles.walletCard}>
+      <Pressable
+        style={styles.walletCard}
+        onPress={wallets.length > 1 ? onToggleWalletPicker : undefined}
+      >
         <WalletAvatar address={walletAddress} />
         <View style={styles.walletText}>
-          <Text style={styles.walletName}>Primary Wallet</Text>
-          <Text style={styles.walletAddress}>
+          <Text style={styles.walletName}>{walletLabel}</Text>
+          <Text style={styles.walletAddr}>
             {formatWalletAddress(walletAddress ?? undefined)}
           </Text>
         </View>
-      </View>
+        {wallets.length > 1 && (
+          showWalletPicker ? (
+            <ChevronUp size={16} color={qsColors.textTertiary} />
+          ) : (
+            <ChevronDown size={16} color={qsColors.textTertiary} />
+          )
+        )}
+      </Pressable>
+
+      {/* Wallet picker dropdown */}
+      {showWalletPicker && wallets.length > 1 && (
+        <View style={styles.walletPickerList}>
+          {wallets.map((w) => {
+            const isActive = w.public_key === walletAddress;
+            return (
+              <Pressable
+                key={w.public_key}
+                style={({ pressed }) => [
+                  styles.walletPickerRow,
+                  isActive && styles.walletPickerRowActive,
+                  pressed && styles.walletPickerRowPressed,
+                ]}
+                onPress={() => onSelectWallet(w.public_key)}
+              >
+                <WalletAvatar address={w.public_key} size={28} />
+                <View style={styles.walletPickerInfo}>
+                  <Text style={styles.walletPickerName} numberOfLines={1}>
+                    {w.name}{w.is_primary ? " (primary)" : ""}
+                  </Text>
+                  <Text style={styles.walletPickerKey}>
+                    {truncateAddress(w.public_key)}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
 
       <View style={styles.statsRow}>
         {stats.map((stat) => (
@@ -318,7 +374,7 @@ function ListHeader({
 
 export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStack>>();
-  const { primaryAccountAddress: walletAddress } = useAuthSession();
+  const { primaryAccountAddress, hasValidAccessToken } = useAuthSession();
   const requestRef = useRef(0);
   const offsetRef2 = useRef(0);
   const [overview, setOverview] = useState<TraderOverview | null>(null);
@@ -333,6 +389,34 @@ export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [expandedMint, setExpandedMint] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("Positions");
+
+  // ── Multi-wallet picker ──
+  const [allWallets, setAllWallets] = useState<UserWalletInfo[]>([]);
+  const [selectedWalletKey, setSelectedWalletKey] = useState<string | null>(null);
+  const [showWalletPicker, setShowWalletPicker] = useState(false);
+
+  // Fetch wallet list
+  useEffect(() => {
+    if (!hasValidAccessToken) {
+      setAllWallets([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchActiveWallets(rpcClient)
+      .then(({ wallets }) => {
+        if (cancelled) return;
+        setAllWallets(wallets);
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [rpcClient, hasValidAccessToken]);
+
+  // Active wallet address — selected wallet or primary
+  const walletAddress = selectedWalletKey ?? primaryAccountAddress;
+  const activeWallet = allWallets.find((w) => w.public_key === walletAddress);
+  const walletLabel = activeWallet?.name ?? "Primary Wallet";
 
   const loadData = useCallback(
     (options?: { refreshing?: boolean }) => {
@@ -458,17 +542,34 @@ export function PortfolioScreen({ rpcClient }: PortfolioScreenProps) {
     [solPriceUsd, navigation, expandedMint, handleToggleExpand],
   );
 
+  const handleToggleWalletPicker = useCallback(() => {
+    haptics.selection();
+    setShowWalletPicker((prev) => !prev);
+  }, []);
+
+  const handleSelectWallet = useCallback((key: string | null) => {
+    haptics.selection();
+    setSelectedWalletKey(key);
+    setShowWalletPicker(false);
+    setExpandedMint(null);
+  }, []);
+
   const listHeader = useMemo(
     () => (
       <ListHeader
         walletAddress={walletAddress ?? null}
+        walletLabel={walletLabel}
+        wallets={allWallets}
+        showWalletPicker={showWalletPicker}
+        onToggleWalletPicker={handleToggleWalletPicker}
+        onSelectWallet={handleSelectWallet}
         stats={stats}
         pnlData={pnlData}
         activeTab={activeTab}
         onTabPress={handleTabPress}
       />
     ),
-    [walletAddress, stats, pnlData, activeTab, handleTabPress],
+    [walletAddress, walletLabel, allWallets, showWalletPicker, handleToggleWalletPicker, handleSelectWallet, stats, pnlData, activeTab, handleTabPress],
   );
 
   const listEmpty = useMemo(
@@ -618,9 +719,46 @@ const styles = StyleSheet.create({
     fontSize: qsTypography.size.base,
     fontWeight: qsTypography.weight.semi,
   },
-  walletAddress: {
+  walletAddr: {
     color: qsColors.textSubtle,
     fontSize: qsTypography.size.xxs,
+  },
+  // -- Wallet picker dropdown --
+  walletPickerList: {
+    backgroundColor: qsColors.layer1,
+    borderWidth: 1,
+    borderColor: qsColors.borderDefault,
+    borderRadius: qsRadius.md,
+    overflow: "hidden",
+  },
+  walletPickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: qsSpacing.sm,
+    paddingVertical: 10,
+    paddingHorizontal: qsSpacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: qsColors.borderSubtle,
+  },
+  walletPickerRowActive: {
+    backgroundColor: qsColors.layer2,
+  },
+  walletPickerRowPressed: {
+    backgroundColor: qsColors.pressedOverlay,
+  },
+  walletPickerInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  walletPickerName: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.medium,
+  },
+  walletPickerKey: {
+    color: qsColors.textTertiary,
+    fontSize: 11,
+    fontVariant: ["tabular-nums"],
   },
   // -- Stats --
   statsRow: {

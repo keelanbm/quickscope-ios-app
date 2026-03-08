@@ -37,6 +37,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { toast } from "@/src/lib/toast";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
+import { SOL_MINT } from "@/src/lib/constants";
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import type { RootStack, TokenDetailRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
@@ -79,6 +80,14 @@ import {
 } from "@/src/features/trade/triggerOrderService";
 import { requestSwapQuote } from "@/src/features/trade/tradeQuoteService";
 import { requestSwapExecution } from "@/src/features/trade/tradeExecutionService";
+import { fetchActiveWallets, fetchWalletSolBalances } from "@/src/features/account/walletService";
+import { fetchAccountTradeSettings } from "@/src/features/account/settingsService";
+import {
+  executeMultiWalletBuy,
+  executeMultiWalletSell,
+  getStealthSettings,
+  batchResultMessage,
+} from "@/src/features/trade/multiWalletTradeService";
 import { haptics } from "@/src/lib/haptics";
 import { ArrowLeft, BarChart3, LineChart, Zap } from "@/src/ui/icons";
 
@@ -542,28 +551,126 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   );
 
   const handleExecuteSwap = useCallback(
-    async (swapParams: { quoteResult: { inputMint: string; outputMint: string; amountAtomic: number; slippageBps: number }; side: "buy" | "sell" }) => {
+    async (swapParams: { quoteResult: { inputMint: string; outputMint: string; amountAtomic: number; slippageBps: number }; side: "buy" | "sell"; sellPercentageBps?: number }) => {
       if (!walletAddress) {
         throw new Error("Connect your wallet to trade.");
       }
-      const result = await requestSwapExecution(rpcClient, {
-        walletAddress,
-        inputMint: swapParams.quoteResult.inputMint,
-        outputMint: swapParams.quoteResult.outputMint,
-        amountAtomic: swapParams.quoteResult.amountAtomic,
-        slippageBps: swapParams.quoteResult.slippageBps,
-        priorityFeeLamports: currentProfile.priorityLamports,
-        jitoTipLamports: currentProfile.tipLamports ?? 0,
-      });
 
-      // Refresh balances after successful swap
-      if (result.status !== "error") {
-        setTimeout(refreshBalances, 2000);
+      // Check if multiple wallets are selected
+      let selectedWallets: { public_key: string; name: string }[] = [];
+      try {
+        const { wallets } = await fetchActiveWallets(rpcClient);
+        selectedWallets = wallets.filter((w) => w.selected);
+      } catch {
+        // Fall through to single-wallet path
       }
 
-      return result;
+      // Single wallet — existing behavior
+      if (selectedWallets.length <= 1) {
+        const result = await requestSwapExecution(rpcClient, {
+          walletAddress,
+          inputMint: swapParams.quoteResult.inputMint,
+          outputMint: swapParams.quoteResult.outputMint,
+          amountAtomic: swapParams.quoteResult.amountAtomic,
+          slippageBps: swapParams.quoteResult.slippageBps,
+          priorityFeeLamports: currentProfile.priorityLamports,
+          jitoTipLamports: currentProfile.tipLamports ?? 0,
+        });
+
+        if (result.status !== "error") {
+          setTimeout(refreshBalances, 2000);
+        }
+
+        return result;
+      }
+
+      // Multi-wallet — batch execution
+      const executionPreset = {
+        priority_fee_lamports: currentProfile.priorityLamports,
+        jito_tip_lamports: currentProfile.tipLamports ?? 0,
+        slippage_bps: swapParams.quoteResult.slippageBps,
+      };
+
+      // Fetch stealth settings (best-effort)
+      let stealthSettings;
+      try {
+        const { account_trade_settings } = await fetchAccountTradeSettings(rpcClient);
+        stealthSettings = getStealthSettings(account_trade_settings);
+      } catch {
+        // Proceed without stealth
+      }
+
+      const isBuy = swapParams.quoteResult.inputMint === SOL_MINT;
+
+      if (isBuy) {
+        // Fetch SOL balances for skip logic
+        let walletSolBalances: Record<string, number> | undefined;
+        try {
+          walletSolBalances = await fetchWalletSolBalances(
+            rpcClient,
+            selectedWallets.map((w) => w.public_key)
+          );
+        } catch {
+          // Proceed without balance check
+        }
+
+        const LAMPORTS_PER_SOL = 1_000_000_000;
+        const totalSolAmount = swapParams.quoteResult.amountAtomic / LAMPORTS_PER_SOL;
+
+        const batchResult = await executeMultiWalletBuy({
+          rpcClient,
+          selectedWallets,
+          totalSolAmount,
+          tokenAddress,
+          executionPreset,
+          walletSolBalances,
+          stealthSettings,
+        });
+
+        const msg = batchResultMessage(batchResult);
+        if (msg.type === "success") toast.success(msg.title, msg.message);
+        else if (msg.type === "warning") toast.info(msg.title, msg.message);
+        else toast.error(msg.title, msg.message);
+
+        setTimeout(refreshBalances, 2000);
+
+        // Return first successful result for UI compatibility
+        const firstSuccess = batchResult.success[0];
+        return firstSuccess?.executionResult ?? {
+          requestedAtMs: Date.now(),
+          status: batchResult.failed.length > 0 ? "error" : "ok",
+          raw: batchResult,
+        };
+      } else {
+        // Sell — use percentage endpoint
+        // If a sell preset was active, use its bps directly. Otherwise fall back to 100%.
+        const percentageBps = swapParams.sellPercentageBps ?? 10000;
+
+        const batchResult = await executeMultiWalletSell({
+          rpcClient,
+          selectedWallets,
+          percentageBps,
+          tokenAddress,
+          executionPreset,
+          stealthSettings,
+        });
+
+        const msg = batchResultMessage(batchResult);
+        if (msg.type === "success") toast.success(msg.title, msg.message);
+        else if (msg.type === "warning") toast.info(msg.title, msg.message);
+        else toast.error(msg.title, msg.message);
+
+        setTimeout(refreshBalances, 2000);
+
+        const firstSuccess = batchResult.success[0];
+        return firstSuccess?.executionResult ?? {
+          requestedAtMs: Date.now(),
+          status: batchResult.failed.length > 0 ? "error" : "ok",
+          raw: batchResult,
+        };
+      }
     },
-    [rpcClient, walletAddress, currentProfile, refreshBalances]
+    [rpcClient, walletAddress, currentProfile, refreshBalances, tokenAddress]
   );
 
   const handleLimitOrderRequest = useCallback(
