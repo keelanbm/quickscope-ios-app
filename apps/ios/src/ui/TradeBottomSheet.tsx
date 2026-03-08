@@ -16,11 +16,7 @@
 
 import React, { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetView,
-} from "@gorhom/bottom-sheet";
-import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
+import SimpleBottomSheet, { type SimpleBottomSheetRef, SimpleBottomSheetView } from "@/src/ui/SimpleBottomSheet";
 import { qsColors, qsRadius, qsSpacing, qsShadows, qsTypography } from "@/src/theme/tokens";
 import { PresetButton } from "@/src/ui/PresetButton";
 import { ChevronDown, X, Settings, Zap } from "@/src/ui/icons";
@@ -108,7 +104,7 @@ type TradeBottomSheetProps = {
   }) => Promise<SwapExecutionResult>;
 };
 
-export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
+export const TradeBottomSheet = forwardRef<SimpleBottomSheetRef, TradeBottomSheetProps>(
   (
     {
       tokenAddress,
@@ -219,20 +215,6 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
         }
       },
       [currentMarketCapUsd],
-    );
-
-    // Backdrop component
-    const renderBackdrop = useCallback(
-      (props: BottomSheetBackdropProps) => (
-        <BottomSheetBackdrop
-          {...props}
-          disappearsOnIndex={-1}
-          appearsOnIndex={0}
-          opacity={0.5}
-          pressBehavior="close"
-        />
-      ),
-      []
     );
 
     // Handle preset button press
@@ -544,12 +526,11 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
     }));
 
     return (
-      <BottomSheet
+      <SimpleBottomSheet
         ref={ref}
         snapPoints={snapPoints}
         index={-1}
         enablePanDownToClose
-        backdropComponent={renderBackdrop}
         backgroundStyle={styles.sheetBackground}
         handleIndicatorStyle={styles.handleIndicator}
         onClose={onClose}
@@ -557,7 +538,7 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
           if (index === -1) resetExecution();
         }}
       >
-        <BottomSheetView style={styles.contentContainer}>
+        <SimpleBottomSheetView style={styles.contentContainer}>
           {/* Header: Title + Mode Dropdown + Close */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Trade {tokenSymbol}</Text>
@@ -957,8 +938,8 @@ export const TradeBottomSheet = forwardRef<BottomSheet, TradeBottomSheetProps>(
           )}
             </>
           )}
-        </BottomSheetView>
-      </BottomSheet>
+        </SimpleBottomSheetView>
+      </SimpleBottomSheet>
     );
   }
 );

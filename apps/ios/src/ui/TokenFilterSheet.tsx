@@ -8,11 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetScrollView,
-} from "@gorhom/bottom-sheet";
-import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
+import SimpleBottomSheet, { type SimpleBottomSheetRef, SimpleBottomSheetScrollView } from "@/src/ui/SimpleBottomSheet";
 
 import { haptics } from "@/src/lib/haptics";
 import {
@@ -105,7 +101,7 @@ function countCategoryFilters(filters: ScopeFilters, category: FilterCategoryId)
 // ── Component ──
 
 type TokenFilterSheetProps = {
-  sheetRef: React.RefObject<BottomSheet | null>;
+  sheetRef: React.RefObject<SimpleBottomSheetRef | null>;
   filters: ScopeFilters;
   onApply: (filters: ScopeFilters) => void;
 };
@@ -172,13 +168,6 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
     });
   }, [activeCategory]);
 
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.5} pressBehavior="close" />
-    ),
-    [],
-  );
-
   // ── Draft updaters ──
 
   const toggleExchange = useCallback((code: string) => {
@@ -234,12 +223,11 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
   const allExchangesSelected = draft.exchanges === undefined || draft.exchanges.length === 0;
 
   return (
-    <BottomSheet
+    <SimpleBottomSheet
       ref={sheetRef}
       snapPoints={snapPoints}
       index={-1}
       enablePanDownToClose
-      backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBackground}
       handleIndicatorStyle={styles.handleIndicator}
       onChange={handleSheetChange}
@@ -282,7 +270,7 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
       </View>
 
       {/* Category content */}
-      <BottomSheetScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
+      <SimpleBottomSheetScrollView contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
         {activeCategory === "launchpads" && (
           <View>
             <View style={styles.sectionHeader}>
@@ -408,8 +396,8 @@ export function TokenFilterSheet({ sheetRef, filters, onApply }: TokenFilterShee
             </Text>
           </Pressable>
         </View>
-      </BottomSheetScrollView>
-    </BottomSheet>
+      </SimpleBottomSheetScrollView>
+    </SimpleBottomSheet>
   );
 }
 

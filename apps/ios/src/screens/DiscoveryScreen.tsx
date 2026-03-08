@@ -15,7 +15,7 @@ import {
   Text,
   View,
 } from "react-native";
-import type BottomSheet from "@gorhom/bottom-sheet";
+import type { SimpleBottomSheetRef } from "@/src/ui/SimpleBottomSheet";
 
 import { haptics } from "@/src/lib/haptics";
 import { formatCompactUsd, formatPercent } from "@/src/lib/format";
@@ -87,7 +87,7 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
   const [starredMints, setStarredMints] = useState<Record<string, boolean>>({});
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const filterSheetRef = useRef<BottomSheet>(null);
+  const filterSheetRef = useRef<SimpleBottomSheetRef>(null);
   const [filters, setFilters] = useState<ScopeFilters>({});
   const filtersActive = hasActiveFilters(filters);
 
