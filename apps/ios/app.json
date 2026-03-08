@@ -36,7 +36,39 @@
       "expo-web-browser",
       "expo-dev-client",
       "expo-font",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-widgets",
+        {
+          "groupIdentifier": "group.com.quickscope.iosapp",
+          "widgets": [
+            {
+              "name": "PortfolioWidget",
+              "displayName": "Portfolio",
+              "description": "Your portfolio value and top holdings",
+              "supportedFamilies": ["systemSmall", "systemMedium"]
+            },
+            {
+              "name": "WatchlistWidget",
+              "displayName": "Watchlist",
+              "description": "Your top watched tokens",
+              "supportedFamilies": ["systemSmall", "systemMedium"]
+            },
+            {
+              "name": "WalletActivityWidget",
+              "displayName": "Wallet Activity",
+              "description": "Hot tokens from your tracked wallets",
+              "supportedFamilies": ["systemSmall", "systemMedium"]
+            },
+            {
+              "name": "ChatPulseWidget",
+              "displayName": "Chat Pulse",
+              "description": "Trending tokens in your chats",
+              "supportedFamilies": ["systemSmall", "systemMedium"]
+            }
+          ]
+        }
+      ]
     ],
     "extra": {
       "projectName": "quickscope-ios-app",
