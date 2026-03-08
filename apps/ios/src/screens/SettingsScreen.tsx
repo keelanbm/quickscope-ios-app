@@ -142,13 +142,11 @@ function SelectableCard({
   selected,
   onPress,
   label,
-  description,
   preview,
 }: {
   selected: boolean;
   onPress: () => void;
   label: string;
-  description: string;
   preview: React.ReactNode;
 }) {
   return (
@@ -163,7 +161,6 @@ function SelectableCard({
       ) : null}
       {preview}
       <Text style={styles.selectableCardLabel}>{label}</Text>
-      <Text style={styles.selectableCardDesc}>{description}</Text>
     </Pressable>
   );
 }
@@ -348,21 +345,6 @@ export function SettingsScreen({ rpcClient }: Props) {
     sellVariance,
   ]);
 
-  // ── General settings handlers ──
-  const setPriceDisplayMode = useCallback(
-    (mode: "price" | "market_cap") => {
-      setAccountSettings((prev) => ({ ...prev, price_display_mode: mode }));
-    },
-    []
-  );
-
-  const setTokenImageMode = useCallback(
-    (mode: "circle" | "square") => {
-      setAccountSettings((prev) => ({ ...prev, token_image_display_mode: mode }));
-    },
-    []
-  );
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -398,7 +380,6 @@ export function SettingsScreen({ rpcClient }: Props) {
                   void setDiscoveryCardSource(opt.value);
                 }}
                 label={opt.label}
-                description={opt.description}
                 preview={
                   <View style={[styles.discoveryCardIconWrap, active && styles.discoveryCardIconWrapActive]}>
                     <Icon size={16} color={active ? qsColors.accent : qsColors.textTertiary} />
@@ -407,44 +388,6 @@ export function SettingsScreen({ rpcClient }: Props) {
               />
             );
           })}
-        </View>
-
-        {/* Price Display Mode */}
-        <Text style={styles.subSectionTitle}>Price Display Mode</Text>
-        <View style={styles.cardsRow}>
-          <SelectableCard
-            selected={accountSettings.price_display_mode === "price"}
-            onPress={() => setPriceDisplayMode("price")}
-            label="Price"
-            description="Token price in USD"
-            preview={<PricePreview mode="price" />}
-          />
-          <SelectableCard
-            selected={accountSettings.price_display_mode === "market_cap"}
-            onPress={() => setPriceDisplayMode("market_cap")}
-            label="Market Cap"
-            description="Total market cap"
-            preview={<PricePreview mode="mcap" />}
-          />
-        </View>
-
-        {/* Token Image Shape */}
-        <Text style={styles.subSectionTitle}>Token Image Shape</Text>
-        <View style={styles.cardsRow}>
-          <SelectableCard
-            selected={accountSettings.token_image_display_mode === "circle"}
-            onPress={() => setTokenImageMode("circle")}
-            label="Circle"
-            description="Circular token images"
-            preview={<TokenShapePreview shape="circle" />}
-          />
-          <SelectableCard
-            selected={accountSettings.token_image_display_mode === "square"}
-            onPress={() => setTokenImageMode("square")}
-            label="Square"
-            description="Rounded square images"
-            preview={<TokenShapePreview shape="square" />}
-          />
         </View>
 
         {/* ── Trade Presets ── */}
@@ -622,36 +565,6 @@ const DISCOVERY_CARD_ICONS: Record<DiscoveryCardSource, typeof Star> = {
   holdings: Wallet,
 };
 
-// ── Preview Components ───────────────────────────
-
-function PricePreview({ mode }: { mode: "price" | "mcap" }) {
-  return (
-    <View style={styles.previewRow}>
-      <View style={styles.previewDot} />
-      <Text style={styles.previewSymbol}>QS</Text>
-      <Text style={styles.previewValue}>
-        {mode === "price" ? "$0.0042" : "$4.2M"}
-      </Text>
-    </View>
-  );
-}
-
-function TokenShapePreview({ shape }: { shape: "circle" | "square" }) {
-  return (
-    <View style={styles.previewRow}>
-      <View
-        style={[
-          styles.tokenShapeBox,
-          { borderRadius: shape === "circle" ? 16 : 6 },
-        ]}
-      >
-        <Text style={styles.tokenShapeEmoji}>Q</Text>
-      </View>
-      <Text style={styles.previewSymbol}>QS</Text>
-    </View>
-  );
-}
-
 // ── Styles ───────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -818,54 +731,6 @@ const styles = StyleSheet.create({
     fontSize: qsTypography.size.sm,
     fontWeight: qsTypography.weight.medium,
     color: qsColors.textPrimary,
-  },
-  selectableCardDesc: {
-    fontSize: qsTypography.size.xxs,
-    color: qsColors.textTertiary,
-  },
-
-  // Preview
-  previewRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: qsColors.layer3,
-    borderRadius: qsRadius.sm,
-    paddingHorizontal: qsSpacing.sm,
-    paddingVertical: qsSpacing.sm,
-    gap: qsSpacing.sm,
-  },
-  previewDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: qsColors.accent,
-  },
-  previewSymbol: {
-    fontSize: qsTypography.size.xxs,
-    fontWeight: qsTypography.weight.medium,
-    color: qsColors.textPrimary,
-    flex: 1,
-  },
-  previewValue: {
-    fontSize: qsTypography.size.xs,
-    fontWeight: qsTypography.weight.medium,
-    color: qsColors.textPrimary,
-    fontVariant: ["tabular-nums"],
-  },
-  tokenShapeBox: {
-    width: 32,
-    height: 32,
-    backgroundColor: qsColors.layer2,
-    borderWidth: 1,
-    borderColor: qsColors.borderDefault,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  tokenShapeEmoji: {
-    fontSize: 16,
-    fontWeight: qsTypography.weight.bold,
-    color: qsColors.accent,
   },
 
   // Discovery Cards
