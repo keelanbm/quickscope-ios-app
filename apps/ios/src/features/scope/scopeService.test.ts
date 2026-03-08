@@ -20,7 +20,7 @@ describe("fetchScopeTokens", () => {
 
     const result = await fetchScopeTokens(rpcClient, tab);
 
-    expect(call).toHaveBeenCalledWith("public/filterTokensTable", [
+    expect(call).toHaveBeenCalledWith("public/filterTokensTableMemescope", [
       expect.objectContaining({
         filter: expect.objectContaining({
           sort_column: sortColumn,
