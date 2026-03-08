@@ -5,26 +5,25 @@
 import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type DiscoveryCardSource = "top_movers" | "watchlist" | "recent" | "holdings";
+export type DiscoveryCardSource = "watchlist" | "recent" | "holdings";
 
 const STORAGE_KEY = "qs_discovery_card_source_v1";
-const DEFAULT_SOURCE: DiscoveryCardSource = "top_movers";
+const DEFAULT_SOURCE: DiscoveryCardSource = "watchlist";
 
 export const DISCOVERY_CARD_SOURCE_OPTIONS: {
   value: DiscoveryCardSource;
   label: string;
   description: string;
 }[] = [
-  { value: "top_movers", label: "Top Movers", description: "Biggest 1h gainers from current tab" },
-  { value: "watchlist", label: "Watchlist", description: "Tokens from your favorites list" },
-  { value: "recent", label: "Recently Searched", description: "Your recent token searches" },
-  { value: "holdings", label: "Holdings", description: "Tokens in your connected wallet" },
+  { value: "watchlist", label: "Watchlist", description: "Your favorites" },
+  { value: "recent", label: "Recent", description: "Recent searches" },
+  { value: "holdings", label: "Holdings", description: "Wallet tokens" },
 ];
 
 export async function getDiscoveryCardSource(): Promise<DiscoveryCardSource> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (raw && ["top_movers", "watchlist", "recent", "holdings"].includes(raw)) {
+    if (raw && ["watchlist", "recent", "holdings"].includes(raw)) {
       return raw as DiscoveryCardSource;
     }
   } catch {

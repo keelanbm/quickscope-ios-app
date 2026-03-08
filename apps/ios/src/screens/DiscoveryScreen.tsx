@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
@@ -182,20 +182,13 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
 
   const selectedTokenAddress = params?.tokenAddress;
 
-  const topMoversFromList = useMemo(() => {
-    return rows
-      .slice()
-      .sort((a, b) => b.oneHourChangePercent - a.oneHourChangePercent)
-      .slice(0, 8);
-  }, [rows]);
-
   const {
     cards: carouselCards,
     isLoading: carouselLoading,
     label: carouselLabel,
     emptyMessage: carouselEmpty,
     source: carouselSource,
-  } = useDiscoveryCards(rpcClient, topMoversFromList);
+  } = useDiscoveryCards(rpcClient);
 
   const toggleStar = useCallback((mint: string) => {
     setStarredMints((current) => ({

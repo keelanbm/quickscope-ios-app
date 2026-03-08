@@ -35,7 +35,7 @@ import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { haptics } from "@/src/lib/haptics";
 import { toast } from "@/src/lib/toast";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { Check, Clock, Star, TrendingUp, Wallet } from "@/src/ui/icons";
+import { Check, Clock, Star, Wallet } from "@/src/ui/icons";
 
 // ── Helpers ──────────────────────────────────────
 
@@ -380,6 +380,73 @@ export function SettingsScreen({ rpcClient }: Props) {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        {/* ── General ── */}
+        <SectionHeader title="General" />
+
+        {/* Discovery Cards Source */}
+        <Text style={styles.subSectionTitle}>Discovery Cards</Text>
+        <View style={styles.cardsRow}>
+          {DISCOVERY_CARD_SOURCE_OPTIONS.map((opt) => {
+            const active = discoveryCardSource === opt.value;
+            const Icon = DISCOVERY_CARD_ICONS[opt.value];
+            return (
+              <SelectableCard
+                key={opt.value}
+                selected={active}
+                onPress={() => {
+                  haptics.selection();
+                  void setDiscoveryCardSource(opt.value);
+                }}
+                label={opt.label}
+                description={opt.description}
+                preview={
+                  <View style={[styles.discoveryCardIconWrap, active && styles.discoveryCardIconWrapActive]}>
+                    <Icon size={16} color={active ? qsColors.accent : qsColors.textTertiary} />
+                  </View>
+                }
+              />
+            );
+          })}
+        </View>
+
+        {/* Price Display Mode */}
+        <Text style={styles.subSectionTitle}>Price Display Mode</Text>
+        <View style={styles.cardsRow}>
+          <SelectableCard
+            selected={accountSettings.price_display_mode === "price"}
+            onPress={() => setPriceDisplayMode("price")}
+            label="Price"
+            description="Token price in USD"
+            preview={<PricePreview mode="price" />}
+          />
+          <SelectableCard
+            selected={accountSettings.price_display_mode === "market_cap"}
+            onPress={() => setPriceDisplayMode("market_cap")}
+            label="Market Cap"
+            description="Total market cap"
+            preview={<PricePreview mode="mcap" />}
+          />
+        </View>
+
+        {/* Token Image Shape */}
+        <Text style={styles.subSectionTitle}>Token Image Shape</Text>
+        <View style={styles.cardsRow}>
+          <SelectableCard
+            selected={accountSettings.token_image_display_mode === "circle"}
+            onPress={() => setTokenImageMode("circle")}
+            label="Circle"
+            description="Circular token images"
+            preview={<TokenShapePreview shape="circle" />}
+          />
+          <SelectableCard
+            selected={accountSettings.token_image_display_mode === "square"}
+            onPress={() => setTokenImageMode("square")}
+            label="Square"
+            description="Rounded square images"
+            preview={<TokenShapePreview shape="square" />}
+          />
+        </View>
+
         {/* ── Trade Presets ── */}
         <SectionHeader title="Trade Presets" />
 
@@ -525,84 +592,6 @@ export function SettingsScreen({ rpcClient }: Props) {
           />
         </View>
 
-        {/* ── General ── */}
-        <SectionHeader title="General" />
-
-        {/* Price Display Mode */}
-        <Text style={styles.subSectionTitle}>Price Display Mode</Text>
-        <View style={styles.cardsRow}>
-          <SelectableCard
-            selected={accountSettings.price_display_mode === "price"}
-            onPress={() => setPriceDisplayMode("price")}
-            label="Price"
-            description="Token price in USD"
-            preview={<PricePreview mode="price" />}
-          />
-          <SelectableCard
-            selected={accountSettings.price_display_mode === "market_cap"}
-            onPress={() => setPriceDisplayMode("market_cap")}
-            label="Market Cap"
-            description="Total market cap"
-            preview={<PricePreview mode="mcap" />}
-          />
-        </View>
-
-        {/* Token Image Shape */}
-        <Text style={styles.subSectionTitle}>Token Image Shape</Text>
-        <View style={styles.cardsRow}>
-          <SelectableCard
-            selected={accountSettings.token_image_display_mode === "circle"}
-            onPress={() => setTokenImageMode("circle")}
-            label="Circle"
-            description="Circular token images"
-            preview={<TokenShapePreview shape="circle" />}
-          />
-          <SelectableCard
-            selected={accountSettings.token_image_display_mode === "square"}
-            onPress={() => setTokenImageMode("square")}
-            label="Square"
-            description="Rounded square images"
-            preview={<TokenShapePreview shape="square" />}
-          />
-        </View>
-
-        {/* Discovery Cards Source */}
-        <Text style={styles.subSectionTitle}>Discovery Cards</Text>
-        <Text style={styles.discoveryCardsHint}>
-          Choose what appears in the carousel at the top of Discover
-        </Text>
-        <View style={styles.discoveryCardsList}>
-          {DISCOVERY_CARD_SOURCE_OPTIONS.map((opt) => {
-            const active = discoveryCardSource === opt.value;
-            const Icon = DISCOVERY_CARD_ICONS[opt.value];
-            return (
-              <Pressable
-                key={opt.value}
-                style={[styles.discoveryCardOption, active && styles.discoveryCardOptionActive]}
-                onPress={() => {
-                  haptics.selection();
-                  void setDiscoveryCardSource(opt.value);
-                }}
-              >
-                <View style={[styles.discoveryCardIconWrap, active && styles.discoveryCardIconWrapActive]}>
-                  <Icon size={16} color={active ? qsColors.accent : qsColors.textTertiary} />
-                </View>
-                <View style={styles.discoveryCardTextWrap}>
-                  <Text style={[styles.discoveryCardLabel, active && styles.discoveryCardLabelActive]}>
-                    {opt.label}
-                  </Text>
-                  <Text style={styles.discoveryCardDesc}>{opt.description}</Text>
-                </View>
-                {active ? (
-                  <View style={styles.discoveryCardCheck}>
-                    <Check size={12} color="#fff" />
-                  </View>
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </View>
-
         {/* Bottom spacer for button */}
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -627,8 +616,7 @@ export function SettingsScreen({ rpcClient }: Props) {
 
 // ── Discovery Card Icons ─────────────────────────
 
-const DISCOVERY_CARD_ICONS: Record<DiscoveryCardSource, typeof TrendingUp> = {
-  top_movers: TrendingUp,
+const DISCOVERY_CARD_ICONS: Record<DiscoveryCardSource, typeof Star> = {
   watchlist: Star,
   recent: Clock,
   holdings: Wallet,
@@ -881,27 +869,6 @@ const styles = StyleSheet.create({
   },
 
   // Discovery Cards
-  discoveryCardsHint: {
-    fontSize: qsTypography.size.xxs,
-    color: qsColors.textTertiary,
-  },
-  discoveryCardsList: {
-    gap: qsSpacing.sm,
-  },
-  discoveryCardOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: qsColors.layer1,
-    borderRadius: qsRadius.lg,
-    padding: qsSpacing.md,
-    gap: qsSpacing.md,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  discoveryCardOptionActive: {
-    backgroundColor: "rgba(119, 102, 247, 0.08)",
-    borderColor: "rgba(119, 102, 247, 0.3)",
-  },
   discoveryCardIconWrap: {
     width: 36,
     height: 36,
@@ -912,30 +879,6 @@ const styles = StyleSheet.create({
   },
   discoveryCardIconWrapActive: {
     backgroundColor: "rgba(119, 102, 247, 0.15)",
-  },
-  discoveryCardTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  discoveryCardLabel: {
-    fontSize: qsTypography.size.sm,
-    fontWeight: qsTypography.weight.medium,
-    color: qsColors.textPrimary,
-  },
-  discoveryCardLabelActive: {
-    color: qsColors.accent,
-  },
-  discoveryCardDesc: {
-    fontSize: qsTypography.size.xxs,
-    color: qsColors.textTertiary,
-  },
-  discoveryCardCheck: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: qsColors.accent,
-    alignItems: "center",
-    justifyContent: "center",
   },
 
   // Bottom bar

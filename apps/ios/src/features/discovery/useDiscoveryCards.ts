@@ -1,11 +1,10 @@
 /**
  * Hook that fetches carousel card data based on the user's
- * preferred discovery card source (top movers, watchlist, recent, holdings).
+ * preferred discovery card source (watchlist, recent, holdings).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
-import type { DiscoveryToken } from "@/src/features/discovery/discoveryService";
 import {
   type DiscoveryCardSource,
   useDiscoveryCardSource,
@@ -29,26 +28,20 @@ export type CarouselCardItem = {
 };
 
 const CAROUSEL_LABEL: Record<DiscoveryCardSource, string> = {
-  top_movers: "Top Movers",
   watchlist: "Watchlist",
   recent: "Recently Searched",
   holdings: "Holdings",
 };
 
 const CAROUSEL_EMPTY: Record<DiscoveryCardSource, string> = {
-  top_movers: "",
   watchlist: "Star tokens to see them here",
   recent: "Search for tokens to see them here",
   holdings: "Connect a wallet to see holdings",
 };
 
-export function useDiscoveryCards(
-  rpcClient: RpcClient,
-  /** Pass in top movers derived from the main list for the default source */
-  topMoversFromList: DiscoveryToken[]
-) {
+export function useDiscoveryCards(rpcClient: RpcClient) {
   const { source, loaded: prefLoaded } = useDiscoveryCardSource();
-  const { walletAddress, primaryAccountAddress, status } = useAuthSession();
+  const { walletAddress, primaryAccountAddress } = useAuthSession();
   const [cards, setCards] = useState<CarouselCardItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const seqRef = useRef(0);
@@ -57,19 +50,6 @@ export function useDiscoveryCards(
 
   const fetchCards = useCallback(async () => {
     const seq = ++seqRef.current;
-
-    if (source === "top_movers") {
-      setCards(
-        topMoversFromList.map((t) => ({
-          mint: t.mint,
-          symbol: t.symbol,
-          imageUri: t.imageUri,
-          marketCapUsd: t.marketCapUsd,
-          oneHourChangePercent: t.oneHourChangePercent,
-        }))
-      );
-      return;
-    }
 
     setIsLoading(true);
     try {
@@ -134,9 +114,8 @@ export function useDiscoveryCards(
         setIsLoading(false);
       }
     }
-  }, [source, rpcClient, topMoversFromList, accountAddress]);
+  }, [source, rpcClient, accountAddress]);
 
-  // Re-fetch when source changes or data dependencies update
   useEffect(() => {
     if (!prefLoaded) return;
     void fetchCards();
