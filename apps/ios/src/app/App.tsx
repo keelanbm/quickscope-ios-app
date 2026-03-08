@@ -63,6 +63,7 @@ const TransferScreen = React.lazy(() =>
   import("@/src/screens/TransferScreen").then((m) => ({ default: m.TransferScreen }))
 );
 import { qsColors } from "@/src/theme/tokens";
+import { useWidgetUpdater } from "@/src/features/widgets/useWidgetUpdater";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
 import { SlideOutDrawer } from "@/src/ui/SlideOutDrawer";
@@ -130,6 +131,12 @@ function navigateToTarget(
       navigationRef.navigate("MainTabs", { screen: "Dev" });
       return;
   }
+}
+
+/** Runs hooks that need AuthSessionProvider context */
+function AppEffects({ rpcClient }: { rpcClient: RpcClient }) {
+  useWidgetUpdater(rpcClient);
+  return null;
 }
 
 function MainTabsNavigator({
@@ -330,6 +337,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PrivyWalletProvider env={env}>
         <AuthSessionProvider rpcClient={rpcClient}>
+          <AppEffects rpcClient={rpcClient} />
           <NavigationContainer
             ref={navigationRef}
             theme={navigationTheme}
