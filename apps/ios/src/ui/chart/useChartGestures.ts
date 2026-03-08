@@ -5,15 +5,10 @@
  *      Fires haptic on candle boundary crossings.
  * Pinch: adjusts horizontal scale (1.0-3.0x).
  *
- * Returns composed gesture and shared values for integration with TokenChart.
+ * Returns composed gesture and mutable refs for integration with TokenChart.
  */
 import { useCallback, useRef } from "react";
 import { Gesture, type ComposedGesture } from "react-native-gesture-handler";
-import {
-  useSharedValue,
-  runOnJS,
-  type SharedValue,
-} from "react-native-reanimated";
 import { haptics } from "@/src/lib/haptics";
 
 type UseChartGesturesOptions = {
@@ -35,8 +30,8 @@ type UseChartGesturesOptions = {
 
 type UseChartGesturesResult = {
   gesture: ComposedGesture;
-  isScrubbing: SharedValue<boolean>;
-  pinchScale: SharedValue<number>;
+  isScrubbing: React.RefObject<boolean>;
+  pinchScale: React.RefObject<number>;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -52,8 +47,8 @@ export function useChartGestures({
   onScrubEnd,
   onScaleChange,
 }: UseChartGesturesOptions): UseChartGesturesResult {
-  const isScrubbing = useSharedValue(false);
-  const pinchScale = useSharedValue(1);
+  const isScrubbing = useRef(false);
+  const pinchScale = useRef(1);
   const lastIndex = useRef(-1);
 
   const fireHaptic = useCallback(() => {
@@ -104,31 +99,26 @@ export function useChartGestures({
   const panGesture = Gesture.Pan()
     .activateAfterLongPress(200)
     .onStart((e) => {
-      "worklet";
-      isScrubbing.value = true;
-      runOnJS(startScrub)();
-      runOnJS(handleIndexUpdate)(e.x);
+      isScrubbing.current = true;
+      startScrub();
+      handleIndexUpdate(e.x);
     })
     .onUpdate((e) => {
-      "worklet";
-      runOnJS(handleIndexUpdate)(e.x);
+      handleIndexUpdate(e.x);
     })
     .onEnd(() => {
-      "worklet";
-      isScrubbing.value = false;
-      runOnJS(endScrub)();
+      isScrubbing.current = false;
+      endScrub();
     });
 
   // Pinch gesture — scale 1.0-3.0x
   const pinchGesture = Gesture.Pinch()
     .onUpdate((e) => {
-      "worklet";
       const newScale = clamp(e.scale, 1, 3);
-      pinchScale.value = newScale;
-      runOnJS(updateScale)(newScale);
+      pinchScale.current = newScale;
+      updateScale(newScale);
     })
     .onEnd(() => {
-      "worklet";
       // Keep the scale where user left it
     });
 
