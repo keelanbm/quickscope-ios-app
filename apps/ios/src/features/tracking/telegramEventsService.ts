@@ -80,7 +80,7 @@ export async function fetchTelegramMessages(
 ): Promise<TelegramMessage[]> {
   const limit = options?.limit ?? 50;
   const filter: Record<string, unknown> = {
-    chats: [chatId],
+    chats: [Number(chatId)],
     offset: options?.offset ?? 0,
   };
   if (options?.messageTypes && options.messageTypes.length > 0) {
