@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
@@ -24,6 +24,7 @@ import {
   type DiscoveryTabId,
   type DiscoveryToken,
 } from "@/src/features/discovery/discoveryService";
+import { useDiscoveryCards } from "@/src/features/discovery/useDiscoveryCards";
 import type { ScopeFilters } from "@/src/features/scope/scopeService";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
 import { toast } from "@/src/lib/toast";
@@ -181,12 +182,13 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
 
   const selectedTokenAddress = params?.tokenAddress;
 
-  const topMovers = useMemo(() => {
-    return rows
-      .slice()
-      .sort((a, b) => b.oneHourChangePercent - a.oneHourChangePercent)
-      .slice(0, 8);
-  }, [rows]);
+  const {
+    cards: carouselCards,
+    isLoading: carouselLoading,
+    label: carouselLabel,
+    emptyMessage: carouselEmpty,
+    source: carouselSource,
+  } = useDiscoveryCards(rpcClient);
 
   const toggleStar = useCallback((mint: string) => {
     setStarredMints((current) => ({
@@ -315,10 +317,10 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
             <SkeletonRows count={5} style={{ gap: qsSpacing.xs }} />
           ) : null}
 
-          {/* ── Top Movers carousel ── */}
-          {!isInitialLoading && topMovers.length > 0 ? (
+          {/* ── Carousel cards (configurable source) ── */}
+          {!isInitialLoading && !carouselLoading && carouselCards.length > 0 ? (
             <View style={styles.topMoversSection}>
-              <Text style={styles.topMoversHeader}>Top Movers</Text>
+              <Text style={styles.topMoversHeader}>{carouselLabel}</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -326,34 +328,51 @@ export function DiscoveryScreen({ rpcClient, params }: DiscoveryScreenProps) {
                 snapToInterval={TOP_MOVER_CARD_WIDTH + qsSpacing.sm}
                 decelerationRate="fast"
               >
-                {topMovers.map((token) => {
-                  const isPositive = token.oneHourChangePercent >= 0;
+                {carouselCards.map((card) => {
+                  const isPositive = card.oneHourChangePercent >= 0;
+                  const showChange = carouselSource !== "holdings";
                   return (
                     <AnimatedPressable
-                      key={token.mint}
+                      key={card.mint}
                       style={styles.topMoverCard}
-                      onPress={() => handleOpenTokenDetail(token)}
+                      onPress={() => {
+                        rootNavigation?.navigate("TokenDetail", {
+                          source: "discovery-row",
+                          tokenAddress: card.mint,
+                          symbol: card.symbol,
+                          imageUri: card.imageUri,
+                          marketCapUsd: card.marketCapUsd,
+                          oneHourChangePercent: card.oneHourChangePercent,
+                        });
+                      }}
                     >
-                      <TokenAvatar uri={token.imageUri} size={32} />
+                      <TokenAvatar uri={card.imageUri} size={32} />
                       <Text style={styles.topMoverSymbol} numberOfLines={1}>
-                        {token.symbol || "???"}
+                        {card.symbol || "???"}
                       </Text>
                       <Text style={styles.topMoverMC} numberOfLines={1}>
-                        {formatCompactUsd(token.marketCapUsd)}
+                        {formatCompactUsd(card.marketCapUsd)}
                       </Text>
-                      <Text
-                        style={[
-                          styles.topMoverChange,
-                          { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {formatPercent(token.oneHourChangePercent)}
-                      </Text>
+                      {showChange ? (
+                        <Text
+                          style={[
+                            styles.topMoverChange,
+                            { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {formatPercent(card.oneHourChangePercent)}
+                        </Text>
+                      ) : null}
                     </AnimatedPressable>
                   );
                 })}
               </ScrollView>
+            </View>
+          ) : null}
+          {!isInitialLoading && !carouselLoading && carouselCards.length === 0 && carouselEmpty ? (
+            <View style={styles.carouselEmptyWrap}>
+              <Text style={styles.carouselEmptyText}>{carouselEmpty}</Text>
             </View>
           ) : null}
 
@@ -562,5 +581,16 @@ const styles = StyleSheet.create({
     fontSize: qsTypography.size.xs,
     fontWeight: qsTypography.weight.bold,
     fontVariant: ["tabular-nums"],
+  },
+  carouselEmptyWrap: {
+    backgroundColor: qsColors.layer1,
+    borderRadius: qsRadius.lg,
+    paddingVertical: qsSpacing.lg,
+    paddingHorizontal: qsSpacing.md,
+    alignItems: "center",
+  },
+  carouselEmptyText: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxs,
   },
 });

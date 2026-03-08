@@ -17,7 +17,7 @@ import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
 import { useWalletCompat } from "@/src/features/wallet/useWalletCompat";
 import type { RootStack } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
-import { LogOut, Gift, X, Wallet, ArrowUpDown, User } from "@/src/ui/icons";
+import { LogOut, Gift, X, Wallet, ArrowUpDown, User, Settings } from "@/src/ui/icons";
 
 const DRAWER_WIDTH = Dimensions.get("window").width * 0.8;
 const ANIMATION_DURATION = 250;
@@ -139,6 +139,12 @@ export function SlideOutDrawer({ visible, onClose }: Props) {
       label: "Transfer",
       subtitle: "Coming soon",
       onPress: () => {},
+    },
+    {
+      icon: <Settings size={20} color={qsColors.textSecondary} />,
+      label: "Settings",
+      subtitle: "Trade presets, display & more",
+      onPress: () => navigateTo("Settings"),
     },
     {
       icon: <User size={20} color={qsColors.textSecondary} />,
