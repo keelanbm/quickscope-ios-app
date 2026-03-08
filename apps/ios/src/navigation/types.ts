@@ -78,4 +78,5 @@ export type RootStack = {
   WalletDetail: WalletDetailRouteParams;
   Rewards: undefined;
   Deposit: undefined;
+  Settings: undefined;
 };

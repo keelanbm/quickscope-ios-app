@@ -56,6 +56,9 @@ const TelegramScreen = React.lazy(() =>
 const WalletDetailScreen = React.lazy(() =>
   import("@/src/screens/walletDetail/WalletDetailScreen").then((m) => ({ default: m.WalletDetailScreen }))
 );
+const SettingsScreen = React.lazy(() =>
+  import("@/src/screens/SettingsScreen").then((m) => ({ default: m.SettingsScreen }))
+);
 import { qsColors } from "@/src/theme/tokens";
 import { AuthRouteGate } from "@/src/ui/AuthRouteGate";
 import { RouteErrorBoundary } from "@/src/ui/RouteErrorBoundary";
@@ -410,6 +413,17 @@ export default function App() {
                         <DepositScreen />
                       </Suspense>
                     </AuthRouteGate>
+                  </RouteErrorBoundary>
+                )}
+              />
+              <Stack.Screen
+                name="Settings"
+                options={{ title: "Settings", headerBackButtonDisplayMode: "minimal" }}
+                children={() => (
+                  <RouteErrorBoundary routeName="Settings">
+                    <Suspense fallback={<LazyFallback />}>
+                      <SettingsScreen rpcClient={rpcClient} />
+                    </Suspense>
                   </RouteErrorBoundary>
                 )}
               />
