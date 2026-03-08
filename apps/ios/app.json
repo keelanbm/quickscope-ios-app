@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "quickscope",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "runtimeVersion": "0.1.0",
     "ios": {
       "supportsTablet": true,
@@ -30,12 +29,14 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#0a0810"
         }
       ],
       "expo-secure-store",
       "expo-web-browser",
-      "expo-dev-client"
+      "expo-dev-client",
+      "expo-font",
+      "expo-image"
     ],
     "extra": {
       "projectName": "quickscope-ios-app",
