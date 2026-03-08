@@ -2,27 +2,12 @@
  * HorizontalPriceLine — horizontal dashed line at touch Y position.
  *
  * Shows during active scrub with a small price label on the right edge.
- * Animated Y position via reanimated shared value.
  */
-import React, { useEffect } from "react";
+import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedProps,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
 import { Line } from "react-native-svg";
 
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
-
-const AnimatedLine = Animated.createAnimatedComponent(Line);
-
-const TIMING_CONFIG = {
-  duration: 100,
-  easing: Easing.out(Easing.quad),
-};
 
 type HorizontalPriceLineProps = {
   /** Y position in chart coordinates */
@@ -41,45 +26,26 @@ export function HorizontalPriceLine({
   chartHeight,
   priceLabel,
 }: HorizontalPriceLineProps) {
-  const animY = useSharedValue(y);
-
-  useEffect(() => {
-    animY.value = withTiming(y, TIMING_CONFIG);
-  }, [y, animY]);
-
-  const lineProps = useAnimatedProps(() => ({
-    y1: animY.value,
-    y2: animY.value,
-  }));
-
-  const labelStyle = useAnimatedStyle(() => {
-    // Keep label within chart bounds
-    const clampedY = Math.min(
-      Math.max(animY.value - 10, 0),
-      chartHeight - 20,
-    );
-    return {
-      top: clampedY,
-    };
-  });
+  const clampedY = Math.min(Math.max(y - 10, 0), chartHeight - 20);
 
   return (
     <>
-      <AnimatedLine
+      <Line
         x1={0}
         x2={width}
+        y1={y}
+        y2={y}
         stroke={qsColors.textTertiary}
         strokeWidth={0.5}
         strokeDasharray="4 3"
         strokeOpacity={0.6}
-        animatedProps={lineProps}
       />
       {/* Price label positioned outside SVG via absolute positioning */}
-      <Animated.View style={[styles.label, labelStyle]}>
+      <View style={[styles.label, { top: clampedY }]}>
         <Text style={styles.labelText} numberOfLines={1}>
           {priceLabel}
         </Text>
-      </Animated.View>
+      </View>
     </>
   );
 }

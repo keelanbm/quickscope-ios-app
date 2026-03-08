@@ -20,19 +20,13 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Clipboard from "expo-clipboard";
 import BottomSheet from "@gorhom/bottom-sheet";
 import {
+  Animated,
   Image,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import Animated, {
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-  interpolate,
-  Extrapolation,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { toast } from "@/src/lib/toast";
@@ -131,21 +125,22 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const bottomSheetRef = useRef<BottomSheet>(null);
   const settingsSheetRef = useRef<BottomSheet>(null);
 
-  const scrollY = useSharedValue(0);
-  const onScroll = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-    },
-  });
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const onScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: true },
+  );
 
-  const stickyHeaderStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [100, 140], [0, 1], Extrapolation.CLAMP),
-    transform: [
-      {
-        translateY: interpolate(scrollY.value, [100, 140], [-10, 0], Extrapolation.CLAMP),
-      },
-    ],
-  }));
+  const stickyHeaderOpacity = scrollY.interpolate({
+    inputRange: [100, 140],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+  const stickyHeaderTranslateY = scrollY.interpolate({
+    inputRange: [100, 140],
+    outputRange: [-10, 0],
+    extrapolate: "clamp",
+  });
 
   const [selectedTimeframe, setSelectedTimeframe] = useState<ChartTimeframe>(chartTimeframes[1]);
   const [liveInfo, setLiveInfo] = useState<LiveTokenInfo | null>(null);
@@ -719,7 +714,7 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   return (
     <View style={[styles.page, { paddingTop: insets.top }]}>
       {/* Sticky condensed header */}
-      <Animated.View style={[styles.stickyHeader, stickyHeaderStyle]} pointerEvents="box-none">
+      <Animated.View style={[styles.stickyHeader, { opacity: stickyHeaderOpacity, transform: [{ translateY: stickyHeaderTranslateY }] }]} pointerEvents="box-none">
         <View style={styles.stickyHeaderInner}>
           <Pressable
             onPress={handleGoBack}

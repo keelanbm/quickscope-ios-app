@@ -35,7 +35,9 @@
       }
     },
     "preview": {
-      "distribution": "internal",
+      "distribution": "store",
+      "channel": "preview",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://api.quickscope.gg",
         "EXPO_PUBLIC_WS_HOST": "wss://api.quickscope.gg",

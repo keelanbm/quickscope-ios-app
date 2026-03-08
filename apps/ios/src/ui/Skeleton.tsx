@@ -1,12 +1,5 @@
-import { useEffect } from "react";
-import { StyleSheet, View, type DimensionValue, type ViewStyle } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
+import { useEffect, useRef } from "react";
+import { Animated, StyleSheet, View, type DimensionValue, type ViewStyle } from "react-native";
 import { qsColors, qsRadius, qsSpacing } from "@/src/theme/tokens";
 
 type SkeletonBaseProps = {
@@ -22,19 +15,26 @@ function SkeletonBase({
   borderRadius = 4,
   style,
 }: SkeletonBaseProps) {
-  const opacity = useSharedValue(0.3);
+  const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    opacity.value = withRepeat(
-      withTiming(0.7, { duration: 800, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true,
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.7,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
     );
+    animation.start();
+    return () => animation.stop();
   }, [opacity]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
 
   return (
     <Animated.View
@@ -44,9 +44,9 @@ function SkeletonBase({
           height,
           borderRadius,
           backgroundColor: qsColors.borderDefault,
+          opacity,
         },
         style,
-        animatedStyle,
       ]}
     />
   );

@@ -1,7 +1,5 @@
 import { type PropsWithChildren } from "react";
-import { type PressableProps, type ViewStyle } from "react-native";
-import Animated, { type AnimatedStyle } from "react-native-reanimated";
-import { Pressable } from "react-native";
+import { Animated, type PressableProps, Pressable, type ViewStyle } from "react-native";
 import * as Haptics from "expo-haptics";
 
 import { useAnimatedPress } from "@/src/hooks/useAnimatedPress";
@@ -10,7 +8,7 @@ type AnimatedPressableProps = PropsWithChildren<
   PressableProps & {
     scaleTo?: number;
     hapticStyle?: Haptics.ImpactFeedbackStyle;
-    style?: ViewStyle | ViewStyle[] | AnimatedStyle<ViewStyle>;
+    style?: ViewStyle | ViewStyle[];
   }
 >;
 

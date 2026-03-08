@@ -1,12 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
+import { Animated, type ViewStyle } from "react-native";
 import * as Haptics from "expo-haptics";
-import {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  type AnimatedStyle,
-} from "react-native-reanimated";
-import type { ViewStyle } from "react-native";
 
 type AnimatedPressOptions = {
   scaleTo?: number;
@@ -15,14 +9,9 @@ type AnimatedPressOptions = {
 };
 
 type AnimatedPressResult = {
-  animatedStyle: AnimatedStyle<ViewStyle>;
+  animatedStyle: { transform: { scale: Animated.Value }[] };
   onPressIn: () => void;
   onPressOut: () => void;
-};
-
-const SPRING_CONFIG = {
-  damping: 15,
-  stiffness: 150,
 };
 
 export function useAnimatedPress(
@@ -34,20 +23,28 @@ export function useAnimatedPress(
     disabled = false,
   } = options ?? {};
 
-  const scale = useSharedValue(1);
+  const scale = useRef(new Animated.Value(1)).current;
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const animatedStyle = { transform: [{ scale }] };
 
   const onPressIn = useCallback(() => {
     if (disabled) return;
-    scale.value = withSpring(scaleTo, SPRING_CONFIG);
+    Animated.spring(scale, {
+      toValue: scaleTo,
+      damping: 15,
+      stiffness: 150,
+      useNativeDriver: true,
+    }).start();
     void Haptics.impactAsync(hapticStyle);
   }, [disabled, scaleTo, hapticStyle, scale]);
 
   const onPressOut = useCallback(() => {
-    scale.value = withSpring(1, SPRING_CONFIG);
+    Animated.spring(scale, {
+      toValue: 1,
+      damping: 15,
+      stiffness: 150,
+      useNativeDriver: true,
+    }).start();
   }, [scale]);
 
   return { animatedStyle, onPressIn, onPressOut };

@@ -1,27 +1,13 @@
 /**
- * AnimatedCandle — single candlestick with reanimated transitions.
+ * AnimatedCandle — single candlestick with fade-in on mount.
  *
- * Body height/position animate via withTiming (150ms) for smooth updates.
- * Fades in on mount via opacity transition.
+ * Uses RN Animated for opacity fade-in. Position/size values set directly.
  */
-import React, { useEffect } from "react";
-import Animated, {
-  useSharedValue,
-  useAnimatedProps,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
+import React, { useEffect, useRef } from "react";
+import { Animated, Easing } from "react-native";
 import { Line, Rect } from "react-native-svg";
 
 import { qsColors } from "@/src/theme/tokens";
-
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
-const AnimatedLine = Animated.createAnimatedComponent(Line);
-
-const TIMING_CONFIG = {
-  duration: 150,
-  easing: Easing.out(Easing.quad),
-};
 
 type AnimatedCandleProps = {
   x: number;
@@ -45,54 +31,39 @@ export function AnimatedCandle({
   candleWidth,
 }: AnimatedCandleProps) {
   const color = isGreen ? qsColors.candleGreen : qsColors.candleRed;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const [opacityVal, setOpacityVal] = React.useState(0);
 
-  // Animated shared values
-  const animHighY = useSharedValue(highY);
-  const animLowY = useSharedValue(lowY);
-  const animBodyTop = useSharedValue(bodyTop);
-  const animBodyHeight = useSharedValue(bodyHeight);
-  const animOpacity = useSharedValue(0);
-
-  // Drive animations on value changes
   useEffect(() => {
-    animHighY.value = withTiming(highY, TIMING_CONFIG);
-    animLowY.value = withTiming(lowY, TIMING_CONFIG);
-    animBodyTop.value = withTiming(bodyTop, TIMING_CONFIG);
-    animBodyHeight.value = withTiming(bodyHeight, TIMING_CONFIG);
-  }, [highY, lowY, bodyTop, bodyHeight, animHighY, animLowY, animBodyTop, animBodyHeight]);
-
-  // Fade in on mount
-  useEffect(() => {
-    animOpacity.value = withTiming(1, { duration: 200 });
-  }, [animOpacity]);
-
-  const wickProps = useAnimatedProps(() => ({
-    y1: animHighY.value,
-    y2: animLowY.value,
-    opacity: animOpacity.value,
-  }));
-
-  const bodyProps = useAnimatedProps(() => ({
-    y: animBodyTop.value,
-    height: animBodyHeight.value,
-    opacity: animOpacity.value,
-  }));
+    const id = opacity.addListener(({ value }) => setOpacityVal(value));
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 200,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
+    return () => opacity.removeListener(id);
+  }, [opacity]);
 
   return (
     <>
-      <AnimatedLine
+      <Line
         x1={centerX}
         x2={centerX}
+        y1={highY}
+        y2={lowY}
         stroke={color}
         strokeWidth={1}
-        animatedProps={wickProps}
+        opacity={opacityVal}
       />
-      <AnimatedRect
+      <Rect
         x={x}
+        y={bodyTop}
         width={candleWidth}
+        height={bodyHeight}
         fill={color}
         rx={1}
-        animatedProps={bodyProps}
+        opacity={opacityVal}
       />
     </>
   );

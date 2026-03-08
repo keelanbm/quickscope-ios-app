@@ -1,12 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from "react";
-import { StyleSheet, Text } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS,
-  Easing,
-} from "react-native-reanimated";
+import { Animated, Easing, StyleSheet, Text } from "react-native";
 import { qsColors, qsRadius, qsShadows, qsSpacing } from "@/src/theme/tokens";
 
 type ToastVariant = "success" | "error" | "info";
@@ -33,14 +26,25 @@ let toastId = 0;
 
 export function useInlineToast(): [React.ReactNode, InlineToastController] {
   const [message, setMessage] = useState<ToastMessage | null>(null);
-  const translateY = useSharedValue(-40);
-  const opacity = useSharedValue(0);
+  const translateY = useRef(new Animated.Value(-40)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dismiss = useCallback(() => {
-    translateY.value = withTiming(-40, { duration: 200, easing: Easing.in(Easing.ease) });
-    opacity.value = withTiming(0, { duration: 200 }, () => {
-      runOnJS(setMessage)(null);
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -40,
+        duration: 200,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setMessage(null);
     });
   }, [translateY, opacity]);
 
@@ -53,10 +57,22 @@ export function useInlineToast(): [React.ReactNode, InlineToastController] {
       const id = ++toastId;
       setMessage({ id, text, variant });
 
-      translateY.value = -40;
-      opacity.value = 0;
-      translateY.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.ease) });
-      opacity.value = withTiming(1, { duration: 250 });
+      translateY.setValue(-40);
+      opacity.setValue(0);
+
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
       timeoutRef.current = setTimeout(dismiss, AUTO_DISMISS_MS);
     },
@@ -71,17 +87,12 @@ export function useInlineToast(): [React.ReactNode, InlineToastController] {
     };
   }, []);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-    opacity: opacity.value,
-  }));
-
   const element = message ? (
     <Animated.View
       style={[
         styles.container,
         { borderLeftColor: VARIANT_COLORS[message.variant] },
-        animatedStyle,
+        { transform: [{ translateY }], opacity },
       ]}
       pointerEvents="none"
     >

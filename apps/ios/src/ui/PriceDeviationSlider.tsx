@@ -5,14 +5,9 @@
  * small draggable thumb, and a compact % input box on the right.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  runOnJS,
-} from "react-native-reanimated";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 import { haptics } from "@/src/lib/haptics";
 
@@ -31,15 +26,15 @@ const SNAP_THRESHOLD = 3;
 const TICK_POSITIONS = [-100, -50, 0, 50, 100];
 
 export function PriceDeviationSlider({
-  currentMC,
+  currentMC: _currentMC,
   deviationPercent,
   onDeviationChange,
   side,
   minPercent = -100,
   maxPercent = 100,
 }: Props) {
-  const trackWidth = useSharedValue(0);
-  const translateX = useSharedValue(0);
+  const trackWidthRef = useRef(0);
+  const [thumbX, setThumbX] = useState(0);
   const [inputText, setInputText] = useState(String(deviationPercent));
 
   const percentToX = useCallback(
@@ -52,25 +47,19 @@ export function PriceDeviationSlider({
 
   const panGesture = Gesture.Pan()
     .onUpdate((e) => {
-      "worklet";
-      const width = trackWidth.value;
+      const width = trackWidthRef.current;
       if (width <= 0) return;
       const clampedX = Math.max(0, Math.min(e.x, width));
-      translateX.value = clampedX;
+      setThumbX(clampedX);
       const range = maxPercent - minPercent;
       const pct = (clampedX / width) * range + minPercent;
       const snapped = Math.abs(pct) < SNAP_THRESHOLD ? 0 : Math.round(pct);
-      runOnJS(onDeviationChange)(snapped);
-      runOnJS(setInputText)(String(snapped));
+      onDeviationChange(snapped);
+      setInputText(String(snapped));
     })
     .onEnd(() => {
-      "worklet";
-      runOnJS(haptics.light)();
+      haptics.light();
     });
-
-  const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value - THUMB_SIZE / 2 }],
-  }));
 
   // Thumb color
   const fillColor = useMemo(() => {
@@ -93,17 +82,11 @@ export function PriceDeviationSlider({
     setInputText(String(clamped));
     haptics.light();
     // Sync thumb position
-    const width = trackWidth.value;
+    const width = trackWidthRef.current;
     if (width > 0) {
-      translateX.value = percentToX(clamped, width);
+      setThumbX(percentToX(clamped, width));
     }
-  }, [inputText, deviationPercent, minPercent, maxPercent, onDeviationChange, trackWidth, translateX, percentToX]);
-
-  // Sync inputText when parent changes deviationPercent
-  const displayText = String(deviationPercent);
-  if (inputText !== displayText && !isNaN(parseInt(inputText, 10))) {
-    // Only sync if not actively editing
-  }
+  }, [inputText, deviationPercent, minPercent, maxPercent, onDeviationChange, percentToX]);
 
   // Tick mark positions as percentages
   const tickPositions = useMemo(() => {
@@ -125,8 +108,8 @@ export function PriceDeviationSlider({
               style={styles.trackHitArea}
               onLayout={(e) => {
                 const width = e.nativeEvent.layout.width;
-                trackWidth.value = width;
-                translateX.value = percentToX(deviationPercent, width);
+                trackWidthRef.current = width;
+                setThumbX(percentToX(deviationPercent, width));
               }}
             >
               {/* Thin track line */}
@@ -145,8 +128,11 @@ export function PriceDeviationSlider({
               ))}
 
               {/* Thumb */}
-              <Animated.View
-                style={[styles.thumb, thumbStyle, { backgroundColor: fillColor }]}
+              <View
+                style={[
+                  styles.thumb,
+                  { backgroundColor: fillColor, transform: [{ translateX: thumbX - THUMB_SIZE / 2 }] },
+                ]}
               />
             </View>
           </GestureDetector>

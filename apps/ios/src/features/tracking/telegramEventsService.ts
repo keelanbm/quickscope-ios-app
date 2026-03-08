@@ -26,7 +26,7 @@ export async function fetchTelegramChats(
 ): Promise<TelegramChat[]> {
   const response = await rpcClient.call<RawTelegramChat[]>(
     "private/getTelegramChats",
-    [{ limit: 100 }]
+    []
   );
 
   const chats = Array.isArray(response) ? response : [];

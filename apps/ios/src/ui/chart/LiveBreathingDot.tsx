@@ -4,19 +4,11 @@
  * Outer circle scales 1→1.4→1 with fading opacity (accent at 30%).
  * Inner solid dot stays fixed. Used only in line mode when isLive=true.
  */
-import React, { useEffect } from "react";
-import Animated, {
-  useSharedValue,
-  useAnimatedProps,
-  withRepeat,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Easing } from "react-native";
 import { Circle } from "react-native-svg";
 
 import { qsColors } from "@/src/theme/tokens";
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type LiveBreathingDotProps = {
   cx: number;
@@ -26,47 +18,51 @@ type LiveBreathingDotProps = {
 const OUTER_RADIUS = 8;
 
 export function LiveBreathingDot({ cx, cy }: LiveBreathingDotProps) {
-  const animScale = useSharedValue(1);
-  const animOpacity = useSharedValue(0.3);
+  const anim = useRef(new Animated.Value(0)).current;
+  const [pulse, setPulse] = useState({ scale: 1, opacity: 0.3 });
 
   useEffect(() => {
-    animScale.value = withRepeat(
-      withTiming(1.4, {
-        duration: 1200,
-        easing: Easing.inOut(Easing.sin),
-      }),
-      -1,
-      true,
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        }),
+        Animated.timing(anim, {
+          toValue: 0,
+          duration: 1200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        }),
+      ]),
     );
-    animOpacity.value = withRepeat(
-      withTiming(0.08, {
-        duration: 1200,
-        easing: Easing.inOut(Easing.sin),
-      }),
-      -1,
-      true,
-    );
-  }, [animScale, animOpacity]);
 
-  const outerProps = useAnimatedProps(() => ({
-    r: OUTER_RADIUS * animScale.value,
-    opacity: animOpacity.value,
-  }));
+    const id = anim.addListener(({ value }) => {
+      setPulse({
+        scale: 1 + value * 0.4,
+        opacity: 0.3 - value * 0.22,
+      });
+    });
+
+    loop.start();
+    return () => {
+      loop.stop();
+      anim.removeListener(id);
+    };
+  }, [anim]);
 
   return (
     <>
-      <AnimatedCircle
-        cx={cx}
-        cy={cy}
-        fill={qsColors.accent}
-        animatedProps={outerProps}
-      />
       <Circle
         cx={cx}
         cy={cy}
-        r={4}
+        r={OUTER_RADIUS * pulse.scale}
         fill={qsColors.accent}
+        opacity={pulse.opacity}
       />
+      <Circle cx={cx} cy={cy} r={4} fill={qsColors.accent} />
     </>
   );
 }
