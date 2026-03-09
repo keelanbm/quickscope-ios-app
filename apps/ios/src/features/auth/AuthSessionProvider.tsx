@@ -213,7 +213,8 @@ export function AuthSessionProvider({
         const bytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
         return bs58.encode(bytes);
       }
-      return bs58.encode(signature instanceof Uint8Array ? signature : new Uint8Array(signature as ArrayLike<number>));
+      const sig = signature as unknown;
+      return bs58.encode(sig instanceof Uint8Array ? sig : new Uint8Array(sig as ArrayLike<number>));
     });
   }, [authenticateWithExternalSigner, embeddedWalletAddress, isPhantomConnected, phantomSignMessage, wallets]);
 
