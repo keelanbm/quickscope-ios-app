@@ -258,6 +258,7 @@ export class RpcClient {
     const response = await fetch(`${this.apiHost}/${method}`, {
       method: "POST",
       credentials: "include",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         method,
         params,
