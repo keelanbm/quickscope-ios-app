@@ -39,6 +39,7 @@ import {
   type EnrichedWatchlistToken,
   type TokenWatchlist,
 } from "@/src/features/watchlist/tokenWatchlistService";
+import { fetchLiveTokenInfos, type LiveTokenInfo } from "@/src/features/token/tokenService";
 import type { RootStack, RootTabs, TrackingRouteParams } from "@/src/navigation/types";
 import { qsColors, qsRadius, qsSpacing, qsTypography } from "@/src/theme/tokens";
 import { Activity, ChevronDown, Copy, Eye, Globe, MessageCircle, Star, TrendingDown, TrendingUp, Wallet } from "@/src/ui/icons";
@@ -68,6 +69,33 @@ const TABS: { id: TrackingTabId; label: string }[] = [
   { id: "tokens", label: "Tokens" },
   { id: "chats", label: "Chats" },
 ];
+
+/* ─── LiveTokenInfo → EnrichedWatchlistToken adapter ─── */
+
+function liveTokenInfoToEnriched(mint: string, info: LiveTokenInfo): EnrichedWatchlistToken {
+  const priceUsd = info.token_price_info?.price_usd ?? 0;
+  const supply = info.mint_info?.supply ?? 0;
+  const decimals = info.mint_info?.decimals ?? 0;
+  const naturalSupply = decimals > 0 ? supply / Math.pow(10, decimals) : 0;
+  const marketCapUsd = priceUsd * naturalSupply;
+  const dailyChange = info.token_price_info?.daily_trade_info?.daily_change_proportion ?? 0;
+
+  return {
+    mint,
+    symbol: info.token_metadata?.symbol || "???",
+    name: info.token_metadata?.name || "Unknown",
+    imageUri: info.token_metadata?.image_uri,
+    twitterUrl: info.token_metadata?.twitter_url,
+    telegramUrl: info.token_metadata?.telegram_url,
+    websiteUrl: info.token_metadata?.website_url,
+    marketCapUsd,
+    oneHourVolumeUsd: 0,
+    oneHourChangePercent: dailyChange * 100,
+    oneDayVolumeUsd: 0,
+    oneDayChangePercent: dailyChange * 100,
+    holders: info.token_metadata?.holders ?? 0,
+  };
+}
 
 /* ─── Wallet activity types ─── */
 
@@ -367,13 +395,30 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
           if (requestId !== requestRef.current) return;
           setTelegramMessages(msgs);
 
-          // Batch-fetch token table data for token-type messages (gives us market_cap_sol directly)
+          // Batch-fetch token data for token-type messages
           const tokenMints = [...new Set(msgs.filter((m) => m.msgType === 1 && m.tokenMint).map((m) => m.tokenMint!))];
           if (tokenMints.length > 0) {
             try {
+              // Primary: filterTokensTable (best data — MC, 1h change, volume)
               const enriched = await fetchWatchlistTokens(rpcClient, tokenMints);
               const map: Record<string, EnrichedWatchlistToken> = {};
               for (const t of enriched) map[t.mint] = t;
+
+              // Fallback: getLiveTokenInfos for mints missing from tokens table
+              const missingMints = tokenMints.filter((m) => !map[m]);
+              if (missingMints.length > 0) {
+                try {
+                  const liveInfos = await fetchLiveTokenInfos(rpcClient, missingMints);
+                  for (const [mint, info] of Object.entries(liveInfos)) {
+                    if (info.token_metadata) {
+                      map[mint] = liveTokenInfoToEnriched(mint, info);
+                    }
+                  }
+                } catch {
+                  // Non-critical — some tokens just won't have enrichment
+                }
+              }
+
               setChatTokenInfoMap(map);
             } catch {
               // Non-critical — messages still render without enrichment
@@ -932,10 +977,43 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
           );
         }
 
+        // Token message without enrichment — show minimal token row with truncated address
+        if (msg.msgType === 1 && msg.tokenMint) {
+          return (
+            <Pressable
+              style={styles.rowItem}
+              onPress={() => handleOpenTokenDetail(msg.tokenMint!)}
+            >
+              <View style={styles.rowMain}>
+                <TokenAvatar uri={undefined} size={44} />
+                <View style={styles.nameColumn}>
+                  <Text numberOfLines={1} style={styles.tokenSymbol}>
+                    {msg.tokenMint.slice(0, 6)}…{msg.tokenMint.slice(-4)}
+                  </Text>
+                  <View style={styles.chatMessageMeta}>
+                    <Text style={styles.chatMessageUsername}>@{msg.username}</Text>
+                    <Text style={styles.chatMetaDot}>·</Text>
+                    <Text style={styles.chatMessageTime}>
+                      {formatAgeFromSeconds(msg.timestamp)}
+                    </Text>
+                    <Text style={styles.chatMetaDot}>·</Text>
+                    <Text style={[styles.chatMessageType, { color: qsColors.accent }]}>
+                      Token
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.priceColumn}>
+                  <Text numberOfLines={1} style={styles.priceValue}>—</Text>
+                </View>
+              </View>
+            </Pressable>
+          );
+        }
+
         return (
           <Pressable
             style={({ pressed }) => [styles.chatRowItem, pressed && { opacity: 0.7 }]}
-            onPress={msg.tokenMint ? () => handleOpenTokenDetail(msg.tokenMint!) : undefined}
+            onPress={undefined}
           >
             <View style={styles.chatMessageCard}>
               <View style={styles.chatCardInner}>
