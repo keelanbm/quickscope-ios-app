@@ -213,7 +213,8 @@ export function AuthSessionProvider({
         const bytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
         return bs58.encode(bytes);
       }
-      return bs58.encode(signature instanceof Uint8Array ? signature : new Uint8Array(signature as ArrayLike<number>));
+      const sig = signature as unknown;
+      return bs58.encode(sig instanceof Uint8Array ? sig : new Uint8Array(sig as ArrayLike<number>));
     });
   }, [authenticateWithExternalSigner, embeddedWalletAddress, isPhantomConnected, phantomSignMessage, wallets]);
 
@@ -359,5 +360,14 @@ export function useAuthSession() {
     throw new Error("useAuthSession must be used inside AuthSessionProvider");
   }
 
+  return context;
+}
+
+/** Non-throwing variant — returns safe defaults when provider isn't mounted yet (e.g. hot reload). */
+export function useAuthSessionSafe() {
+  const context = useContext(AuthSessionContext);
+  if (!context) {
+    return { status: "bootstrapping" as const, primaryAccountAddress: undefined };
+  }
   return context;
 }
