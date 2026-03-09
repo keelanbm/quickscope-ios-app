@@ -13,7 +13,6 @@
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://api.quickscope.gg",
         "EXPO_PUBLIC_WS_HOST": "wss://api.quickscope.gg",
-        "EXPO_PUBLIC_SOLANA_RPC_ENDPOINT": "https://attentive-muddy-hill.solana-mainnet.quiknode.pro/5a7216128203735da3e15af0d63bc96fcee73218",
         "EXPO_PUBLIC_PRIVY_APP_ID": "cmip3swbs0061l50d06fdtjhk",
         "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6TP7bXRg8BP5johqPKj9oN4ybb8h5yXsRY4JM9QXdbM",
         "EXPO_PUBLIC_ENABLE_SWAP_EXECUTION": "false"
@@ -28,7 +27,6 @@
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://api.quickscope.gg",
         "EXPO_PUBLIC_WS_HOST": "wss://api.quickscope.gg",
-        "EXPO_PUBLIC_SOLANA_RPC_ENDPOINT": "https://attentive-muddy-hill.solana-mainnet.quiknode.pro/5a7216128203735da3e15af0d63bc96fcee73218",
         "EXPO_PUBLIC_PRIVY_APP_ID": "cmip3swbs0061l50d06fdtjhk",
         "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6TP7bXRg8BP5johqPKj9oN4ybb8h5yXsRY4JM9QXdbM",
         "EXPO_PUBLIC_ENABLE_SWAP_EXECUTION": "false"
@@ -41,7 +39,6 @@
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://api.quickscope.gg",
         "EXPO_PUBLIC_WS_HOST": "wss://api.quickscope.gg",
-        "EXPO_PUBLIC_SOLANA_RPC_ENDPOINT": "https://attentive-muddy-hill.solana-mainnet.quiknode.pro/5a7216128203735da3e15af0d63bc96fcee73218",
         "EXPO_PUBLIC_PRIVY_APP_ID": "cmip3swbs0061l50d06fdtjhk",
         "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6TP7bXRg8BP5johqPKj9oN4ybb8h5yXsRY4JM9QXdbM",
         "EXPO_PUBLIC_ENABLE_SWAP_EXECUTION": "true"
@@ -52,7 +49,6 @@
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://api.quickscope.gg",
         "EXPO_PUBLIC_WS_HOST": "wss://api.quickscope.gg",
-        "EXPO_PUBLIC_SOLANA_RPC_ENDPOINT": "https://attentive-muddy-hill.solana-mainnet.quiknode.pro/5a7216128203735da3e15af0d63bc96fcee73218",
         "EXPO_PUBLIC_PRIVY_APP_ID": "cmip3swbs0061l50d06fdtjhk",
         "EXPO_PUBLIC_PRIVY_CLIENT_ID": "client-WY6TP7bXRg8BP5johqPKj9oN4ybb8h5yXsRY4JM9QXdbM",
         "EXPO_PUBLIC_ENABLE_SWAP_EXECUTION": "true"
