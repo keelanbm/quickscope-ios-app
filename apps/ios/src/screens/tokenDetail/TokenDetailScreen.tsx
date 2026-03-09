@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Clipboard from "expo-clipboard";
-import BottomSheet from "@gorhom/bottom-sheet";
+import type { SimpleBottomSheetRef } from "@/src/ui/SimpleBottomSheet";
 import {
   Animated,
   Image,
@@ -122,8 +122,8 @@ export function TokenDetailScreen({ rpcClient, params }: TokenDetailScreenProps)
   const chartRequestIdRef = useRef(0);
   const positionRequestIdRef = useRef(0);
   const balanceRequestIdRef = useRef(0);
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const settingsSheetRef = useRef<BottomSheet>(null);
+  const bottomSheetRef = useRef<SimpleBottomSheetRef>(null);
+  const settingsSheetRef = useRef<SimpleBottomSheetRef>(null);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const onScroll = Animated.event(

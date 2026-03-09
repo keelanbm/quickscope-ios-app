@@ -58,5 +58,13 @@
         "EXPO_PUBLIC_ENABLE_SWAP_EXECUTION": "true"
       }
     }
+  },
+  "submit": {
+    "preview": {
+      "ios": {}
+    },
+    "production": {
+      "ios": {}
+    }
   }
 }

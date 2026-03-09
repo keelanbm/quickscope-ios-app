@@ -6,11 +6,7 @@
  */
 import React, { forwardRef, useCallback, useMemo, useState, useEffect } from "react";
 import { Alert, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
-import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetScrollView,
-} from "@gorhom/bottom-sheet";
-import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
+import SimpleBottomSheet, { type SimpleBottomSheetRef, SimpleBottomSheetScrollView } from "@/src/ui/SimpleBottomSheet";
 
 import {
   qsColors,
@@ -40,7 +36,7 @@ const TIP_PRESETS = [100_000, 1_000_000, 10_000_000]; // lamports → 0.0001, 0.
 
 const lamportsToSol = (lamports: number) => (lamports / 1_000_000_000).toString();
 
-export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProps>(
+export const TradeSettingsModal = forwardRef<SimpleBottomSheetRef, TradeSettingsModalProps>(
   ({ settings, onSettingsChanged, onClose }, ref) => {
     const snapPoints = useMemo(() => ["80%", "95%"], []);
 
@@ -75,19 +71,6 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
         settings.sellPresets.map((v) => String(v * 100)) as [string, string, string, string]
       );
     }, [settings.buyPresets, settings.sellPresets]);
-
-    const renderBackdrop = useCallback(
-      (props: BottomSheetBackdropProps) => (
-        <BottomSheetBackdrop
-          {...props}
-          disappearsOnIndex={-1}
-          appearsOnIndex={0}
-          opacity={0.5}
-          pressBehavior="close"
-        />
-      ),
-      []
-    );
 
     const handleSave = useCallback(() => {
       const slippagePct = parseFloat(slippageText);
@@ -216,17 +199,16 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
     }, []);
 
     return (
-      <BottomSheet
+      <SimpleBottomSheet
         ref={ref}
         snapPoints={snapPoints}
         index={-1}
         enablePanDownToClose
-        backdropComponent={renderBackdrop}
         backgroundStyle={styles.sheetBg}
         handleIndicatorStyle={styles.handle}
         onClose={onClose}
       >
-        <BottomSheetScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+        <SimpleBottomSheetScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Trade Settings</Text>
@@ -391,8 +373,8 @@ export const TradeSettingsModal = forwardRef<BottomSheet, TradeSettingsModalProp
           >
             <Text style={styles.saveBtnText}>Save P{editingIndex + 1}</Text>
           </Pressable>
-        </BottomSheetScrollView>
-      </BottomSheet>
+        </SimpleBottomSheetScrollView>
+      </SimpleBottomSheet>
     );
   }
 );

@@ -12,7 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
-import type BottomSheet from "@gorhom/bottom-sheet";
+import type { SimpleBottomSheetRef } from "@/src/ui/SimpleBottomSheet";
 
 import { haptics } from "@/src/lib/haptics";
 import { formatCompactUsd, formatPercent, formatCompactNumber, formatAgeFromSeconds } from "@/src/lib/format";
@@ -295,7 +295,7 @@ export function ScopeScreen({ rpcClient, params }: ScopeScreenProps) {
   const requestSeqRef = useRef(0);
   const mountTimestampRef = useRef(Date.now());
   const firstDataLoggedRef = useRef(false);
-  const filterSheetRef = useRef<BottomSheet>(null);
+  const filterSheetRef = useRef<SimpleBottomSheetRef>(null);
   const [activeTab, setActiveTab] = useState<ScopeTabId>("new");
   const [rows, setRows] = useState<ScopeToken[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);

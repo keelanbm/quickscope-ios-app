@@ -161,6 +161,8 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   const [telegramChats, setTelegramChats] = useState<TelegramChat[]>([]);
   const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
 
   // ── List picker drawer ──
   const [listDrawerVisible, setListDrawerVisible] = useState(false);
@@ -178,7 +180,12 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         subtitle: `${wl.tokens.length} token${wl.tokens.length !== 1 ? "s" : ""}`,
       }));
     }
-    return telegramChats.map((c) => ({ id: c.chatId, label: c.name }));
+    return telegramChats.map((c) => ({
+      id: c.chatId,
+      label: c.name,
+      imageUri: c.chatImage || undefined,
+      icon: <MessageCircle size={14} color={qsColors.textTertiary} />,
+    }));
   }, [activeTab, walletWatchlists, tokenWatchlists, telegramChats]);
 
   const activeListId =
@@ -191,12 +198,23 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   const activeListLabel = drawerItems.find((i) => i.id === activeListId)?.label ?? "Select list";
 
   const handleDrawerSelect = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (activeTab === "wallets") setActiveWalletWatchlistId(id);
       else if (activeTab === "tokens") setActiveTokenWatchlistId(Number(id));
-      else if (activeTab === "chats") setActiveChatId(id);
+      else if (activeTab === "chats") {
+        setActiveChatId(id);
+        setIsLoading(true);
+        try {
+          const msgs = await fetchTelegramMessages(rpcClient, id);
+          setTelegramMessages(msgs);
+        } catch {
+          setErrorText("Failed to load chat messages.");
+        } finally {
+          setIsLoading(false);
+        }
+      }
     },
-    [activeTab]
+    [activeTab, rpcClient]
   );
 
   // Dynamic header title based on active tab
@@ -324,10 +342,10 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         if (requestId !== requestRef.current) return;
         setTelegramChats(chats);
 
-        const chatId = activeChatId ?? chats[0]?.chatId ?? null;
-        if (chatId) {
-          setActiveChatId(chatId);
-          const msgs = await fetchTelegramMessages(rpcClient, chatId);
+        const targetChatId = activeChatIdRef.current ?? chats[0]?.chatId ?? null;
+        if (targetChatId) {
+          if (targetChatId !== activeChatIdRef.current) setActiveChatId(targetChatId);
+          const msgs = await fetchTelegramMessages(rpcClient, targetChatId);
           if (requestId !== requestRef.current) return;
           setTelegramMessages(msgs);
         } else {
@@ -342,7 +360,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         setIsRefreshing(false);
       }
     },
-    [rpcClient, activeChatId]
+    [rpcClient]
   );
 
   /* ═══ Tab change / load effect ═══ */
@@ -360,7 +378,7 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   useEffect(() => {
     void loadCurrentTab();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, activeWalletWatchlistId, activeTokenWatchlistId, activeChatId]);
+  }, [activeTab, activeWalletWatchlistId, activeTokenWatchlistId]);
 
   const handleOpenTokenDetail = useCallback(
     (tokenAddress: string, symbol?: string) => {
@@ -795,28 +813,33 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         const msgTypeLabel = msg.msgType === 1 ? "Token" : msg.msgType === 2 ? "Tweet" : "Text";
         return (
           <Pressable
-            style={styles.rowItem}
+            style={({ pressed }) => [styles.chatRowItem, pressed && { opacity: 0.7 }]}
             onPress={msg.tokenMint ? () => handleOpenTokenDetail(msg.tokenMint!) : undefined}
           >
-            <View style={styles.rowMain}>
-              <View style={[styles.chatAvatarCircle, { backgroundColor: qsColors.layer3 }]}>
-                <MessageCircle size={16} color={qsColors.textTertiary} />
-              </View>
-              <View style={styles.nameColumn}>
-                <Text numberOfLines={1} style={styles.tokenSymbol}>
-                  {msg.username}
-                </Text>
-                <Text numberOfLines={2} style={styles.tokenName}>
-                  {msg.body || "—"}
-                </Text>
-              </View>
-              <View style={styles.metricCol}>
-                <Text numberOfLines={1} style={styles.metricSub}>
-                  {msgTypeLabel}
-                </Text>
-                <Text numberOfLines={1} style={styles.metricSub}>
-                  {formatAgeFromSeconds(msg.timestamp)}
-                </Text>
+            <View style={styles.chatMessageCard}>
+              <View style={styles.chatCardInner}>
+                <View style={styles.chatAvatarCircle}>
+                  <MessageCircle size={16} color={qsColors.textTertiary} />
+                </View>
+                <View style={styles.chatCardContent}>
+                  <Text style={styles.chatMessageBody} numberOfLines={4}>
+                    {msg.body || "—"}
+                  </Text>
+                  <View style={styles.chatMessageMeta}>
+                    <Text style={styles.chatMessageUsername}>@{msg.username}</Text>
+                    <Text style={styles.chatMetaDot}>·</Text>
+                    <Text style={styles.chatMessageTime}>
+                      {formatAgeFromSeconds(msg.timestamp)}
+                    </Text>
+                    <Text style={styles.chatMetaDot}>·</Text>
+                    <Text style={[
+                      styles.chatMessageType,
+                      msg.msgType === 1 && { color: qsColors.accent },
+                    ]}>
+                      {msgTypeLabel}
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
           </Pressable>
@@ -1038,12 +1061,60 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 1,
   },
+  chatRowItem: {
+    paddingHorizontal: qsSpacing.lg,
+    paddingVertical: qsSpacing.xs,
+  },
   chatAvatarCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: qsColors.layer3,
     alignItems: "center",
     justifyContent: "center",
+  },
+  chatMessageCard: {
+    backgroundColor: qsColors.layer1,
+    borderRadius: qsRadius.md,
+    padding: qsSpacing.md,
+  },
+  chatCardInner: {
+    flexDirection: "row",
+    gap: qsSpacing.sm,
+  },
+  chatCardContent: {
+    flex: 1,
+    gap: qsSpacing.xs,
+  },
+  chatMessageBody: {
+    color: qsColors.textPrimary,
+    fontSize: qsTypography.size.xs,
+    fontWeight: qsTypography.weight.regular,
+    lineHeight: 18,
+  },
+  chatMessageMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  chatMessageUsername: {
+    color: qsColors.textTertiary,
+    fontSize: qsTypography.size.xxxs + 1,
+    fontWeight: qsTypography.weight.medium,
+  },
+  chatMetaDot: {
+    color: qsColors.textSubtle,
+    fontSize: qsTypography.size.xxxs + 1,
+  },
+  chatMessageTime: {
+    color: qsColors.textSubtle,
+    fontSize: qsTypography.size.xxxs + 1,
+    fontWeight: qsTypography.weight.medium,
+  },
+  chatMessageType: {
+    color: qsColors.textSubtle,
+    fontSize: qsTypography.size.xxxs + 1,
+    fontWeight: qsTypography.weight.semi,
   },
   nameRow: {
     flexDirection: "row",
