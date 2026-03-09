@@ -17,13 +17,24 @@ export function useWidgetUpdater(rpcClient: RpcClient) {
   const { status, primaryAccountAddress } = useAuthSession();
   const lastUpdateRef = useRef(0);
 
+
   const triggerUpdate = () => {
     const now = Date.now();
-    if (now - lastUpdateRef.current < MIN_UPDATE_INTERVAL_MS) return;
-    if (status !== "authenticated" || !primaryAccountAddress) return;
+    if (now - lastUpdateRef.current < MIN_UPDATE_INTERVAL_MS) {
+      console.log("[Widgets] throttled, skipping update");
+      return;
+    }
+    if (status !== "authenticated" || !primaryAccountAddress) {
+      console.log("[Widgets] skipped — auth not ready", { status, hasAccount: !!primaryAccountAddress });
+      return;
+    }
 
+    console.log("[Widgets] updating all widgets…");
     lastUpdateRef.current = now;
-    updateAllWidgets(rpcClient, primaryAccountAddress);
+    updateAllWidgets(rpcClient, primaryAccountAddress).then(
+      () => console.log("[Widgets] update complete"),
+      (e) => console.warn("[Widgets] update error:", e)
+    );
   };
 
   // Update on auth ready

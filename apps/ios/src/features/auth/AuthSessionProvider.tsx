@@ -199,13 +199,21 @@ export function AuthSessionProvider({
 
     await authenticateWithExternalSigner(embeddedWalletAddress, async (challenge) => {
       const provider = await embeddedWallet.getProvider();
+      // Privy Expo SDK expects message as base64-encoded bytes (per docs).
+      // Encode challenge UTF-8 bytes to base64 so Privy signs the correct bytes.
+      const challengeBase64 = btoa(
+        String.fromCharCode(...new TextEncoder().encode(challenge))
+      );
       const { signature } = await provider.request({
         method: "signMessage",
-        params: { message: challenge },
+        params: { message: challengeBase64 },
       });
-      return typeof signature === "string"
-        ? signature
-        : bs58.encode(signature);
+      // Privy returns signature as base64 string — convert to base58 for server
+      if (typeof signature === "string") {
+        const bytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
+        return bs58.encode(bytes);
+      }
+      return bs58.encode(signature instanceof Uint8Array ? signature : new Uint8Array(signature as ArrayLike<number>));
     });
   }, [authenticateWithExternalSigner, embeddedWalletAddress, isPhantomConnected, phantomSignMessage, wallets]);
 

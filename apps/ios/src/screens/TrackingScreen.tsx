@@ -157,12 +157,16 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   // ── Wallet activity filters ──
   const [activityActionFilter, setActivityActionFilter] = useState<"all" | "Buy" | "Sell">("all");
 
+  // ── Chat message filters ──
+  const [chatMsgFilter, setChatMsgFilter] = useState<"all" | "tokens">("all");
+
   // ── Chats tab state ──
   const [telegramChats, setTelegramChats] = useState<TelegramChat[]>([]);
   const [telegramMessages, setTelegramMessages] = useState<TelegramMessage[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const activeChatIdRef = useRef(activeChatId);
   activeChatIdRef.current = activeChatId;
+  const [chatTokenInfoMap, setChatTokenInfoMap] = useState<Record<string, EnrichedWatchlistToken>>({});
 
   // ── List picker drawer ──
   const [listDrawerVisible, setListDrawerVisible] = useState(false);
@@ -207,6 +211,20 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         try {
           const msgs = await fetchTelegramMessages(rpcClient, id);
           setTelegramMessages(msgs);
+
+          const tokenMints = [...new Set(msgs.filter((m) => m.msgType === 1 && m.tokenMint).map((m) => m.tokenMint!))];
+          if (tokenMints.length > 0) {
+            try {
+              const enriched = await fetchWatchlistTokens(rpcClient, tokenMints);
+              const map: Record<string, EnrichedWatchlistToken> = {};
+              for (const t of enriched) map[t.mint] = t;
+              setChatTokenInfoMap(map);
+            } catch {
+              // Non-critical
+            }
+          } else {
+            setChatTokenInfoMap({});
+          }
         } catch {
           setErrorText("Failed to load chat messages.");
         } finally {
@@ -348,8 +366,24 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
           const msgs = await fetchTelegramMessages(rpcClient, targetChatId);
           if (requestId !== requestRef.current) return;
           setTelegramMessages(msgs);
+
+          // Batch-fetch token table data for token-type messages (gives us market_cap_sol directly)
+          const tokenMints = [...new Set(msgs.filter((m) => m.msgType === 1 && m.tokenMint).map((m) => m.tokenMint!))];
+          if (tokenMints.length > 0) {
+            try {
+              const enriched = await fetchWatchlistTokens(rpcClient, tokenMints);
+              const map: Record<string, EnrichedWatchlistToken> = {};
+              for (const t of enriched) map[t.mint] = t;
+              setChatTokenInfoMap(map);
+            } catch {
+              // Non-critical — messages still render without enrichment
+            }
+          } else {
+            setChatTokenInfoMap({});
+          }
         } else {
           setTelegramMessages([]);
+          setChatTokenInfoMap({});
         }
       } catch (error) {
         if (requestId !== requestRef.current) return;
@@ -427,8 +461,6 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   /** Inline toolbar: list picker trigger (left) + action filter chips (right, wallets only) */
   function renderToolbar() {
     const hasLists = drawerItems.length > 0;
-    // Only show toolbar on wallets / tokens tabs (chats has no list concept)
-    if (activeTab === "chats") return null;
 
     const actionOptions: Array<{ label: string; value: "all" | "Buy" | "Sell" }> = [
       { label: "All", value: "all" },
@@ -466,6 +498,32 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
                   onPress={() => {
                     haptics.selection();
                     setActivityActionFilter(opt.value);
+                  }}
+                >
+                  <Text style={[styles.actionChipText, active && styles.actionChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* Message type filter chips — chats tab only */}
+        {activeTab === "chats" && telegramMessages.length > 0 ? (
+          <View style={styles.actionChipRow}>
+            {([
+              { label: "All", value: "all" as const },
+              { label: "Tokens", value: "tokens" as const },
+            ]).map((opt) => {
+              const active = chatMsgFilter === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.actionChip, active && styles.actionChipActive]}
+                  onPress={() => {
+                    haptics.selection();
+                    setChatMsgFilter(opt.value);
                   }}
                 >
                   <Text style={[styles.actionChipText, active && styles.actionChipTextActive]}>
@@ -572,6 +630,15 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
           />
         );
       }
+      if (chatMsgFilter === "tokens" && !telegramMessages.some((m) => m.msgType === 1 && m.tokenMint)) {
+        return (
+          <EmptyState
+            icon={Star}
+            title="No token mentions"
+            subtitle="No tokens have been shared in this chat yet."
+          />
+        );
+      }
     }
 
     return null;
@@ -596,7 +663,10 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
   } else if (activeTab === "wallets") {
     listData = filteredActivity.map((a) => ({ type: "activity" as const, data: a }));
   } else {
-    listData = telegramMessages.map((e) => ({ type: "chat" as const, data: e }));
+    const filteredMessages = chatMsgFilter === "tokens"
+      ? telegramMessages.filter((m) => m.msgType === 1 && m.tokenMint)
+      : telegramMessages;
+    listData = filteredMessages.map((e) => ({ type: "chat" as const, data: e }));
   }
 
   const handleTabChange = (tab: TrackingTabId) => {
@@ -811,6 +881,57 @@ export function TrackingScreen({ rpcClient, params }: TrackingScreenProps) {
         /* ── Telegram message row ── */
         const msg = item.data;
         const msgTypeLabel = msg.msgType === 1 ? "Token" : msg.msgType === 2 ? "Tweet" : "Text";
+        const tokenInfo = msg.tokenMint ? chatTokenInfoMap[msg.tokenMint] : undefined;
+        const isTokenMsg = msg.msgType === 1 && msg.tokenMint && tokenInfo;
+
+        if (isTokenMsg) {
+          const isPositive = tokenInfo.oneHourChangePercent >= 0;
+
+          return (
+            <Pressable
+              style={styles.rowItem}
+              onPress={() => handleOpenTokenDetail(msg.tokenMint!, tokenInfo.symbol)}
+            >
+              <View style={styles.rowMain}>
+                <TokenAvatar uri={tokenInfo.imageUri} size={44} />
+                <View style={styles.nameColumn}>
+                  <Text numberOfLines={1} style={styles.tokenSymbol}>
+                    {tokenInfo.symbol || msg.tokenMint!.slice(0, 6)}
+                  </Text>
+                  <View style={styles.chatMessageMeta}>
+                    <Text style={styles.chatMessageUsername}>@{msg.username}</Text>
+                    <Text style={styles.chatMetaDot}>·</Text>
+                    <Text style={styles.chatMessageTime}>
+                      {formatAgeFromSeconds(msg.timestamp)}
+                    </Text>
+                    <Text style={styles.chatMetaDot}>·</Text>
+                    <Text style={[styles.chatMessageType, { color: qsColors.accent }]}>
+                      Token
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.priceColumn}>
+                  <View style={styles.mcRow}>
+                    <Text numberOfLines={1} style={styles.priceValue}>
+                      {tokenInfo.marketCapUsd > 0 ? formatCompactUsd(tokenInfo.marketCapUsd) : "—"}
+                    </Text>
+                    <Text style={styles.mcSublabel}>MC</Text>
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.changeInline,
+                      { color: isPositive ? qsColors.buyGreen : qsColors.sellRed },
+                    ]}
+                  >
+                    {isPositive ? "▲" : "▼"} {formatPercent(tokenInfo.oneHourChangePercent)}
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+          );
+        }
+
         return (
           <Pressable
             style={({ pressed }) => [styles.chatRowItem, pressed && { opacity: 0.7 }]}

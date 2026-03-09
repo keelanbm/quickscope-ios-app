@@ -1,5 +1,5 @@
 import { Text, VStack, HStack, Spacer } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, padding } from "@expo/ui/swift-ui/modifiers";
+import { background, font, foregroundStyle, padding } from "@expo/ui/swift-ui/modifiers";
 import { createWidget, WidgetBase } from "expo-widgets";
 
 type TokenHolding = {
@@ -19,52 +19,50 @@ type PortfolioWidgetProps = {
   updatedAt: string;
 };
 
-const SmallLayout = (props: WidgetBase<PortfolioWidgetProps>) => {
+const PortfolioWidget = (props: WidgetBase<PortfolioWidgetProps>) => {
   "widget";
-  return (
-    <VStack spacing={4} modifiers={[padding({ all: 12 })]}>
-      <Text
-        modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle("#7b6e9a")]}
-      >
-        Portfolio
-      </Text>
-      <Text
-        modifiers={[font({ size: 22, weight: "bold" }), foregroundStyle("#f8f7fb")]}
-      >
-        {props.totalValueUsd}
-      </Text>
-      <HStack spacing={4}>
+  if (props.family === "systemSmall") {
+    return (
+      <VStack spacing={4} modifiers={[padding({ all: 12 }), background("#0a0810")]}>
         <Text
-          modifiers={[
-            font({ size: 13, weight: "semibold" }),
-            foregroundStyle(props.isPnlPositive ? "#4ade80" : "#f87171"),
-          ]}
+          modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle("#7b6e9a")]}
         >
-          {props.pnl24h}
+          Portfolio
         </Text>
         <Text
-          modifiers={[
-            font({ size: 11, weight: "medium" }),
-            foregroundStyle(props.isPnlPositive ? "#4ade80" : "#f87171"),
-          ]}
+          modifiers={[font({ size: 22, weight: "bold" }), foregroundStyle("#f8f7fb")]}
         >
-          {props.pnl24hPercent}
+          {props.totalValueUsd}
         </Text>
-      </HStack>
-      <Spacer />
-      <Text
-        modifiers={[font({ size: 10, weight: "regular" }), foregroundStyle("#5f596c")]}
-      >
-        {props.updatedAt}
-      </Text>
-    </VStack>
-  );
-};
-
-const MediumLayout = (props: WidgetBase<PortfolioWidgetProps>) => {
-  "widget";
+        <HStack spacing={4}>
+          <Text
+            modifiers={[
+              font({ size: 13, weight: "semibold" }),
+              foregroundStyle(props.isPnlPositive ? "#4ade80" : "#f87171"),
+            ]}
+          >
+            {props.pnl24h}
+          </Text>
+          <Text
+            modifiers={[
+              font({ size: 11, weight: "medium" }),
+              foregroundStyle(props.isPnlPositive ? "#4ade80" : "#f87171"),
+            ]}
+          >
+            {props.pnl24hPercent}
+          </Text>
+        </HStack>
+        <Spacer />
+        <Text
+          modifiers={[font({ size: 10, weight: "regular" }), foregroundStyle("#5f596c")]}
+        >
+          {props.updatedAt}
+        </Text>
+      </VStack>
+    );
+  }
   return (
-    <HStack spacing={16} modifiers={[padding({ all: 12 })]}>
+    <HStack spacing={16} modifiers={[padding({ all: 12 }), background("#0a0810")]}>
       <VStack spacing={4} alignment="leading">
         <Text
           modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle("#7b6e9a")]}
@@ -134,14 +132,6 @@ const MediumLayout = (props: WidgetBase<PortfolioWidgetProps>) => {
       </VStack>
     </HStack>
   );
-};
-
-const PortfolioWidget = (props: WidgetBase<PortfolioWidgetProps>) => {
-  "widget";
-  if (props.family === "systemSmall") {
-    return <SmallLayout {...props} />;
-  }
-  return <MediumLayout {...props} />;
 };
 
 export default createWidget("PortfolioWidget", PortfolioWidget);

@@ -99,8 +99,8 @@ export async function updatePortfolioWidget(
       topHoldings,
       updatedAt: timeAgo(new Date()),
     });
-  } catch {
-    // Silently fail — widget shows stale data
+  } catch (e) {
+    console.warn("[PortfolioWidget] update failed:", e);
   }
 }
 
@@ -113,7 +113,14 @@ export async function updateWatchlistWidget(
     const watchlists = await fetchTokenWatchlists(rpcClient);
     const favorites = watchlists.find((w) => w.isFavorites);
     const list = favorites ?? watchlists[0];
-    if (!list || list.tokens.length === 0) return;
+    if (!list || list.tokens.length === 0) {
+      WatchlistWidget.updateSnapshot({
+        watchlistName: "Watchlist",
+        tokens: [],
+        updatedAt: "No tokens yet",
+      });
+      return;
+    }
 
     const tokens = await fetchWatchlistTokens(rpcClient, list.tokens.slice(0, 3));
 
@@ -127,8 +134,8 @@ export async function updateWatchlistWidget(
       })),
       updatedAt: timeAgo(new Date()),
     });
-  } catch {
-    // Silently fail
+  } catch (e) {
+    console.warn("[WatchlistWidget] update failed:", e);
   }
 }
 
@@ -139,22 +146,33 @@ export async function updateWalletActivityWidget(
 ): Promise<void> {
   try {
     const watchlists = await fetchWalletWatchlists(rpcClient);
-    if (watchlists.length === 0) return;
+    if (watchlists.length === 0) {
+      WalletActivityWidget.updateSnapshot({
+        windowLabel: "30 min",
+        tokens: [],
+        updatedAt: "No wallets tracked",
+      });
+      return;
+    }
 
     // Gather all tracked wallet addresses
-    const allWallets: string[] = [];
-    const watchlistNames: Record<string, string[]> = {};
+    const walletSet = new Set<string>();
     for (const wl of watchlists.slice(0, 5)) {
       const resp = await fetchWalletWatchlist(rpcClient, wl.list_id);
-      const wallets = resp.wallets ?? [];
-      for (const w of wallets) {
-        allWallets.push(w.public_key);
-        if (!watchlistNames[w.public_key]) watchlistNames[w.public_key] = [];
-        watchlistNames[w.public_key].push(wl.name);
+      for (const w of resp.wallets ?? []) {
+        walletSet.add(w.public_key);
       }
     }
 
-    if (allWallets.length === 0) return;
+    const allWallets = [...walletSet];
+    if (allWallets.length === 0) {
+      WalletActivityWidget.updateSnapshot({
+        windowLabel: "30 min",
+        tokens: [],
+        updatedAt: "No wallets found",
+      });
+      return;
+    }
 
     const activity = await fetchWalletActivity(rpcClient, allWallets, 100);
     const rows = activity.table?.rows ?? [];
@@ -204,8 +222,8 @@ export async function updateWalletActivityWidget(
       })),
       updatedAt: timeAgo(new Date()),
     });
-  } catch {
-    // Silently fail
+  } catch (e) {
+    console.warn("[WalletActivityWidget] update failed:", e);
   }
 }
 
@@ -216,7 +234,14 @@ export async function updateChatPulseWidget(
 ): Promise<void> {
   try {
     const chats = await fetchTelegramChats(rpcClient);
-    if (chats.length === 0) return;
+    if (chats.length === 0) {
+      ChatPulseWidget.updateSnapshot({
+        windowLabel: "1h",
+        tokens: [],
+        updatedAt: "No chats connected",
+      });
+      return;
+    }
 
     const oneHourAgo = Date.now() / 1000 - 60 * 60;
     const tokenMentions = new Map<
@@ -272,8 +297,8 @@ export async function updateChatPulseWidget(
       })),
       updatedAt: timeAgo(new Date()),
     });
-  } catch {
-    // Silently fail
+  } catch (e) {
+    console.warn("[ChatPulseWidget] update failed:", e);
   }
 }
 

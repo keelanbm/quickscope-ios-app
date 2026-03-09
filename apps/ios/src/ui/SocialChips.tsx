@@ -40,9 +40,9 @@ export function SocialChips({ links, size = "sm" }: SocialChipsProps) {
 
   return (
     <View style={styles.container}>
-      {links.map((link) => (
+      {links.map((link, i) => (
         <AnimatedPressable
-          key={link.url}
+          key={`${i}-${link.type}`}
           style={[
             styles.chip,
             {

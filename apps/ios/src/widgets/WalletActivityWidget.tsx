@@ -1,5 +1,5 @@
 import { Text, VStack, HStack, Spacer } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, padding } from "@expo/ui/swift-ui/modifiers";
+import { background, font, foregroundStyle, padding } from "@expo/ui/swift-ui/modifiers";
 import { createWidget, WidgetBase } from "expo-widgets";
 
 type HotToken = {
@@ -15,50 +15,50 @@ type WalletActivityWidgetProps = {
   updatedAt: string;
 };
 
-const SmallLayout = (props: WidgetBase<WalletActivityWidgetProps>) => {
+const WalletActivityWidget = (
+  props: WidgetBase<WalletActivityWidgetProps>
+) => {
   "widget";
+  if (props.family === "systemSmall") {
+    return (
+      <VStack spacing={6} alignment="leading" modifiers={[padding({ all: 12 }), background("#0a0810")]}>
+        <Text
+          modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle("#7b6e9a")]}
+        >
+          Wallets · {props.windowLabel}
+        </Text>
+        {props.tokens.map((token, i) => (
+          <HStack key={i} spacing={4}>
+            <Text
+              modifiers={[
+                font({ size: 13, weight: "semibold" }),
+                foregroundStyle("#f8f7fb"),
+              ]}
+            >
+              {token.symbol}
+            </Text>
+            <Spacer />
+            <Text
+              modifiers={[
+                font({ size: 12, weight: "medium" }),
+                foregroundStyle("#b7a8d9"),
+              ]}
+            >
+              {token.tradeCount} trades
+            </Text>
+          </HStack>
+        ))}
+        <Spacer />
+        <Text
+          modifiers={[font({ size: 10, weight: "regular" }), foregroundStyle("#5f596c")]}
+        >
+          {props.updatedAt}
+        </Text>
+      </VStack>
+    );
+  }
   return (
-    <VStack spacing={6} alignment="leading" modifiers={[padding({ all: 12 })]}>
-      <Text
-        modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle("#7b6e9a")]}
-      >
-        Wallets · {props.windowLabel}
-      </Text>
-      {props.tokens.map((token, i) => (
-        <HStack key={i} spacing={4}>
-          <Text
-            modifiers={[
-              font({ size: 13, weight: "semibold" }),
-              foregroundStyle("#f8f7fb"),
-            ]}
-          >
-            {token.symbol}
-          </Text>
-          <Spacer />
-          <Text
-            modifiers={[
-              font({ size: 12, weight: "medium" }),
-              foregroundStyle("#b7a8d9"),
-            ]}
-          >
-            {token.tradeCount} trades
-          </Text>
-        </HStack>
-      ))}
-      <Spacer />
-      <Text
-        modifiers={[font({ size: 10, weight: "regular" }), foregroundStyle("#5f596c")]}
-      >
-        {props.updatedAt}
-      </Text>
-    </VStack>
-  );
-};
-
-const MediumLayout = (props: WidgetBase<WalletActivityWidgetProps>) => {
-  "widget";
-  return (
-    <VStack spacing={6} alignment="leading" modifiers={[padding({ all: 12 })]}>
+    <VStack spacing={6} alignment="leading" modifiers={[padding({ all: 12 }), background("#0a0810")]}>
       <Text
         modifiers={[font({ size: 11, weight: "medium" }), foregroundStyle("#7b6e9a")]}
       >
@@ -109,16 +109,6 @@ const MediumLayout = (props: WidgetBase<WalletActivityWidgetProps>) => {
       </Text>
     </VStack>
   );
-};
-
-const WalletActivityWidget = (
-  props: WidgetBase<WalletActivityWidgetProps>
-) => {
-  "widget";
-  if (props.family === "systemSmall") {
-    return <SmallLayout {...props} />;
-  }
-  return <MediumLayout {...props} />;
 };
 
 export default createWidget("WalletActivityWidget", WalletActivityWidget);
