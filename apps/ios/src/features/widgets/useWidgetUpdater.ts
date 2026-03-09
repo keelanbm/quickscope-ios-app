@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import type { RpcClient } from "@/src/lib/api/rpcClient";
-import { useAuthSession } from "@/src/features/auth/AuthSessionProvider";
+import { useAuthSessionSafe } from "@/src/features/auth/AuthSessionProvider";
 import { updateAllWidgets } from "./widgetDataService";
 
 const MIN_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between updates
@@ -14,7 +14,7 @@ const MIN_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between updates
  * Throttled to avoid excessive API calls.
  */
 export function useWidgetUpdater(rpcClient: RpcClient) {
-  const { status, primaryAccountAddress } = useAuthSession();
+  const { status, primaryAccountAddress } = useAuthSessionSafe();
   const lastUpdateRef = useRef(0);
 
 

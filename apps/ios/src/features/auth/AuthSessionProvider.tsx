@@ -362,3 +362,12 @@ export function useAuthSession() {
 
   return context;
 }
+
+/** Non-throwing variant — returns safe defaults when provider isn't mounted yet (e.g. hot reload). */
+export function useAuthSessionSafe() {
+  const context = useContext(AuthSessionContext);
+  if (!context) {
+    return { status: "bootstrapping" as const, primaryAccountAddress: undefined };
+  }
+  return context;
+}
