@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   Animated,
   Dimensions,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -24,6 +25,8 @@ export type ListPickerItem = {
   id: string;
   label: string;
   subtitle?: string;
+  imageUri?: string;
+  icon?: React.ReactNode;
 };
 
 type Props = {
@@ -137,6 +140,11 @@ export function ListPickerDrawer({ visible, onClose, title, items, activeId, onS
                   ]}
                   onPress={() => handleSelect(item.id)}
                 >
+                  {item.imageUri ? (
+                    <Image source={{ uri: item.imageUri }} style={styles.listAvatar} />
+                  ) : item.icon ? (
+                    <View style={styles.listAvatarFallback}>{item.icon}</View>
+                  ) : null}
                   <View style={styles.listTextCol}>
                     <Text
                       numberOfLines={1}
@@ -170,7 +178,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   drawer: {
@@ -225,6 +237,20 @@ const styles = StyleSheet.create({
   },
   listRowPressed: {
     backgroundColor: qsColors.layer3,
+  },
+  listAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: qsColors.layer3,
+  },
+  listAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: qsColors.layer3,
+    alignItems: "center",
+    justifyContent: "center",
   },
   listTextCol: {
     flex: 1,
